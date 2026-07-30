@@ -118,7 +118,10 @@ main{max-width:1180px;margin:0 auto;padding:44px 20px 96px}
 .composerBar{display:flex;align-items:center;gap:8px;padding:6px 6px 6px 10px}
 .composerBar select{width:auto;padding:6px 26px 6px 10px;font-size:13px;background-color:transparent;border-color:transparent;color:var(--muted)}
 .composerBar select:hover{background-color:var(--raised);color:var(--fg)}
-.hintline{margin-top:12px;font-size:12.5px;color:var(--faint);text-align:center}
+.hintline{margin-top:12px;font-size:12.5px;color:var(--faint);text-align:center;display:flex;gap:8px;align-items:center;justify-content:center;flex-wrap:wrap}
+.linkish{font-size:12.5px;color:var(--muted);text-decoration:underline;text-underline-offset:3px;text-decoration-color:var(--line2)}
+.linkish:hover{color:var(--fg);text-decoration-color:currentColor}
+#suggestFrom{max-width:min(420px,70vw);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 kbd{font:inherit;font-size:11.5px;padding:1px 5px;border:1px solid var(--line2);border-radius:5px;color:var(--muted)}
 
 .panel{margin-top:12px;background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:14px;animation:fade .2s var(--ease)}
@@ -297,17 +300,25 @@ details summary:hover{color:var(--fg)}
           <button id="genDeck" class="btn primary">Generate</button>
         </div>
       </div>
-      <div class="hintline"><kbd>⌘</kbd> <kbd>↵</kbd> to generate · images follow automatically</div>
+      <div id="suggestBar" class="hintline hide">
+        <span id="suggestFrom"></span>
+        <button id="another" class="linkish">Another</button>
+        <span style="color:var(--line2)">·</span>
+        <button id="editNiche" class="linkish">Niche</button>
+      </div>
+      <div class="hintline" id="baseHint"><kbd>⌘</kbd> <kbd>↵</kbd> to generate · images follow automatically</div>
 
       <div id="suggestPanel" class="panel hide">
         <div class="field">
-          <label for="niche">Niche <span id="hookCount" class="muted"></span></label>
+          <label for="niche">Who is this for? <span id="hookCount" class="muted"></span></label>
           <input id="niche" placeholder="e.g. amateur golfers trying to break 90">
         </div>
-        <div class="cats" id="catBox"></div>
-        <div class="cands" id="cands"></div>
-        <div class="row" style="margin-top:12px">
-          <button id="reroll" class="btn sm quiet">Reroll</button>
+        <details>
+          <summary>Which hook styles to draw from</summary>
+          <div class="cats" id="catBox"></div>
+        </details>
+        <div class="row" style="margin-top:14px">
+          <button id="useNiche" class="btn sm primary">Suggest a hook</button>
           <div class="spacer"></div>
           <button id="closeSuggest" class="btn sm quiet">Close</button>
         </div>
@@ -1130,14 +1141,65 @@ function buildCats(){
 }
 function enabledCats(){ return [...$('catBox').querySelectorAll('button.on')].map(b=>b.dataset.cat); }
 
-async function surprise(){
+/* One click = one hook in the box. Spare candidates are kept so "Another" is instant. */
+async function suggestHook(){
+  if(!$('niche').value.trim()){        // first run only — we need to know the niche once
+    $('suggestPanel').classList.remove('hide');
+    $('niche').focus();
+    return;
+  }
+  $('suggestPanel').classList.add('hide');
+  if(S.candidates.length > 1){         // serve from the queue
+    S.candidates.shift();
+    return applyHook(S.candidates[0]);
+  }
+  const btn = $('surprise'), was = btn.innerHTML;
+  btn.disabled = true; btn.textContent = 'Thinking…';
+  try{
+    const {list, pick} = await fetchHooks();
+    if(!list.length) throw new Error('the model returned nothing usable');
+    S.candidates = list; S.lastPick = pick;
+    applyHook(list[0]);
+  }catch(e){
+    log('suggest failed: '+e.message,'e');
+    if(e.raw) log('raw: '+String(e.raw).slice(0,600),'w');
+  }
+  btn.disabled = false; btn.innerHTML = was;
+}
+function applyHook(text){
+  const t = $('hookInput');
+  t.value = text; autosize(t);
+  $('suggestBar').classList.remove('hide');
+  $('baseHint').classList.add('hide');
+  $('suggestFrom').textContent = S.lastPick ? S.lastPick.c.toLowerCase() + ' template' : '';
+  $('suggestFrom').title = S.lastPick ? S.lastPick.t : '';
+}
+/* Accepts a JSON array, an object wrapping one, or plain/numbered lines — models drift. */
+function parseHookList(text){
+  let out = [];
+  try{
+    let j = extractJSON(text, true);
+    if(!Array.isArray(j) && j && typeof j === 'object')
+      j = Object.values(j).find(v=>Array.isArray(v)) || [];
+    out = (Array.isArray(j) ? j : []).map(v =>
+      typeof v === 'string' ? v
+      : (v && (v.hook || v.title || v.text || v.headline)) || '');
+  }catch(e){ /* fall through to line parsing */ }
+  if(!out.filter(Boolean).length){
+    out = String(text||'').split('\n')
+      .map(l => l.replace(/^[\s\-*•]*\d*[.)]?\s*/,'').replace(/^["'`]+|["'`,]+$/g,'').trim())
+      .filter(l => l.length > 12 && !/^[{[\]}]/.test(l) && !/^(json|here|sure|option)/i.test(l));
+  }
+  return out.map(s=>String(s).replace(/^["']|["']$/g,'').trim())
+            .filter(s => s.length > 8 && !/\(insert/i.test(s))
+            .slice(0,3);
+}
+async function fetchHooks(){
   const cats = enabledCats();
   const pool = HOOK_DATA.filter(h=>cats.includes(h.c));
-  if(!pool.length) return log('no categories enabled','w');
-  const niche = $('niche').value.trim() || 'general';
+  if(!pool.length) throw new Error('no hook styles enabled — turn one on under Niche');
+  const niche = $('niche').value.trim();
   const pick = pool[Math.floor(Math.random()*pool.length)];
-  $('suggestPanel').classList.remove('hide');
-  $('cands').innerHTML = '<div class="tiny muted">Adapting a ' + pick.c.toLowerCase() + ' template…</div>';
   const sys =
 'You turn viral hook templates into cover-slide headlines for a static image carousel.\n' +
 'TEMPLATE (category: '+pick.c+'): "'+pick.t+'"\n' +
@@ -1149,36 +1211,10 @@ async function surprise(){
 '3. Most of these hooks were written for talking-head video and open with a spoken address or a piece to camera. Rewrite anything like that into something that works as a static cover slide someone sees for half a second while scrolling: no "hey guys", no "watch this", no "in this video", no direct-to-camera address. If this template cannot survive that translation, invent a hook in the same category and spirit instead of forcing it.\n' +
 '4. Never invent a statistic, a study or a number you are not confident is real.\n' +
 '5. Max ~14 words. No emoji, no hashtags, no quotation marks around the whole line.\n\n' +
-'Return ONLY a JSON array of exactly three different candidate strings.';
-  try{
-    const r = await callModel({model: cfg().textModel, parts:[{type:'text', text:sys}]});
-    const arr = extractJSON(r.text, true);
-    S.candidates = (Array.isArray(arr) ? arr : []).map(String).slice(0,3);
-    renderCands(pick);
-  }catch(e){
-    $('cands').innerHTML = '<div class="tiny muted">Didn\'t come back — check the console in Settings.</div>';
-    log('suggest failed: '+e.message,'e');
-    if(e.raw) log('raw: '+String(e.raw).slice(0,600),'e');
-  }
-}
-function renderCands(pick){
-  const box = $('cands'); box.innerHTML = '';
-  if(pick){
-    const h = document.createElement('div');
-    h.className = 'tiny'; h.style.color = 'var(--faint)';
-    h.textContent = pick.c + ' · ' + pick.t;
-    box.appendChild(h);
-  }
-  S.candidates.forEach(c=>{
-    const d = document.createElement('button'); d.className = 'cand'; d.textContent = c;
-    d.onclick = () => {
-      $('hookInput').value = c;
-      $('suggestPanel').classList.add('hide');
-      $('hookInput').focus();
-      autosize($('hookInput'));
-    };
-    box.appendChild(d);
-  });
+'Return ONLY a JSON array of exactly three different candidate strings, nothing else.';
+  const r = await callModel({model: cfg().textModel, parts:[{type:'text', text:sys}]});
+  S.lastRaw = r.text;
+  return {list: parseHookList(r.text), pick};
 }
 function autosize(t){ t.style.height = 'auto'; t.style.height = Math.max(76, t.scrollHeight) + 'px'; }
 
@@ -1503,6 +1539,7 @@ function init(){
     $('toggleKey').textContent = k.type === 'password' ? 'Show' : 'Hide';
   };
   ['apiKey','textModel','imageModel','niche'].forEach(id=>$(id).addEventListener('input', saveSettings));
+  $('niche').addEventListener('input', ()=>{ S.candidates = []; });   // new niche, new batch
   $('apiKey').addEventListener('input', ()=> setConn(''));
   $('remember').onchange = saveSettings;
   $('apiShape').onchange = saveSettings;
@@ -1529,8 +1566,11 @@ function init(){
 
   $('hookInput').addEventListener('input', e => autosize(e.target));
   $('closeSuggest').onclick = () => $('suggestPanel').classList.add('hide');
-  $('surprise').onclick = surprise;
-  $('reroll').onclick = surprise;
+  $('surprise').onclick = suggestHook;
+  $('another').onclick = suggestHook;
+  $('useNiche').onclick = () => { saveSettings(); suggestHook(); };
+  $('niche').addEventListener('keydown', e=>{ if(e.key === 'Enter'){ e.preventDefault(); saveSettings(); suggestHook(); } });
+  $('editNiche').onclick = () => { $('suggestPanel').classList.remove('hide'); $('niche').focus(); $('niche').select(); };
   $('genDeck').onclick = generateDeck;
   $('genAllImages').onclick = generateAllImages;
   $('regenAllImgs').onclick = regenAllImages;

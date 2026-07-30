@@ -184,8 +184,10 @@ button:disabled{opacity:.45;cursor:not-allowed}
     <label>Title <span id="vTitle" class="hint"></span></label><input type="range" id="rTitle" min="0.02" max="0.11" step="0.001">
     <label>Body <span id="vBody" class="hint"></span></label><input type="range" id="rBody" min="0.015" max="0.075" step="0.001">
     <label>Stroke w <span id="vStroke" class="hint"></span></label><input type="range" id="rStroke" min="0" max="24" step="1">
+    <label>Shadow <span id="vShadow" class="hint"></span></label><input type="range" id="rShadow" min="0" max="1" step="0.05">
     <label>Text top <span id="vTop" class="hint"></span></label><input type="range" id="rTop" min="0.02" max="0.85" step="0.005">
     <label>Hook top <span id="vHookTop" class="hint"></span></label><input type="range" id="rHookTop" min="0.02" max="0.8" step="0.005">
+    <label style="text-transform:none;letter-spacing:0;color:var(--fg);font-size:12px"><input type="checkbox" id="cNumber"> auto-number titles</label>
   </div>
 </section>
 
@@ -265,6 +267,23 @@ const PRESETS = [
     text_align:'center',
     structure:'hook cover, then numbered points, one per slide',
     voice:'punchy, plainspoken, coach-like'
+  },
+  {
+    name:'Realistic photo', builtin:true,
+    aspect_ratio:'9:16',
+    imagery:'photographic',
+    image_prompt_suffix:'real photograph, natural daylight, true-to-life colour, documentary framing, phone or drone camera feel, no illustration, no rendering, no graphic overlays',
+    caption_treatment:'outlined',
+    font_family:'Inter', font_weight:700, body_weight:600, italic:false,
+    text_color:'#FFFFFF', stroke_color:'#000000', stroke_width:5, text_shadow:0.45,
+    label_bg:'#FFFFFF',
+    title_size_pct:0.026, body_size_pct:0.025, title_gap_em:1.15,
+    max_width_pct:0.86, body_width_pct:0.76,
+    text_block_top_pct:0.40, hook_top_pct:0.47,
+    auto_number:true,
+    text_align:'center',
+    structure:'cover carries the promise, then one numbered realization per slide',
+    voice:'blunt second person, no filler, tells you what you do wrong and what it costs'
   }
 ];
 
@@ -492,14 +511,15 @@ function ensureFont(fam){
 async function fontReady(p){
   ensureFont(p.font_family);
   try{
-    await document.fonts.load(((p.italic?'italic ':'') + (p.font_weight||800) + ' 80px "' + p.font_family + '"'));
+    for(const w of new Set([p.font_weight||800, p.body_weight||p.font_weight||800]))
+      await document.fonts.load(((p.italic?'italic ':'') + w + ' 80px "' + p.font_family + '"'));
     await document.fonts.ready;
   }catch(e){ log('font load issue: '+e.message,'w'); }
 }
 
 /* ============================ canvas rendering ============================ */
-function fontStr(p, size){
-  return (p.italic ? 'italic ' : '') + (p.font_weight||800) + ' ' + Math.round(size) + 'px "' + (p.font_family||'Inter') + '", Inter, sans-serif';
+function fontStr(p, size, weight){
+  return (p.italic ? 'italic ' : '') + (weight || p.font_weight || 800) + ' ' + Math.round(size) + 'px "' + (p.font_family||'Inter') + '", Inter, sans-serif';
 }
 function wrap(ctx, text, maxW){
   const out = [];
@@ -528,28 +548,43 @@ function anchorX(p,W){
   const m = W*0.07;
   return p.text_align === 'left' ? m : p.text_align === 'right' ? W-m : W/2;
 }
-function drawLines(ctx, lines, p, size, x, y, W, H){
+function drawLines(ctx, lines, p, size, x, y, W, H, weight){
   const treat = p.caption_treatment || 'outlined';
-  ctx.font = fontStr(p, size);
+  ctx.font = fontStr(p, size, weight);
   ctx.textBaseline = 'middle';
   ctx.textAlign = p.text_align === 'left' ? 'left' : p.text_align === 'right' ? 'right' : 'center';
   const lh = treat === 'label-boxes' ? size*1.42 : size*1.20;
+  const sh = +p.text_shadow || 0;
+  const setShadow = on => {
+    ctx.shadowColor = on ? 'rgba(0,0,0,'+sh+')' : 'transparent';
+    ctx.shadowBlur = on ? size*0.40 : 0;
+    ctx.shadowOffsetY = on ? size*0.05 : 0;
+  };
   let cy = y + lh/2;
   for(const ln of lines){
     if(treat === 'label-boxes'){
       const w = ctx.measureText(ln).width, padX = size*0.34, padY = size*0.20;
       const bw = w + padX*2, bh = size*1.02 + padY*2;
       let bx = ctx.textAlign === 'left' ? x : ctx.textAlign === 'right' ? x-bw : x-bw/2;
+      if(sh) setShadow(true);
       ctx.fillStyle = p.label_bg || '#FFFFFF';
       roundRect(ctx, bx, cy-bh/2, bw, bh, size*0.28);
       ctx.fill();
+      setShadow(false);
       ctx.fillStyle = p.text_color || '#000000';
       ctx.fillText(ln, x, cy + size*0.03);
     } else {
-      if(treat === 'outlined' && (p.stroke_width||0) > 0){
-        ctx.lineJoin = 'round'; ctx.miterLimit = 2;
-        ctx.lineWidth = (p.stroke_width||8) * (H/1920);
-        ctx.strokeStyle = p.stroke_color || '#000';
+      const lw = (p.stroke_width||0) * (H/1920);
+      ctx.lineJoin = 'round'; ctx.miterLimit = 2;
+      if(sh){                                  // shadow pass first, so the type itself stays crisp
+        setShadow(true);
+        if(treat === 'outlined' && lw > 0){ ctx.lineWidth = lw; ctx.strokeStyle = p.stroke_color || '#000'; ctx.strokeText(ln, x, cy); }
+        ctx.fillStyle = p.text_color || '#fff';
+        ctx.fillText(ln, x, cy);
+        setShadow(false);
+      }
+      if(treat === 'outlined' && lw > 0){
+        ctx.lineWidth = lw; ctx.strokeStyle = p.stroke_color || '#000';
         ctx.strokeText(ln, x, cy);
       }
       ctx.fillStyle = p.text_color || '#fff';
@@ -557,7 +592,15 @@ function drawLines(ctx, lines, p, size, x, y, W, H){
     }
     cy += lh;
   }
+  ctx.shadowColor = 'transparent'; ctx.shadowBlur = 0; ctx.shadowOffsetY = 0;
   return cy - lh/2 - y;
+}
+/* "3. " prefixes, numbered across the body slides, so reordering renumbers for free */
+function displayTitle(slide, p){
+  const t = String(slide.title||'');
+  if(!p.auto_number || slide.kind === 'hook' || /^\s*\d+\s*[.):]/.test(t)) return t;
+  const n = S.slides.filter(s=>s.kind !== 'hook').indexOf(slide) + 1;
+  return n > 0 ? n + '. ' + t : t;
 }
 function blockHeight(size, n, treat){ return n * (treat === 'label-boxes' ? size*1.42 : size*1.20); }
 
@@ -582,22 +625,25 @@ function renderSlide(slide, canvas, p){
   const isHook = slide.kind === 'hook';
   const tSize = (p.title_size_pct||0.05) * H * (isHook ? 1.4 : 1);
   const bSize = (p.body_size_pct||0.033) * H;
-  const maxW = W*0.86 - (p.caption_treatment==='label-boxes' ? tSize*0.7 : 0);
+  const box = p.caption_treatment === 'label-boxes' ? tSize*0.7 : 0;
+  const maxW = W*(p.max_width_pct ?? 0.86) - box;
+  const bMaxW = W*(p.body_width_pct ?? p.max_width_pct ?? 0.86) - box;
   const x = anchorX(p,W);
 
+  const bWeight = p.body_weight || p.font_weight;
   ctx.font = fontStr(p, tSize);
-  const tLines = wrap(ctx, slide.title, maxW);
-  ctx.font = fontStr(p, bSize);
-  const bLines = isHook ? [] : wrap(ctx, slide.body, maxW);
+  const tLines = wrap(ctx, displayTitle(slide, p), maxW);
+  ctx.font = fontStr(p, bSize, bWeight);
+  const bLines = isHook ? [] : wrap(ctx, slide.body, bMaxW);
 
   const treat = p.caption_treatment || 'outlined';
-  const gap = bLines.length ? bSize*0.7 : 0;
+  const gap = bLines.length ? bSize*(p.title_gap_em ?? 0.7) : 0;
   const totalH = blockHeight(tSize, tLines.length, treat) + gap + blockHeight(bSize, bLines.length, treat);
   let top = (isHook ? (p.hook_top_pct != null ? p.hook_top_pct : 0.34) : (p.text_block_top_pct != null ? p.text_block_top_pct : 0.6)) * H;
   top = clamp(top, H*0.01, H - totalH - H*0.02);
 
   const used = drawLines(ctx, tLines, p, tSize, x, top, W, H);
-  if(bLines.length) drawLines(ctx, bLines, p, bSize, x, top + used + gap, W, H);
+  if(bLines.length) drawLines(ctx, bLines, p, bSize, x, top + used + gap, W, H, bWeight);
 }
 
 /* ============================ slide grid ============================ */
@@ -730,8 +776,11 @@ function syncControls(){
   $('rTitle').value = p.title_size_pct ?? 0.05;
   $('rBody').value = p.body_size_pct ?? 0.033;
   $('rStroke').value = p.stroke_width ?? 8;
+  $('rShadow').value = p.text_shadow ?? 0;
+  $('cNumber').checked = !!p.auto_number;
   $('rTop').value = p.text_block_top_pct ?? 0.6;
   $('rHookTop').value = p.hook_top_pct ?? 0.34;
+  $('vShadow').textContent = (+$('rShadow').value).toFixed(2);
   $('vTitle').textContent = (+$('rTitle').value).toFixed(3);
   $('vBody').textContent = (+$('rBody').value).toFixed(3);
   $('vStroke').textContent = $('rStroke').value;
@@ -751,6 +800,8 @@ function bindControls(){
   live('rTitle', ()=> S.profile.title_size_pct = +$('rTitle').value);
   live('rBody',  ()=> S.profile.body_size_pct = +$('rBody').value);
   live('rStroke',()=> S.profile.stroke_width = +$('rStroke').value);
+  live('rShadow',()=> S.profile.text_shadow = +$('rShadow').value);
+  live('cNumber',()=> S.profile.auto_number = $('cNumber').checked);
   live('rTop',   ()=> S.profile.text_block_top_pct = +$('rTop').value);
   live('rHookTop',()=> S.profile.hook_top_pct = +$('rHookTop').value);
   $('cAspect').addEventListener('input', ()=>{ S.profile.aspect_ratio = $('cAspect').value; drawAll(); autosave(); });
@@ -827,7 +878,8 @@ function deckPrompt(hook, n){
 '- Never invent a statistic, a study or a number. If a claim needs a number and you are not confident it is real, write the claim without one.\n' +
 '- "scene" describes only what is in the picture: subject, setting, light, camera framing. It never asks for words, numbers, logos, text or UI. Keep one region of the frame calm and uncluttered so a caption can sit over it.\n' +
 '- No call-to-action slide.\n' +
-'- Titles are short (max ~7 words). Bodies max ~32 words.\n\n' +
+'- Titles are short (max ~7 words). Bodies max ~32 words.\n' +
+(p.auto_number ? '- Do not number the titles. The app draws the numbers itself.\n' : '') + '\n' +
 'Return ONLY JSON of this exact shape:\n' +
 '{"slides":[{"kind":"hook","title":"...","scene":"..."},{"kind":"slide","title":"...","body":"...","scene":"..."}],"caption":"post caption with hashtags"}'
   );
@@ -948,8 +1000,11 @@ async function addExamples(files){
 const PROFILE_FIELDS = [
   ['name','text'],['aspect_ratio','select:9:16,4:5,1:1'],['imagery','text'],['image_prompt_suffix','text'],
   ['caption_treatment','select:outlined,label-boxes,plain'],['font_family','text'],['font_weight','number'],
-  ['italic','check'],['text_color','color'],['stroke_color','color'],['stroke_width','number'],['label_bg','color'],
-  ['title_size_pct','number'],['body_size_pct','number'],['text_block_top_pct','number'],['hook_top_pct','number'],
+  ['body_weight','number'],['italic','check'],['text_color','color'],['stroke_color','color'],['stroke_width','number'],
+  ['text_shadow','number'],['label_bg','color'],
+  ['title_size_pct','number'],['body_size_pct','number'],['title_gap_em','number'],
+  ['max_width_pct','number'],['body_width_pct','number'],
+  ['text_block_top_pct','number'],['hook_top_pct','number'],['auto_number','check'],
   ['text_align','select:center,left,right'],['structure','text'],['voice','text']
 ];
 function buildProfileForm(){
@@ -985,11 +1040,18 @@ async function extractProfile(){
 '{"aspect_ratio":"9:16|4:5|1:1","imagery":"photographic|flat-vector-cartoon|3d-render|...",' +
 '"image_prompt_suffix":"the look, lighting and rendering style to append to every scene prompt",' +
 '"caption_treatment":"outlined|label-boxes|plain","font_family":"closest common web font available on Google Fonts",' +
-'"font_weight":800,"italic":false,"text_color":"#FFFFFF","stroke_color":"#000000","stroke_width":7,"label_bg":"#FFFFFF",' +
-'"title_size_pct":0.029,"body_size_pct":0.026,"text_block_top_pct":0.40,"hook_top_pct":0.30,"text_align":"center",' +
+'"font_weight":800,"body_weight":600,"italic":false,"text_color":"#FFFFFF","stroke_color":"#000000","stroke_width":7,' +
+'"text_shadow":0.45,"label_bg":"#FFFFFF",' +
+'"title_size_pct":0.029,"body_size_pct":0.026,"title_gap_em":0.7,"max_width_pct":0.86,"body_width_pct":0.78,' +
+'"text_block_top_pct":0.40,"hook_top_pct":0.30,' +
+'"auto_number":false,"text_align":"center",' +
 '"structure":"how the deck is sequenced","voice":"how the copy sounds"}\n\n' +
 'Sizes are a fraction of canvas HEIGHT (cap height of the drawn glyphs relative to full image height), so the profile survives an aspect change. ' +
 'text_block_top_pct is the top of the caption block on a body slide; hook_top_pct the same for the cover slide. ' +
+'text_shadow is 0 for no drop shadow behind the type, up to 1 for a heavy one. title_gap_em is the blank space between title and body, in body-text ems. ' +
+'max_width_pct / body_width_pct are the measure the title and body wrap at, as a fraction of canvas width. ' +
+'body_weight is the body copy weight if it is visibly lighter than the title, otherwise same as font_weight. ' +
+'auto_number is true if the body slides carry a leading number like "3. ". ' +
 'image_prompt_suffix must describe only rendering style and must never ask for text, logos or UI. ' +
 'Judge the treatment: "label-boxes" if lines sit in filled rounded rectangles, "outlined" if the type has a contrasting stroke, otherwise "plain".';
   const parts = [{type:'text', text:sys}].concat(S.examples.map(e=>({type:'image', mime:'image/jpeg', b64:e.b64})));

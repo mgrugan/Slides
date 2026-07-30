@@ -500,7 +500,11 @@ function log(msg, cls){
   $('log').appendChild(d); $('log').scrollTop = 1e9;
   if(cls === 'e' || cls === 'o') toast(msg.split('\n')[0], cls === 'e' ? 'err' : 'ok');
 }
+let LAST_TOAST = '';
 function toast(msg, kind){
+  if(msg === LAST_TOAST) return;              // five slides failing the same way is one message
+  LAST_TOAST = msg;
+  setTimeout(()=>{ if(LAST_TOAST === msg) LAST_TOAST = ''; }, 4000);
   const t = document.createElement('div');
   t.className = 'toast' + (kind ? ' '+kind : '');
   t.textContent = msg.length > 90 ? msg.slice(0,88)+'…' : msg;
@@ -763,35 +767,58 @@ async function rawCall(shape, model, parts, opts){
   return res;
 }
 
-let AUTO_SHAPE = null;   // whichever shape answered first this session
+let AUTO_SHAPE = null;          // whichever shape answered first this session
+const NO_IMG_CFG = new Set();   // shapes that reject generation_config image fields
+let GATE = Promise.resolve();   // rate-limit gate shared by every in-flight request
+const holdOff = ms => { GATE = new Promise(r=>setTimeout(r, ms)); };
+
+/* short, human version of an API error */
+function apiError(e){
+  const raw = String(e.raw || e.message || '');
+  let m = '';
+  try{ const j = JSON.parse(raw); m = (j.error && (j.error.message || j.error.status)) || ''; }catch(_){}
+  return String(m || e.message || 'unknown error').split('\n')[0].trim().slice(0,150);
+}
+function quotaInfo(e){
+  const raw = String(e.raw || e.message || '');
+  const is429 = e.status === 429 || /RESOURCE_EXHAUSTED|too_many_requests|exceeded your current quota/i.test(raw);
+  const zero  = /limit:\s*0\b/.test(raw);                 // free tier gives this model nothing at all
+  const m = raw.match(/retry in ([\d.]+)\s*s/i);
+  return {is429, zero, wait: m ? Math.ceil(parseFloat(m[1])) : 25};
+}
 /* wantImage: ask for an image back. Returns {text, images[]} */
 async function callModel({model, parts, wantImage=false, aspect='9:16'}){
   const c = cfg();
   if(!c.key){ openDrawer('drawerSettings'); $('apiKey').focus(); throw new Error('Add your Gemini API key in Settings.'); }
-  const opts = {wantImage, aspect, imageCfg: $('sendImageCfg').checked};
   let order = c.shape === 'auto' ? ['interactions','generateContent'] : [c.shape];
   if(c.shape === 'auto' && AUTO_SHAPE) order = [AUTO_SHAPE].concat(order.filter(s=>s!==AUTO_SHAPE));
-  let firstErr = null;
+  const errs = [];
+  await GATE;                                   // respect any active rate-limit hold
   for(let i=0;i<order.length;i++){
+    const shape = order[i];
+    const opts = {wantImage, aspect, imageCfg: $('sendImageCfg').checked && !NO_IMG_CFG.has(shape)};
     try{
-      const res = await rawCall(order[i], model, parts, opts);
-      if(c.shape === 'auto' && AUTO_SHAPE !== order[i]){
-        AUTO_SHAPE = order[i];
-        log('note: using the "'+AUTO_SHAPE+'" request shape for this session — pin it in the API shape dropdown to skip the probe','w');
+      const res = await rawCall(shape, model, parts, opts);
+      if(c.shape === 'auto' && AUTO_SHAPE !== shape){
+        AUTO_SHAPE = shape;
+        log('using the "'+shape+'" request shape for this session','w');
       }
       return res;
     }catch(e){
-      if(!firstErr) firstErr = e;
-      // a failed probe of the other request shape is not worth shouting about
-      log('API error ['+order[i]+']: '+e.message, i < order.length-1 ? 'w' : 'e');
-      // targeted, logged retry: some models reject the image config fields
-      if(wantImage && opts.imageCfg && /modalit|image_config|imageConfig|aspect/i.test(e.raw||e.message||'')){
-        log('retrying ['+order[i]+'] without responseModalities/imageConfig','w');
-        try{ return await rawCall(order[i], model, parts, {...opts, imageCfg:false}); }catch(e2){ log('retry failed: '+e2.message,'e'); }
+      errs.push(e);
+      const cfgReject = wantImage && opts.imageCfg && /modalit|image_config|imageConfig|aspect_ratio/i.test(e.raw||e.message||'');
+      if(cfgReject){
+        NO_IMG_CFG.add(shape);                  // learn it once, never send them to this shape again
+        log(shape + ' rejects the image config fields — dropping them for this session','w');
+        try{ return await rawCall(shape, model, parts, {...opts, imageCfg:false}); }
+        catch(e2){ errs.push(e2); }
+      } else {
+        log('API error ['+shape+']: '+apiError(e), i < order.length-1 ? 'w' : 'e');
       }
-      if(i === order.length-1) throw firstErr;
     }
   }
+  // surface the error that actually tells you something: quota beats a config complaint
+  throw errs.find(e => quotaInfo(e).is429) || errs[errs.length-1] || new Error('request failed');
 }
 
 /* ============================ defensive JSON ============================ */
@@ -1041,7 +1068,8 @@ function setStatus(s, st, err){
   const el = document.querySelector('[data-st="'+s.id+'"]');
   if(!el) return;
   el.className = 'state ' + (st||'');
-  el.innerHTML = st && st !== 'done' ? '<span class="sdot"></span>' + (err ? 'failed — tap ↻' : st) : '';
+  const label = err ? err.slice(0,38) : st;
+  el.innerHTML = st && st !== 'done' ? '<span class="sdot"></span>' + label : '';
   el.title = err || '';
 }
 
@@ -1193,7 +1221,7 @@ async function suggestHook(){
     S.candidates = list; S.lastPick = pick;
     applyHook(list[0]);
   }catch(e){
-    log('suggest failed: '+e.message,'e');
+    log('suggest failed: '+apiError(e),'e');
     if(e.raw) log('raw: '+String(e.raw).slice(0,600),'w');
   }
   btn.disabled = false; btn.innerHTML = was;
@@ -1293,7 +1321,7 @@ async function generateDeck(){
     $('genDeck').disabled = false;
     S.lastRaw = e.raw || S.lastRaw || e.message;
     $('rawRetry').classList.remove('hide');
-    log('deck generation failed: '+e.message,'e');
+    log('deck generation failed: '+apiError(e),'e');
   }
 }
 function loadDeck(j){
@@ -1321,7 +1349,9 @@ function imagePrompt(slide){
     'Keep the ' + region + ' of the frame visually calm, uncluttered and even in tone so a caption can be placed over it. ' +
     NO_TEXT_CLAUSE;
 }
-async function genImage(slide, single){
+let QUOTA_NOTED = false;
+async function genImage(slide, single, attempt){
+  attempt = attempt || 0;
   setStatus(slide,'generating');
   try{
     const r = await callModel({model: cfg().imageModel, parts:[{type:'text', text: imagePrompt(slide)}], wantImage:true, aspect:S.profile.aspect_ratio});
@@ -1329,8 +1359,21 @@ async function genImage(slide, single){
     setImage(slide, r.images[0], autosave);
     setStatus(slide,'done');
   }catch(e){
-    setStatus(slide,'failed', e.message);
-    log('image failed (slide '+(S.slides.indexOf(slide)+1)+'): '+e.message,'e');
+    const q = quotaInfo(e), n = S.slides.indexOf(slide)+1;
+    if(q.is429 && !q.zero && attempt < 2){          // transient rate limit: hold everything, then retry
+      holdOff(q.wait*1000 + 400);
+      setStatus(slide,'queued', 'rate limited · retrying in '+q.wait+'s');
+      log('slide '+n+' rate limited — pausing '+q.wait+'s','w');
+      await GATE;
+      return genImage(slide, single, attempt+1);
+    }
+    if(q.zero && !QUOTA_NOTED){
+      QUOTA_NOTED = true;
+      log('No image quota on this key for "'+cfg().imageModel+'" — the free tier allows 0 requests for it. '+
+          'Enable billing on the Google project, or try another image model in Settings. Copy and layout still work; you can upload your own images per slide.','e');
+    }
+    setStatus(slide,'failed', q.zero ? 'no image quota for this model' : apiError(e));
+    if(!q.zero) log('slide '+n+' image failed: '+apiError(e),'e');
   }
   if(single) autosave();
 }
@@ -1461,7 +1504,7 @@ async function extractProfile(){
     log('style profile extracted','o');
   }catch(e){
     $('cloneStatus').textContent = 'failed';
-    log('profile extraction failed: '+e.message,'e');
+    log('style extraction failed: '+apiError(e),'e');
     if(e.raw) log('raw: '+String(e.raw).slice(0,800),'e');
   }
 }
@@ -1485,7 +1528,7 @@ async function rebuildCopy(){
     $('cloneStatus').textContent = 'deck rebuilt — generate images when ready';
   }catch(e){
     $('cloneStatus').textContent = 'failed';
-    log('rebuild failed: '+e.message,'e');
+    log('rewrite failed: '+apiError(e),'e');
   }
 }
 
@@ -1582,7 +1625,7 @@ function init(){
       const r = await callModel({model: cfg().textModel, parts:[{type:'text', text:'Reply with the single word: ok'}]});
       setConn('on');
       log('connected — model replied: ' + (r.text||'(empty)').trim().slice(0,60), 'o');
-    }catch(e){ setConn('err'); log('connection failed: '+e.message,'e'); }
+    }catch(e){ setConn('err'); log('connection failed: '+apiError(e),'e'); }
     $('testConn').disabled = false;
   };
 

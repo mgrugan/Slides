@@ -1,213 +1,468 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Carousel Builder</title>
+<title>Carousel</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link id="gfonts" rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:ital,wght@0,400..900;1,400..900&family=Archivo:ital,wght@0,400..900;1,400..900&family=Anton&family=Poppins:ital,wght@0,400;0,600;0,800;1,800&family=Bebas+Neue&family=Montserrat:ital,wght@0,400..900;1,400..900&display=swap">
 <style>
 :root{
-  --bg:#0e0f12; --panel:#16181d; --panel2:#1c1f26; --line:#2a2e37; --line2:#3a404c;
-  --fg:#e7e9ee; --dim:#8b93a3; --accent:#59d98a; --accent2:#4a9ef5; --bad:#ff6b6b; --warn:#f5c451;
+  --bg:#09090a; --surface:#0f0f11; --raised:#161619; --raised2:#1d1d21;
+  --line:rgba(255,255,255,.07); --line2:rgba(255,255,255,.14);
+  --fg:#f3f3f5; --muted:#8b8b94; --faint:#5c5c65;
+  --ok:#4ade80; --bad:#f87171; --warn:#fbbf24;
+  --r:14px; --r2:10px; --r3:8px;
+  --ease:cubic-bezier(.2,.7,.3,1);
 }
 *{box-sizing:border-box}
-html,body{margin:0;background:var(--bg);color:var(--fg);font:13px/1.45 ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
-body{padding:10px 12px 150px}
-h1,h2,h3{margin:0;font-weight:700}
-h1{font-size:14px;letter-spacing:.02em}
-section{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:10px;margin-bottom:10px}
-.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
-.row.tight{gap:6px}
-.col{display:flex;flex-direction:column;gap:4px}
-label{color:var(--dim);font-size:11px;text-transform:uppercase;letter-spacing:.05em}
-input,select,textarea,button{font:inherit;color:var(--fg);background:var(--panel2);border:1px solid var(--line2);border-radius:6px;padding:6px 8px;outline:none}
-input:focus,select:focus,textarea:focus{border-color:var(--accent2)}
-input[type=checkbox]{accent-color:var(--accent);width:14px;height:14px;padding:0;vertical-align:-2px}
-input[type=color]{padding:2px;width:42px;height:30px}
-input[type=range]{accent-color:var(--accent);background:none;border:none;padding:0;width:150px}
-textarea{width:100%;resize:vertical;min-height:60px;font:13px/1.4 ui-monospace,SFMono-Regular,Menlo,monospace}
-button{cursor:pointer;background:#242832;border-color:var(--line2)}
-button:hover{background:#2d323e}
-button.primary{background:var(--accent);color:#08170e;border-color:#3fbf70;font-weight:700}
-button.primary:hover{background:#6ee89a}
-button.ghost{background:transparent}
-button.danger{color:var(--bad)}
-button:disabled{opacity:.45;cursor:not-allowed}
-.mini{font-size:11px;padding:3px 6px}
-.hint{color:var(--dim);font-size:11px}
-.bar{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
-.sep{width:1px;height:20px;background:var(--line2)}
-.grow{flex:1 1 auto;min-width:80px}
-.tabs{display:flex;gap:4px}
-.tabs button{border-radius:6px 6px 0 0;border-bottom:none}
-.tabs button.on{background:var(--accent2);color:#04121f;font-weight:700;border-color:var(--accent2)}
-.styles{display:flex;gap:8px;overflow-x:auto;padding-bottom:2px}
-.styleCard{flex:0 0 auto;width:132px;background:var(--panel2);border:2px solid var(--line);border-radius:8px;padding:6px;cursor:pointer;position:relative}
-.styleCard.on{border-color:var(--accent)}
-.styleCard canvas{width:100%;height:88px;border-radius:4px;display:block;background:#000}
-.styleCard .nm{font-size:11px;font-weight:700;margin-top:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.styleCard .ar{font-size:10px;color:var(--dim)}
-.styleCard .acts{position:absolute;top:8px;right:8px;display:none;gap:2px}
-.styleCard:hover .acts{display:flex}
-.styleCard .acts button{padding:1px 4px;font-size:10px;background:#000a;border-color:#0000}
-.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:10px}
-.slide{background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:8px;display:flex;flex-direction:column;gap:6px}
-.slide canvas{width:100%;height:auto;border-radius:4px;background:#000;display:block}
-.slide textarea{min-height:36px;font-size:12px}
-.slide .hd{display:flex;justify-content:space-between;align-items:center;gap:6px}
-.tag{font-size:10px;padding:1px 5px;border-radius:99px;border:1px solid var(--line2);color:var(--dim)}
-.tag.hook{color:var(--warn);border-color:var(--warn)}
-.st{font-size:10px;letter-spacing:.04em;text-transform:uppercase}
-.st.queued{color:var(--dim)} .st.generating{color:var(--accent2)} .st.done{color:var(--accent)} .st.failed{color:var(--bad)}
-#log{position:fixed;left:0;right:0;bottom:0;max-height:120px;overflow:auto;background:#0b0c0fee;border-top:1px solid var(--line);padding:4px 10px;font:11px/1.4 ui-monospace,Menlo,monospace;color:var(--dim);white-space:pre-wrap}
-#log .e{color:var(--bad)} #log .o{color:var(--accent)} #log .w{color:var(--warn)}
-.cands{display:flex;flex-direction:column;gap:4px;margin-top:6px}
-.cand{background:var(--panel2);border:1px solid var(--line2);border-radius:6px;padding:6px 8px;cursor:pointer}
-.cand:hover{border-color:var(--accent)}
-.notice{background:#3a2f10;border:1px solid var(--warn);color:#ffe9b0;border-radius:6px;padding:6px 8px;margin-top:8px;display:flex;gap:8px;align-items:center}
+html{-webkit-text-size-adjust:100%}
+body{
+  margin:0; background:var(--bg); color:var(--fg);
+  font:14px/1.5 Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;
+  -webkit-font-smoothing:antialiased; letter-spacing:-.006em;
+}
+h1,h2,h3{margin:0;font-weight:600;letter-spacing:-.02em}
+p{margin:0}
+::selection{background:#ffffff22}
+
+/* ---------- primitives ---------- */
+button{font:inherit;color:var(--fg);background:none;border:none;cursor:pointer;letter-spacing:inherit}
+input,select,textarea{
+  font:inherit;color:var(--fg);background:var(--raised);border:1px solid var(--line);
+  border-radius:var(--r3);padding:9px 11px;outline:none;width:100%;
+  transition:border-color .15s var(--ease),background .15s var(--ease);
+}
+input:hover,select:hover,textarea:hover{border-color:var(--line2)}
+input:focus,select:focus,textarea:focus{border-color:#ffffff40;background:var(--raised2)}
+select{appearance:none;padding-right:28px;
+  background-image:linear-gradient(45deg,transparent 50%,var(--muted) 50%),linear-gradient(135deg,var(--muted) 50%,transparent 50%);
+  background-position:calc(100% - 15px) 50%,calc(100% - 10px) 50%;background-size:5px 5px,5px 5px;background-repeat:no-repeat}
+textarea{resize:none;line-height:1.5}
+input[type=checkbox]{
+  appearance:none;width:34px;height:20px;border-radius:999px;background:var(--raised2);
+  border:1px solid var(--line2);position:relative;flex:0 0 auto;cursor:pointer;padding:0;transition:background .18s var(--ease)}
+input[type=checkbox]::after{
+  content:'';position:absolute;top:2px;left:2px;width:14px;height:14px;border-radius:50%;
+  background:var(--muted);transition:transform .18s var(--ease),background .18s var(--ease)}
+input[type=checkbox]:checked{background:#f3f3f5;border-color:#f3f3f5}
+input[type=checkbox]:checked::after{transform:translateX(14px);background:#0a0a0b}
+input[type=color]{padding:0;width:34px;height:26px;border-radius:6px;overflow:hidden;cursor:pointer;background:none}
+input[type=color]::-webkit-color-swatch-wrapper{padding:2px}
+input[type=color]::-webkit-color-swatch{border:none;border-radius:4px}
+input[type=range]{
+  -webkit-appearance:none;appearance:none;background:none;border:none;padding:0;height:18px;cursor:pointer}
+input[type=range]::-webkit-slider-runnable-track{height:2px;background:var(--line2);border-radius:2px}
+input[type=range]::-webkit-slider-thumb{
+  -webkit-appearance:none;width:13px;height:13px;margin-top:-5.5px;border-radius:50%;background:var(--fg);
+  transition:transform .15s var(--ease)}
+input[type=range]:hover::-webkit-slider-thumb{transform:scale(1.15)}
+input[type=range]::-moz-range-track{height:2px;background:var(--line2)}
+input[type=range]::-moz-range-thumb{width:13px;height:13px;border:none;border-radius:50%;background:var(--fg)}
+
+.btn{
+  display:inline-flex;align-items:center;gap:7px;padding:9px 15px;border-radius:999px;
+  border:1px solid var(--line2);color:var(--fg);font-size:13.5px;font-weight:500;white-space:nowrap;
+  transition:background .15s var(--ease),border-color .15s var(--ease),opacity .15s var(--ease),transform .1s var(--ease)}
+.btn:hover{background:var(--raised2);border-color:#ffffff26}
+.btn:active{transform:scale(.98)}
+.btn.primary{background:var(--fg);color:#0a0a0b;border-color:var(--fg);font-weight:600}
+.btn.primary:hover{background:#fff;border-color:#fff}
+.btn.quiet{border-color:transparent;color:var(--muted)}
+.btn.quiet:hover{color:var(--fg);background:var(--raised)}
+.btn.sm{padding:6px 12px;font-size:12.5px}
+.btn:disabled{opacity:.4;pointer-events:none}
+.icon{
+  width:34px;height:34px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;
+  color:var(--muted);transition:background .15s var(--ease),color .15s var(--ease)}
+.icon:hover{background:var(--raised);color:var(--fg)}
+.icon svg{width:17px;height:17px;stroke:currentColor;fill:none;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}
+
 .hide{display:none!important}
-.drop{border:1px dashed var(--line2);border-radius:8px;padding:14px;text-align:center;color:var(--dim)}
-.drop.over{border-color:var(--accent);color:var(--accent)}
-.thumbs{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px}
-.thumbs img{height:74px;border-radius:4px;border:1px solid var(--line2)}
-.pf{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:6px;margin-top:8px}
-.pf .col input,.pf .col select{width:100%}
-.catbox{display:flex;gap:8px;flex-wrap:wrap;align-items:center;font-size:11px;color:var(--fg);text-transform:none;letter-spacing:0}
-.catbox label{color:var(--fg);text-transform:none;font-size:11px;letter-spacing:0;display:flex;gap:3px;align-items:center}
+.spacer{flex:1 1 auto}
+.row{display:flex;align-items:center;gap:10px}
+.muted{color:var(--muted)}
+.tiny{font-size:12px}
+.field{display:flex;flex-direction:column;gap:6px}
+.field > label{font-size:12px;color:var(--muted);font-weight:450}
+.switch{display:flex;align-items:center;gap:10px;justify-content:space-between;font-size:13px}
+.switch span{color:var(--fg)}
+
+/* ---------- top bar ---------- */
+header{
+  position:sticky;top:0;z-index:40;display:flex;align-items:center;gap:8px;
+  height:56px;padding:0 20px;background:#09090acc;backdrop-filter:blur(14px);
+  border-bottom:1px solid var(--line)}
+.brand{font-size:14.5px;font-weight:600;letter-spacing:-.02em;margin-right:6px}
+.brand em{font-style:normal;color:var(--faint);font-weight:450}
+.chip{
+  display:inline-flex;align-items:center;gap:8px;padding:6px 12px 6px 8px;border-radius:999px;
+  border:1px solid var(--line);color:var(--fg);font-size:13px;background:var(--surface);
+  transition:border-color .15s var(--ease),background .15s var(--ease)}
+.chip:hover{border-color:var(--line2);background:var(--raised)}
+.chip .sw{width:16px;height:16px;border-radius:5px;background:linear-gradient(135deg,#2f4f3a,#0e1a12);flex:0 0 auto}
+.dot{width:6px;height:6px;border-radius:50%;background:var(--faint);flex:0 0 auto;transition:background .2s}
+.dot.on{background:var(--ok)} .dot.err{background:var(--bad)}
+
+/* ---------- layout ---------- */
+main{max-width:1180px;margin:0 auto;padding:44px 20px 96px}
+.composer{max-width:660px;margin:0 auto}
+.seg{display:inline-flex;padding:3px;gap:2px;background:var(--surface);border:1px solid var(--line);border-radius:999px;margin-bottom:18px}
+.seg button{padding:6px 14px;border-radius:999px;font-size:13px;color:var(--muted);transition:color .15s var(--ease),background .15s var(--ease)}
+.seg button:hover{color:var(--fg)}
+.seg button.on{background:var(--raised2);color:var(--fg)}
+
+.sheet{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:6px}
+.sheet:focus-within{border-color:var(--line2)}
+#hookInput{background:none;border:none;padding:14px 14px 6px;font-size:17px;line-height:1.45;letter-spacing:-.015em;min-height:76px}
+#hookInput:focus{background:none}
+#hookInput::placeholder{color:var(--faint)}
+.composerBar{display:flex;align-items:center;gap:8px;padding:6px 6px 6px 10px}
+.composerBar select{width:auto;padding:6px 26px 6px 10px;font-size:13px;background-color:transparent;border-color:transparent;color:var(--muted)}
+.composerBar select:hover{background-color:var(--raised);color:var(--fg)}
+.hintline{margin-top:12px;font-size:12.5px;color:var(--faint);text-align:center}
+kbd{font:inherit;font-size:11.5px;padding:1px 5px;border:1px solid var(--line2);border-radius:5px;color:var(--muted)}
+
+.panel{margin-top:12px;background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:14px;animation:fade .2s var(--ease)}
+@keyframes fade{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:none}}
+.cands{display:flex;flex-direction:column;gap:6px;margin-top:12px}
+.cand{
+  text-align:left;padding:11px 13px;border-radius:var(--r2);border:1px solid var(--line);color:var(--fg);
+  font-size:13.5px;line-height:1.4;transition:border-color .15s var(--ease),background .15s var(--ease)}
+.cand:hover{border-color:#ffffff33;background:var(--raised)}
+.cats{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
+.cats button{
+  padding:5px 11px;border-radius:999px;border:1px solid var(--line);font-size:12px;color:var(--faint);
+  transition:all .15s var(--ease)}
+.cats button:hover{color:var(--fg);border-color:var(--line2)}
+.cats button.on{background:var(--raised2);color:var(--fg);border-color:transparent}
+
+.drop{
+  border:1px dashed var(--line2);border-radius:var(--r);padding:30px 20px;text-align:center;color:var(--muted);
+  font-size:13.5px;transition:border-color .15s var(--ease),background .15s var(--ease);cursor:pointer}
+.drop:hover,.drop.over{border-color:#ffffff44;background:var(--surface);color:var(--fg)}
+.thumbs{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+.thumbs img{height:78px;border-radius:var(--r3);border:1px solid var(--line);cursor:pointer;transition:opacity .15s}
+.thumbs img:hover{opacity:.55}
+details{margin-top:14px}
+details summary{
+  cursor:pointer;list-style:none;font-size:12.5px;color:var(--muted);padding:8px 0;
+  display:flex;align-items:center;gap:6px}
+details summary::-webkit-details-marker{display:none}
+details summary::before{content:'';width:5px;height:5px;border-right:1.4px solid currentColor;border-bottom:1.4px solid currentColor;transform:rotate(-45deg);transition:transform .2s var(--ease)}
+details[open] summary::before{transform:rotate(45deg)}
+details summary:hover{color:var(--fg)}
+.pf{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:10px;padding:4px 0 8px}
+.pf .field > input,.pf .field > select{font-size:12.5px;padding:7px 9px}
+
+.notice{
+  display:flex;align-items:center;gap:10px;margin-top:12px;padding:10px 12px;border-radius:var(--r2);
+  background:#211c0d;border:1px solid #4a3d13;color:#f0dfae;font-size:12.5px}
+
+/* ---------- deck ---------- */
+#deckSection{margin-top:52px}
+.deckHead{display:flex;align-items:center;gap:8px;margin-bottom:16px;padding-bottom:14px;border-bottom:1px solid var(--line)}
+.deckHead h2{font-size:14px}
+#captionWrap{margin-bottom:20px}
+#capInput{min-height:70px;font-size:13.5px}
+
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(212px,1fr));gap:18px}
+.card{border-radius:var(--r);background:var(--surface);border:1px solid var(--line);overflow:hidden;transition:border-color .18s var(--ease)}
+.card:hover{border-color:var(--line2)}
+.card.open{border-color:#ffffff2e}
+.cw{position:relative;cursor:pointer;line-height:0;background:#000}
+.cw canvas{width:100%;height:auto;display:block;transition:opacity .2s}
+.badge{
+  position:absolute;top:9px;left:9px;padding:2px 7px;border-radius:999px;font-size:11px;font-weight:500;
+  background:#00000073;backdrop-filter:blur(6px);color:#fff;line-height:1.6;letter-spacing:.01em}
+.tools{
+  position:absolute;right:8px;top:8px;display:flex;gap:4px;opacity:0;transform:translateY(-3px);
+  transition:opacity .18s var(--ease),transform .18s var(--ease)}
+.card:hover .tools{opacity:1;transform:none}
+.tools button{
+  width:28px;height:28px;border-radius:8px;background:#0a0a0bcc;backdrop-filter:blur(6px);color:#e9e9ec;
+  display:flex;align-items:center;justify-content:center;transition:background .15s var(--ease)}
+.tools button:hover{background:#000}
+.tools svg{width:14px;height:14px;stroke:currentColor;fill:none;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+.state{
+  position:absolute;left:0;right:0;bottom:0;padding:7px 10px;font-size:11.5px;letter-spacing:.01em;
+  background:linear-gradient(transparent,#000000cc);color:#fff;display:flex;align-items:center;gap:6px}
+.state.done{display:none}
+.state .sdot{width:5px;height:5px;border-radius:50%;background:currentColor}
+.state.generating{color:#dfe6ff} .state.queued{color:#b9b9c2} .state.failed{color:#ffb4b4}
+.card .edit{padding:12px;display:flex;flex-direction:column;gap:8px;border-top:1px solid var(--line)}
+.card .edit textarea{font-size:13px;padding:8px 10px;min-height:34px;background:var(--bg)}
+.card .edit .lbl{font-size:11px;color:var(--faint)}
+.shimmer{position:relative;overflow:hidden}
+.shimmer::after{content:'';position:absolute;inset:0;background:linear-gradient(90deg,transparent,#ffffff0f,transparent);animation:sh 1.4s infinite}
+@keyframes sh{from{transform:translateX(-100%)}to{transform:translateX(100%)}}
+
+/* ---------- drawers ---------- */
+#scrim{position:fixed;inset:0;background:#000000a6;backdrop-filter:blur(3px);opacity:0;pointer-events:none;transition:opacity .22s var(--ease);z-index:50}
+#scrim.on{opacity:1;pointer-events:auto}
+.drawer{
+  position:fixed;top:0;right:0;bottom:0;width:min(400px,100vw);z-index:60;background:var(--surface);
+  border-left:1px solid var(--line);transform:translateX(100%);transition:transform .26s var(--ease);
+  display:flex;flex-direction:column}
+.drawer.on{transform:none}
+.drawer header{position:static;background:none;backdrop-filter:none;border-bottom:1px solid var(--line);padding:0 12px 0 20px;flex:0 0 auto}
+.drawer .body{padding:20px;overflow:auto;display:flex;flex-direction:column;gap:20px}
+.group{display:flex;flex-direction:column;gap:12px}
+.group > h3{font-size:11.5px;font-weight:500;color:var(--faint);letter-spacing:.04em;text-transform:uppercase}
+.slider{display:grid;grid-template-columns:1fr auto;gap:4px 10px;align-items:center}
+.slider label{font-size:12.5px;color:var(--muted)}
+.slider .val{font-size:11.5px;color:var(--faint);font-variant-numeric:tabular-nums}
+.slider input[type=range]{grid-column:1/3}
+.pair{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.swatches{display:flex;gap:14px;align-items:center}
+.swatches .field{align-items:flex-start;gap:5px}
+
+.styleList{display:flex;flex-direction:column;gap:10px}
+.styleCard{
+  position:relative;display:flex;gap:12px;align-items:center;padding:10px;border-radius:var(--r2);
+  border:1px solid var(--line);background:var(--bg);cursor:pointer;text-align:left;
+  transition:border-color .15s var(--ease),background .15s var(--ease)}
+.styleCard:hover{border-color:var(--line2);background:var(--raised)}
+.styleCard.on{border-color:#ffffff4d;background:var(--raised)}
+.styleCard canvas{width:52px;height:auto;border-radius:6px;display:block;flex:0 0 auto;background:#000}
+.styleCard .nm{font-size:13.5px;font-weight:500}
+.styleCard .ar{font-size:11.5px;color:var(--faint);margin-top:2px}
+.styleCard .acts{margin-left:auto;display:flex;gap:2px;opacity:0;transition:opacity .15s}
+.styleCard:hover .acts{opacity:1}
+.styleCard .acts button{width:26px;height:26px;border-radius:6px;color:var(--muted)}
+.styleCard .acts button:hover{background:var(--raised2);color:var(--fg)}
+
+#log{
+  font:11.5px/1.6 ui-monospace,SFMono-Regular,Menlo,monospace;color:var(--faint);
+  background:var(--bg);border:1px solid var(--line);border-radius:var(--r3);padding:10px;
+  max-height:190px;overflow:auto;white-space:pre-wrap;word-break:break-word}
+#log .e{color:#e88} #log .o{color:#8dd6a4} #log .w{color:#e5c07b}
+
+/* ---------- menu + toasts ---------- */
+.menuWrap{position:relative}
+.menu{
+  position:absolute;right:0;top:calc(100% + 6px);min-width:196px;padding:6px;z-index:30;
+  background:var(--raised);border:1px solid var(--line2);border-radius:var(--r2);
+  box-shadow:0 16px 40px #00000080;animation:fade .14s var(--ease)}
+.menu button{display:flex;width:100%;padding:8px 10px;border-radius:6px;font-size:13px;color:var(--fg);text-align:left}
+.menu button:hover{background:var(--raised2)}
+.menu button.danger{color:#f3a1a1}
+.menu hr{border:none;border-top:1px solid var(--line);margin:5px 2px}
+
+#toasts{position:fixed;left:50%;bottom:28px;transform:translateX(-50%);z-index:80;display:flex;flex-direction:column;gap:8px;align-items:center;pointer-events:none}
+.toast{
+  padding:9px 16px;border-radius:999px;background:var(--raised);border:1px solid var(--line2);
+  font-size:13px;box-shadow:0 12px 32px #00000073;animation:pop .22s var(--ease);max-width:82vw;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.toast.err{border-color:#7f3b3b;color:#ffc9c9}
+.toast.ok{border-color:#2f6b45;color:#c6f0d6}
+@keyframes pop{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+
+@media(max-width:640px){
+  main{padding:28px 14px 80px}
+  .grid{grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px}
+  header{padding:0 12px}
+}
 </style>
 
-<section id="setup">
-  <div class="bar">
-    <h1>Setup</h1>
-    <div class="sep"></div>
-    <label for="apiKey">Gemini key</label>
-    <input id="apiKey" type="password" class="grow" placeholder="AIza..." autocomplete="off" style="min-width:220px">
-    <button id="toggleKey" class="mini">show</button>
-    <label for="textModel">Text model</label><input id="textModel" value="gemini-3.6-flash" style="width:170px">
-    <label for="imageModel">Image model</label><input id="imageModel" value="gemini-3.1-flash-image" style="width:190px">
-    <label for="apiShape">API shape</label>
-    <select id="apiShape">
-      <option value="auto">auto</option>
-      <option value="interactions">interactions</option>
-      <option value="generateContent">generateContent</option>
-    </select>
-    <button id="testConn">Test connection</button>
-  </div>
-  <div class="bar" style="margin-top:6px">
-    <label style="text-transform:none;letter-spacing:0;color:var(--fg);font-size:12px">
-      <input type="checkbox" id="remember"> Remember on this device
-    </label>
-    <span class="hint">this stores the key in plain text in this browser — fine for a local file, don't host this page anywhere public.</span>
-    <div class="sep"></div>
-    <label style="text-transform:none;letter-spacing:0;color:var(--fg);font-size:12px">
-      <input type="checkbox" id="sendImageCfg" checked> send imageConfig/responseModalities
-    </label>
-  </div>
-</section>
+<header>
+  <div class="brand">Carousel</div>
+  <button id="btnStyle" class="chip"><span class="sw"></span><span id="styleName">Photographic</span></button>
+  <div class="spacer"></div>
+  <button id="btnDesign" class="icon" title="Design">
+    <svg viewBox="0 0 24 24"><path d="M4 7h10M18 7h2M4 17h6M14 17h6M16 4v6M10 14v6"/></svg>
+  </button>
+  <button id="btnSettings" class="icon" title="Settings">
+    <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.6 1.6 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.6 1.6 0 0 0-1.8-.3 1.6 1.6 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1A1.6 1.6 0 0 0 9 19.4a1.6 1.6 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.6 1.6 0 0 0 .3-1.8 1.6 1.6 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1A1.6 1.6 0 0 0 4.6 9a1.6 1.6 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.6 1.6 0 0 0 1.8.3H9a1.6 1.6 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.6 1.6 0 0 0 1 1.5 1.6 1.6 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.6 1.6 0 0 0-.3 1.8V9a1.6 1.6 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.6 1.6 0 0 0-1.5 1z"/></svg>
+  </button>
+  <span id="connDot" class="dot" title="not connected"></span>
+</header>
 
-<section id="stylesSec">
-  <div class="bar"><h1>Style</h1><span class="hint">one style per deck — switching re-renders captions instantly</span></div>
-  <div class="styles" id="styleCards"></div>
-  <div id="imageryNotice" class="notice hide">
-    <span>Imagery style differs from the images already generated.</span>
-    <button id="regenAllImgs" class="mini">Regenerate all images</button>
-    <button id="dismissNotice" class="mini ghost">Dismiss</button>
-  </div>
-</section>
-
-<section id="hookLib">
-  <div class="bar">
-    <h1>Hook library</h1><span class="hint" id="hookCount"></span>
-    <div class="sep"></div>
-    <label for="niche">Niche</label><input id="niche" class="grow" placeholder="e.g. amateur golfers trying to break 90" style="min-width:240px">
-    <button id="surprise">Surprise me</button>
-    <button id="reroll" class="ghost">Reroll</button>
-  </div>
-  <div class="catbox" id="catBox" style="margin-top:6px"></div>
-  <div class="cands" id="cands"></div>
-</section>
-
-<section id="modes">
-  <div class="tabs">
-    <button data-mode="A" class="on">Mode A — Hook</button>
-    <button data-mode="B">Mode B — Clone from examples</button>
-  </div>
-
-  <div id="modeA" style="padding-top:10px">
-    <div class="col"><label for="hookInput">Hook (slide 1 title — the promise, no facts)</label>
-      <textarea id="hookInput" placeholder="7 Realizations That Will Make You Better at Golf"></textarea></div>
-    <div class="bar" style="margin-top:8px">
-      <label for="slideCount">Slides</label>
-      <select id="slideCount"></select>
-      <label style="text-transform:none;letter-spacing:0;color:var(--fg);font-size:12px">
-        <input type="checkbox" id="autoImages" checked> generate images after writing</label>
-      <button id="genDeck" class="primary">Generate deck</button>
-      <button id="genAllImages">Generate all images</button>
-      <span class="hint" id="deckStatus"></span>
+<main>
+  <section class="composer">
+    <div class="seg" id="modeTabs">
+      <button data-mode="A" class="on">Write from a hook</button>
+      <button data-mode="B">Match a style</button>
     </div>
-    <div id="rawRetry" class="notice hide">
-      <span class="grow">Model returned something that didn't parse as JSON.</span>
-      <button id="showRaw" class="mini">Show raw</button><button id="retryDeck" class="mini">Retry</button>
+
+    <div id="modeA">
+      <div class="sheet">
+        <textarea id="hookInput" rows="2" placeholder="What's the hook?"></textarea>
+        <div class="composerBar">
+          <button id="surprise" class="btn quiet sm" title="Adapt a viral hook template">
+            <svg viewBox="0 0 24 24" style="width:14px;height:14px;stroke:currentColor;fill:none;stroke-width:1.6;stroke-linejoin:round"><path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z"/></svg>
+            Suggest
+          </button>
+          <select id="slideCount" title="Slides"></select>
+          <div class="spacer"></div>
+          <span id="deckStatus" class="tiny muted"></span>
+          <button id="genDeck" class="btn primary">Generate</button>
+        </div>
+      </div>
+      <div class="hintline"><kbd>⌘</kbd> <kbd>↵</kbd> to generate · images follow automatically</div>
+
+      <div id="suggestPanel" class="panel hide">
+        <div class="field">
+          <label for="niche">Niche <span id="hookCount" class="muted"></span></label>
+          <input id="niche" placeholder="e.g. amateur golfers trying to break 90">
+        </div>
+        <div class="cats" id="catBox"></div>
+        <div class="cands" id="cands"></div>
+        <div class="row" style="margin-top:12px">
+          <button id="reroll" class="btn sm quiet">Reroll</button>
+          <div class="spacer"></div>
+          <button id="closeSuggest" class="btn sm quiet">Close</button>
+        </div>
+      </div>
+
+      <div id="rawRetry" class="notice hide">
+        <span class="spacer">That didn't come back as valid JSON.</span>
+        <button id="showRaw" class="btn sm quiet">Raw</button>
+        <button id="retryDeck" class="btn sm">Retry</button>
+      </div>
+    </div>
+
+    <div id="modeB" class="hide">
+      <div class="drop" id="drop">
+        Drop 1–8 screenshots of a carousel you like
+        <div class="tiny" style="margin-top:6px;color:var(--faint)">or click to choose files</div>
+        <input type="file" id="fileInput" accept="image/*" multiple class="hide">
+      </div>
+      <div class="thumbs" id="exThumbs"></div>
+      <div class="row" style="margin-top:14px">
+        <button id="extract" class="btn primary">Extract style</button>
+        <button id="rebuildCopy" class="btn">Rewrite this deck</button>
+        <div class="spacer"></div>
+        <span id="cloneStatus" class="tiny muted"></span>
+      </div>
+      <details>
+        <summary>Fine-tune the extracted profile</summary>
+        <div id="profileForm" class="pf"></div>
+      </details>
+      <div class="row" style="margin-top:6px">
+        <input id="profileName" placeholder="Name this style" style="max-width:240px">
+        <button id="saveProfile" class="btn sm">Save to styles</button>
+      </div>
+    </div>
+  </section>
+
+  <section id="deckSection" class="hide">
+    <div class="deckHead">
+      <h2><span id="slideTally"></span></h2>
+      <span id="saveState" class="tiny" style="color:var(--faint)"></span>
+      <div class="spacer"></div>
+      <button id="btnCaption" class="btn sm quiet">Caption</button>
+      <button id="dlAll" class="btn sm">Download</button>
+      <div class="menuWrap">
+        <button id="btnMore" class="icon" title="More">
+          <svg viewBox="0 0 24 24"><circle cx="12" cy="5" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="12" cy="19" r="1"/></svg>
+        </button>
+        <div id="moreMenu" class="menu hide">
+          <button id="genAllImages">Generate missing images</button>
+          <button id="addSlide">Add slide</button>
+          <hr>
+          <button id="exportProj">Export project</button>
+          <button id="importProj">Import project</button>
+          <input type="file" id="importFile" accept="application/json" class="hide">
+          <hr>
+          <button id="clearDeck" class="danger">Clear deck</button>
+        </div>
+      </div>
+    </div>
+    <div id="captionWrap" class="hide">
+      <textarea id="capInput" placeholder="Post caption"></textarea>
+      <div class="row" style="margin-top:8px"><div class="spacer"></div><button id="copyCap" class="btn sm quiet">Copy caption</button></div>
+    </div>
+    <div class="grid" id="slideGrid"></div>
+  </section>
+</main>
+
+<div id="scrim"></div>
+
+<aside id="drawerStyle" class="drawer">
+  <header><h2>Style</h2><div class="spacer"></div><button class="icon" data-close><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button></header>
+  <div class="body">
+    <div class="tiny" style="color:var(--faint)">One style per deck. Switching redraws captions instantly — free.</div>
+    <div class="styleList" id="styleCards"></div>
+    <div id="imageryNotice" class="notice hide">
+      <span class="spacer">Different imagery to what's generated.</span>
+      <button id="regenAllImgs" class="btn sm">Redo images</button>
+      <button id="dismissNotice" class="btn sm quiet">Keep</button>
     </div>
   </div>
+</aside>
 
-  <div id="modeB" class="hide" style="padding-top:10px">
-    <div class="drop" id="drop">Drop 1–8 screenshots here, or <button id="pickFiles" class="mini">choose files</button>
-      <input type="file" id="fileInput" accept="image/*" multiple class="hide"></div>
-    <div class="thumbs" id="exThumbs"></div>
-    <div class="bar" style="margin-top:8px">
-      <button id="extract" class="primary">Extract style profile</button>
-      <button id="rebuildCopy">Rebuild this deck's copy in that style</button>
-      <span class="hint" id="cloneStatus"></span>
+<aside id="drawerDesign" class="drawer">
+  <header><h2>Design</h2><div class="spacer"></div><button class="icon" data-close><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button></header>
+  <div class="body">
+    <div class="group">
+      <h3>Format</h3>
+      <div class="pair">
+        <div class="field"><label for="cAspect">Aspect</label><select id="cAspect"><option>9:16</option><option>4:5</option><option>1:1</option></select></div>
+        <div class="field"><label for="cTreat">Caption</label><select id="cTreat"><option value="outlined">Outlined</option><option value="label-boxes">Label boxes</option><option value="plain">Plain</option></select></div>
+      </div>
     </div>
-    <div id="profileForm" class="pf"></div>
-    <div class="bar" style="margin-top:8px">
-      <input id="profileName" placeholder="profile name" style="width:200px">
-      <button id="saveProfile">Save profile to style picker</button>
+    <div class="group">
+      <h3>Type</h3>
+      <div class="field"><label for="cFont">Font family</label><input id="cFont" placeholder="Inter"></div>
+      <div class="pair">
+        <div class="field"><label for="cWeight">Weight</label><select id="cWeight"><option>400</option><option>600</option><option>700</option><option>800</option><option>900</option></select></div>
+        <div class="field"><label for="cAlign">Align</label><select id="cAlign"><option>center</option><option>left</option><option>right</option></select></div>
+      </div>
+      <div class="switch"><span>Italic</span><input type="checkbox" id="cItalic"></div>
+      <div class="switch"><span>Auto-number titles</span><input type="checkbox" id="cNumber"></div>
+    </div>
+    <div class="group">
+      <h3>Size &amp; position</h3>
+      <div class="slider"><label for="rTitle">Title</label><span class="val" id="vTitle"></span><input type="range" id="rTitle" min="0.02" max="0.11" step="0.001"></div>
+      <div class="slider"><label for="rBody">Body</label><span class="val" id="vBody"></span><input type="range" id="rBody" min="0.015" max="0.075" step="0.001"></div>
+      <div class="slider"><label for="rTop">Text top</label><span class="val" id="vTop"></span><input type="range" id="rTop" min="0.02" max="0.85" step="0.005"></div>
+      <div class="slider"><label for="rHookTop">Cover top</label><span class="val" id="vHookTop"></span><input type="range" id="rHookTop" min="0.02" max="0.8" step="0.005"></div>
+    </div>
+    <div class="group">
+      <h3>Contrast</h3>
+      <div class="slider"><label for="rStroke">Outline</label><span class="val" id="vStroke"></span><input type="range" id="rStroke" min="0" max="24" step="1"></div>
+      <div class="slider"><label for="rShadow">Shadow</label><span class="val" id="vShadow"></span><input type="range" id="rShadow" min="0" max="1" step="0.05"></div>
+      <div class="swatches">
+        <div class="field"><label for="cText">Text</label><input type="color" id="cText"></div>
+        <div class="field"><label for="cStroke">Outline</label><input type="color" id="cStroke"></div>
+        <div class="field"><label for="cLabelBg">Box</label><input type="color" id="cLabelBg"></div>
+      </div>
     </div>
   </div>
-</section>
+</aside>
 
-<section id="renderCtl">
-  <div class="bar">
-    <h1>Render</h1>
-    <label>Aspect</label><select id="cAspect"><option>9:16</option><option>4:5</option><option>1:1</option></select>
-    <label>Treatment</label><select id="cTreat"><option value="outlined">outlined</option><option value="label-boxes">label-boxes</option><option value="plain">plain</option></select>
-    <label>Font</label><input id="cFont" style="width:130px">
-    <label>Weight</label><select id="cWeight"><option>400</option><option>600</option><option>700</option><option>800</option><option>900</option></select>
-    <label style="text-transform:none;letter-spacing:0;color:var(--fg);font-size:12px"><input type="checkbox" id="cItalic"> italic</label>
-    <label>Align</label><select id="cAlign"><option>center</option><option>left</option><option>right</option></select>
-    <label>Text</label><input type="color" id="cText">
-    <label>Stroke</label><input type="color" id="cStroke">
-    <label>Box</label><input type="color" id="cLabelBg">
+<aside id="drawerSettings" class="drawer">
+  <header><h2>Settings</h2><div class="spacer"></div><button class="icon" data-close><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button></header>
+  <div class="body">
+    <div class="group">
+      <h3>Connection</h3>
+      <div class="field">
+        <label for="apiKey">Gemini API key</label>
+        <div class="row">
+          <input id="apiKey" type="password" placeholder="AIza…" autocomplete="off">
+          <button id="toggleKey" class="btn sm quiet">Show</button>
+        </div>
+      </div>
+      <div class="switch"><span>Remember on this device</span><input type="checkbox" id="remember"></div>
+      <div class="tiny" style="color:var(--faint)">Stored as plain text in this browser. Leave off on the hosted copy.</div>
+      <div class="row"><button id="testConn" class="btn sm">Test connection</button></div>
+    </div>
+    <div class="group">
+      <h3>Models</h3>
+      <div class="field"><label for="textModel">Text</label><input id="textModel" value="gemini-3.6-flash"></div>
+      <div class="field"><label for="imageModel">Image</label><input id="imageModel" value="gemini-3.1-flash-image"></div>
+      <div class="field"><label for="apiShape">Request shape</label>
+        <select id="apiShape"><option value="auto">auto</option><option value="interactions">interactions</option><option value="generateContent">generateContent</option></select>
+      </div>
+      <div class="switch"><span>Send imageConfig</span><input type="checkbox" id="sendImageCfg" checked></div>
+    </div>
+    <div class="group">
+      <h3>Console</h3>
+      <div id="log"></div>
+    </div>
   </div>
-  <div class="bar" style="margin-top:6px">
-    <label>Title <span id="vTitle" class="hint"></span></label><input type="range" id="rTitle" min="0.02" max="0.11" step="0.001">
-    <label>Body <span id="vBody" class="hint"></span></label><input type="range" id="rBody" min="0.015" max="0.075" step="0.001">
-    <label>Stroke w <span id="vStroke" class="hint"></span></label><input type="range" id="rStroke" min="0" max="24" step="1">
-    <label>Shadow <span id="vShadow" class="hint"></span></label><input type="range" id="rShadow" min="0" max="1" step="0.05">
-    <label>Text top <span id="vTop" class="hint"></span></label><input type="range" id="rTop" min="0.02" max="0.85" step="0.005">
-    <label>Hook top <span id="vHookTop" class="hint"></span></label><input type="range" id="rHookTop" min="0.02" max="0.8" step="0.005">
-    <label style="text-transform:none;letter-spacing:0;color:var(--fg);font-size:12px"><input type="checkbox" id="cNumber"> auto-number titles</label>
-  </div>
-</section>
+</aside>
 
-<section id="outputSec">
-  <div class="bar">
-    <h1>Output</h1>
-    <button id="dlAll">Download all (ZIP)</button>
-    <button id="copyCap">Copy caption</button>
-    <button id="exportProj">Export project</button>
-    <button id="importProj">Import project</button>
-    <input type="file" id="importFile" accept="application/json" class="hide">
-    <button id="addSlide" class="ghost">+ slide</button>
-    <button id="clearDeck" class="ghost danger">Clear deck</button>
-    <span class="hint" id="saveState"></span>
-  </div>
-  <div class="col" style="margin-top:6px"><label for="capInput">Caption</label><textarea id="capInput" style="min-height:44px"></textarea></div>
-</section>
-
-<div class="grid" id="slideGrid"></div>
-<div id="log"></div>
+<div id="toasts"></div>
 
 <script>
 /* ============================ hook library (parsed from the PDF at build time) ============================ */
@@ -232,7 +487,25 @@ function log(msg, cls){
   if(cls) d.className = cls;
   d.textContent = new Date().toLocaleTimeString() + '  ' + msg;
   $('log').appendChild(d); $('log').scrollTop = 1e9;
+  if(cls === 'e' || cls === 'o') toast(msg.split('\n')[0], cls === 'e' ? 'err' : 'ok');
 }
+function toast(msg, kind){
+  const t = document.createElement('div');
+  t.className = 'toast' + (kind ? ' '+kind : '');
+  t.textContent = msg.length > 90 ? msg.slice(0,88)+'…' : msg;
+  t.title = msg;
+  $('toasts').appendChild(t);
+  setTimeout(()=>{ t.style.transition = 'opacity .3s, transform .3s'; t.style.opacity = 0; t.style.transform = 'translateY(6px)'; }, kind === 'err' ? 5200 : 2600);
+  setTimeout(()=>t.remove(), kind === 'err' ? 5600 : 3000);
+}
+const ICON = {
+  regen:'<path d="M20 11a8 8 0 1 0-2.3 5.7"/><path d="M20 5v6h-6"/>',
+  up:'<path d="M12 16V4"/><path d="M7 9l5-5 5 5"/><path d="M4 17v2a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-2"/>',
+  dl:'<path d="M12 4v12"/><path d="M7 11l5 5 5-5"/><path d="M4 19h16"/>',
+  left:'<path d="M14 6l-6 6 6 6"/>', right:'<path d="M10 6l6 6-6 6"/>',
+  del:'<path d="M5 7h14"/><path d="M9 7V5h6v2"/><path d="M7 7l1 12h8l1-12"/>'
+};
+const svg = d => '<svg viewBox="0 0 24 24">'+d+'</svg>';
 function debounce(fn, ms){ let t; return (...a)=>{ clearTimeout(t); t=setTimeout(()=>fn(...a),ms); }; }
 
 /* ============================ style presets ============================ */
@@ -453,7 +726,7 @@ let AUTO_SHAPE = null;   // whichever shape answered first this session
 /* wantImage: ask for an image back. Returns {text, images[]} */
 async function callModel({model, parts, wantImage=false, aspect='9:16'}){
   const c = cfg();
-  if(!c.key) throw new Error('No API key. Paste one into Setup.');
+  if(!c.key){ openDrawer('drawerSettings'); $('apiKey').focus(); throw new Error('Add your Gemini API key in Settings.'); }
   const opts = {wantImage, aspect, imageCfg: $('sendImageCfg').checked};
   let order = c.shape === 'auto' ? ['interactions','generateContent'] : [c.shape];
   if(c.shape === 'auto' && AUTO_SHAPE) order = [AUTO_SHAPE].concat(order.filter(s=>s!==AUTO_SHAPE));
@@ -468,7 +741,8 @@ async function callModel({model, parts, wantImage=false, aspect='9:16'}){
       return res;
     }catch(e){
       if(!firstErr) firstErr = e;
-      log('API error ['+order[i]+']: '+e.message,'e');
+      // a failed probe of the other request shape is not worth shouting about
+      log('API error ['+order[i]+']: '+e.message, i < order.length-1 ? 'w' : 'e');
       // targeted, logged retry: some models reject the image config fields
       if(wantImage && opts.imageCfg && /modalit|image_config|imageConfig|aspect/i.test(e.raw||e.message||'')){
         log('retrying ['+order[i]+'] without responseModalities/imageConfig','w');
@@ -665,29 +939,40 @@ function drawAll(){ for(const s of S.slides) drawOne(s.id); }
 function buildGrid(){
   const g = $('slideGrid'); g.innerHTML = '';
   S.slides.forEach((s,i)=>{
-    const d = document.createElement('div'); d.className = 'slide';
+    const d = document.createElement('article'); d.className = 'card' + (OPEN.has(s.id) ? ' open' : '');
+    const tool = (a,t) => '<button data-a="'+a+'" title="'+t+'">'+svg(ICON[a])+'</button>';
     d.innerHTML =
-      '<div class="hd"><span class="tag '+(s.kind==='hook'?'hook':'')+'">'+(i+1)+' · '+s.kind+'</span>'+
-      '<span class="st '+(s.status||'')+'" data-st="'+s.id+'">'+(s.status||'')+'</span></div>'+
-      '<canvas data-id="'+s.id+'"></canvas>'+
-      '<textarea data-f="title" placeholder="title">'+(s.title||'')+'</textarea>'+
-      (s.kind==='hook' ? '' : '<textarea data-f="body" placeholder="body">'+(s.body||'')+'</textarea>')+
-      '<textarea data-f="scene" placeholder="scene (picture only)">'+(s.scene||'')+'</textarea>'+
-      '<div class="row tight">'+
-        '<button class="mini" data-a="img">Regenerate image</button>'+
-        '<button class="mini" data-a="up">Upload own</button>'+
-        '<button class="mini" data-a="dl">JPEG</button>'+
-        '<button class="mini ghost" data-a="left">←</button>'+
-        '<button class="mini ghost" data-a="right">→</button>'+
-        '<button class="mini ghost danger" data-a="del">delete</button>'+
+      '<div class="cw">'+
+        '<canvas data-id="'+s.id+'"></canvas>'+
+        '<span class="badge">'+String(i+1).padStart(2,'0')+(s.kind==='hook'?' · cover':'')+'</span>'+
+        '<div class="tools">'+tool('regen','Regenerate image')+tool('up','Use my own image')+
+          tool('dl','Download JPEG')+tool('left','Move left')+tool('right','Move right')+tool('del','Delete')+'</div>'+
+        '<div class="state '+(s.status||'')+'" data-st="'+s.id+'"></div>'+
         '<input type="file" accept="image/*" class="hide" data-a="file">'+
+      '</div>'+
+      '<div class="edit'+(OPEN.has(s.id) ? '' : ' hide')+'">'+
+        '<div class="lbl">Title</div><textarea data-f="title" rows="2"></textarea>'+
+        (s.kind==='hook' ? '' : '<div class="lbl">Body</div><textarea data-f="body" rows="3"></textarea>')+
+        '<div class="lbl">Scene — picture only, never words</div><textarea data-f="scene" rows="2"></textarea>'+
       '</div>';
     g.appendChild(d);
 
     d.querySelectorAll('textarea').forEach(t=>{
-      t.addEventListener('input', ()=>{ s[t.dataset.f] = t.value; drawOne(s.id); autosave(); });
+      t.value = s[t.dataset.f] || '';
+      t.addEventListener('input', ()=>{
+        s[t.dataset.f] = t.value; drawOne(s.id); autosave();
+        t.style.height = 'auto'; t.style.height = t.scrollHeight + 'px';
+      });
     });
-    d.querySelector('[data-a=img]').onclick = () => genImage(s, true);
+    d.querySelector('.cw').onclick = e => {
+      if(e.target.closest('.tools')) return;
+      const ed = d.querySelector('.edit');
+      const nowOpen = ed.classList.toggle('hide') === false;
+      d.classList.toggle('open', nowOpen);
+      nowOpen ? OPEN.add(s.id) : OPEN.delete(s.id);
+      if(nowOpen) ed.querySelector('textarea').focus();
+    };
+    d.querySelector('[data-a=regen]').onclick = () => genImage(s, true);
     d.querySelector('[data-a=up]').onclick = () => d.querySelector('[data-a=file]').click();
     d.querySelector('[data-a=file]').onchange = e => {
       const f = e.target.files[0]; if(!f) return;
@@ -696,16 +981,27 @@ function buildGrid(){
       rd.readAsDataURL(f);
     };
     d.querySelector('[data-a=dl]').onclick = () => downloadSlide(i);
-    d.querySelector('[data-a=del]').onclick = () => { S.slides.splice(i,1); buildGrid(); autosave(); };
+    d.querySelector('[data-a=del]').onclick = () => { S.slides.splice(i,1); OPEN.delete(s.id); buildGrid(); autosave(); };
     d.querySelector('[data-a=left]').onclick = () => { if(i>0){ const t=S.slides[i-1]; S.slides[i-1]=S.slides[i]; S.slides[i]=t; buildGrid(); autosave(); } };
     d.querySelector('[data-a=right]').onclick = () => { if(i<S.slides.length-1){ const t=S.slides[i+1]; S.slides[i+1]=S.slides[i]; S.slides[i]=t; buildGrid(); autosave(); } };
     renderSlide(s, d.querySelector('canvas'));
+    setStatus(s, s.status || '', s.error);
   });
+  refreshDeckChrome();
+}
+const OPEN = new Set();   // slide ids with the editor expanded
+function refreshDeckChrome(){
+  const n = S.slides.length;
+  $('deckSection').classList.toggle('hide', !n);
+  $('slideTally').textContent = n ? n + (n === 1 ? ' slide' : ' slides') : '';
 }
 function setStatus(s, st, err){
   s.status = st; s.error = err||'';
   const el = document.querySelector('[data-st="'+s.id+'"]');
-  if(el){ el.className = 'st '+st; el.textContent = st + (err ? ' · '+err.slice(0,40) : ''); el.title = err||''; }
+  if(!el) return;
+  el.className = 'state ' + (st||'');
+  el.innerHTML = st && st !== 'done' ? '<span class="sdot"></span>' + (err ? 'failed — tap ↻' : st) : '';
+  el.title = err || '';
 }
 
 /* ============================ style picker ============================ */
@@ -734,19 +1030,29 @@ function buildStyles(){
   allStyles().forEach(({key,p})=>{
     const d = document.createElement('div');
     d.className = 'styleCard' + (key === S.styleKey ? ' on' : '');
-    d.innerHTML = '<canvas></canvas><div class="nm">'+(p.name||'unnamed')+'</div><div class="ar">'+(p.aspect_ratio||'')+' · '+(p.caption_treatment||'')+'</div>'+
-      (key.startsWith('saved:') ? '<div class="acts"><button data-a="ren">ren</button><button data-a="del">del</button></div>' : '');
+    d.innerHTML = '<canvas></canvas><div><div class="nm">'+(p.name||'unnamed')+'</div>'+
+      '<div class="ar">'+(p.aspect_ratio||'')+' · '+(p.caption_treatment||'').replace('-',' ')+'</div></div>'+
+      (key.startsWith('saved:')
+        ? '<div class="acts"><button data-a="ren" title="Rename">'+svg('<path d="M4 20h4l10-10-4-4L4 16z"/>')+'</button>'+
+          '<button data-a="del" title="Delete">'+svg(ICON.del)+'</button></div>' : '');
     wrapEl.appendChild(d);
     ensureFont(p.font_family);
     drawThumb(d.querySelector('canvas'), p);
     d.onclick = e => {
-      const a = e.target.dataset && e.target.dataset.a;
+      const btn = e.target.closest('[data-a]');
+      const a = btn && btn.dataset.a;
       const idx = parseInt(key.split(':')[1],10);
       if(a === 'ren'){ const n = prompt('Rename profile', p.name); if(n){ S.saved[idx].name = n; persistProfiles(); buildStyles(); } return; }
       if(a === 'del'){ if(confirm('Delete profile "'+p.name+'"?')){ S.saved.splice(idx,1); persistProfiles(); buildStyles(); } return; }
       applyStyle(key, p);
+      closeDrawers();
     };
   });
+  const cur = allStyles().find(x=>x.key === S.styleKey);
+  $('styleName').textContent = (cur ? cur.p.name : S.profile.name) || 'Custom';
+  const sw = document.querySelector('#btnStyle .sw');
+  if(sw) sw.style.background = /cartoon|vector|illustrat/i.test(S.profile.imagery||'')
+    ? 'linear-gradient(135deg,#1f6b3a,#0c2a18)' : 'linear-gradient(135deg,#55707f,#161c22)';
 }
 function persistProfiles(){ localStorage.setItem(LS.profiles, JSON.stringify(S.saved)); }
 function applyStyle(key, p){
@@ -812,16 +1118,17 @@ const CATS = [...new Set(HOOK_DATA.map(h=>h.c))];
 function buildCats(){
   let on = [];
   try{ on = JSON.parse(localStorage.getItem(LS.cats)||'null') || CATS.slice(); }catch(e){ on = CATS.slice(); }
-  const box = $('catBox'); box.innerHTML = '<span class="hint">categories:</span>';
+  const box = $('catBox'); box.innerHTML = '';
   CATS.forEach(c=>{
     const n = HOOK_DATA.filter(h=>h.c===c).length;
-    const l = document.createElement('label');
-    l.innerHTML = '<input type="checkbox" '+(on.includes(c)?'checked':'')+' value="'+c+'"> '+c+' <span class="hint">('+n+')</span>';
-    l.querySelector('input').onchange = () => localStorage.setItem(LS.cats, JSON.stringify(enabledCats()));
-    box.appendChild(l);
+    const b = document.createElement('button');
+    b.className = on.includes(c) ? 'on' : '';
+    b.dataset.cat = c; b.textContent = c; b.title = n + ' templates';
+    b.onclick = () => { b.classList.toggle('on'); localStorage.setItem(LS.cats, JSON.stringify(enabledCats())); };
+    box.appendChild(b);
   });
 }
-function enabledCats(){ return [...$('catBox').querySelectorAll('input:checked')].map(i=>i.value); }
+function enabledCats(){ return [...$('catBox').querySelectorAll('button.on')].map(b=>b.dataset.cat); }
 
 async function surprise(){
   const cats = enabledCats();
@@ -829,7 +1136,8 @@ async function surprise(){
   if(!pool.length) return log('no categories enabled','w');
   const niche = $('niche').value.trim() || 'general';
   const pick = pool[Math.floor(Math.random()*pool.length)];
-  $('cands').innerHTML = '<div class="hint">adapting a '+pick.c+' template…</div>';
+  $('suggestPanel').classList.remove('hide');
+  $('cands').innerHTML = '<div class="tiny muted">Adapting a ' + pick.c.toLowerCase() + ' template…</div>';
   const sys =
 'You turn viral hook templates into cover-slide headlines for a static image carousel.\n' +
 'TEMPLATE (category: '+pick.c+'): "'+pick.t+'"\n' +
@@ -848,20 +1156,31 @@ async function surprise(){
     S.candidates = (Array.isArray(arr) ? arr : []).map(String).slice(0,3);
     renderCands(pick);
   }catch(e){
-    $('cands').innerHTML = '<div class="hint">failed — see log</div>';
-    log('surprise me failed: '+e.message,'e');
+    $('cands').innerHTML = '<div class="tiny muted">Didn\'t come back — check the console in Settings.</div>';
+    log('suggest failed: '+e.message,'e');
     if(e.raw) log('raw: '+String(e.raw).slice(0,600),'e');
   }
 }
 function renderCands(pick){
   const box = $('cands'); box.innerHTML = '';
-  if(pick){ const h = document.createElement('div'); h.className='hint'; h.textContent = 'from ['+pick.c+'] '+pick.t; box.appendChild(h); }
+  if(pick){
+    const h = document.createElement('div');
+    h.className = 'tiny'; h.style.color = 'var(--faint)';
+    h.textContent = pick.c + ' · ' + pick.t;
+    box.appendChild(h);
+  }
   S.candidates.forEach(c=>{
-    const d = document.createElement('div'); d.className='cand'; d.textContent = c;
-    d.onclick = () => { $('hookInput').value = c; $('hookInput').focus(); };
+    const d = document.createElement('button'); d.className = 'cand'; d.textContent = c;
+    d.onclick = () => {
+      $('hookInput').value = c;
+      $('suggestPanel').classList.add('hide');
+      $('hookInput').focus();
+      autosize($('hookInput'));
+    };
     box.appendChild(d);
   });
 }
+function autosize(t){ t.style.height = 'auto'; t.style.height = Math.max(76, t.scrollHeight) + 'px'; }
 
 /* ============================ Mode A — deck generation ============================ */
 function deckPrompt(hook, n){
@@ -889,17 +1208,21 @@ async function generateDeck(){
   if(!hook) return log('type a hook first','w');
   const n = +$('slideCount').value;
   $('rawRetry').classList.add('hide');
-  $('deckStatus').textContent = 'writing…';
+  $('suggestPanel').classList.add('hide');
+  $('deckStatus').textContent = 'Writing…';
+  $('genDeck').disabled = true;
   S.lastDeckReq = {hook,n};
   try{
     const r = await callModel({model: cfg().textModel, parts:[{type:'text', text: deckPrompt(hook,n)}]});
     S.lastRaw = r.text;
     const j = extractJSON(r.text, false);
     loadDeck(j);
-    $('deckStatus').textContent = S.slides.length + ' slides written';
-    if($('autoImages').checked) generateAllImages();
+    $('deckStatus').textContent = '';
+    $('genDeck').disabled = false;
+    generateAllImages();
   }catch(e){
-    $('deckStatus').textContent = 'failed';
+    $('deckStatus').textContent = 'Failed';
+    $('genDeck').disabled = false;
     S.lastRaw = e.raw || S.lastRaw || e.message;
     $('rawRetry').classList.remove('hide');
     log('deck generation failed: '+e.message,'e');
@@ -1010,7 +1333,7 @@ const PROFILE_FIELDS = [
 function buildProfileForm(){
   const f = $('profileForm'); f.innerHTML = '';
   PROFILE_FIELDS.forEach(([k,type])=>{
-    const c = document.createElement('div'); c.className = 'col';
+    const c = document.createElement('div'); c.className = 'field';
     let input;
     if(type.startsWith('select:')){
       input = document.createElement('select');
@@ -1134,19 +1457,53 @@ async function downloadZip(){
   }
 }
 
+/* ============================ drawers, menus, keyboard ============================ */
+function openDrawer(id){
+  closeDrawers();
+  $(id).classList.add('on');
+  $('scrim').classList.add('on');
+}
+function closeDrawers(){
+  document.querySelectorAll('.drawer').forEach(d=>d.classList.remove('on'));
+  $('scrim').classList.remove('on');
+}
+function setConn(state){          // 'on' | 'err' | ''
+  const d = $('connDot');
+  d.className = 'dot' + (state ? ' '+state : '');
+  d.title = state === 'on' ? 'connected' : state === 'err' ? 'connection failed' : 'not connected';
+}
+
 /* ============================ wiring ============================ */
 function init(){
   loadSettings();
-  for(let i=2;i<=12;i++){ const o = document.createElement('option'); o.value = o.textContent = i; if(i===7) o.selected = true; $('slideCount').appendChild(o); }
-  $('hookCount').textContent = HOOK_META.kept + ' templates (' + HOOK_META.dropped + ' dropped in parsing)';
+  for(let i=2;i<=12;i++){ const o = document.createElement('option'); o.value = i; o.textContent = i + ' slides'; if(i===7) o.selected = true; $('slideCount').appendChild(o); }
+  $('hookCount').textContent = '· ' + HOOK_META.kept + ' templates';
   buildCats();
+
+  // drawers
+  $('btnStyle').onclick = () => openDrawer('drawerStyle');
+  $('btnDesign').onclick = () => openDrawer('drawerDesign');
+  $('btnSettings').onclick = () => openDrawer('drawerSettings');
+  $('scrim').onclick = closeDrawers;
+  document.querySelectorAll('[data-close]').forEach(b=>b.onclick = closeDrawers);
+  document.addEventListener('keydown', e=>{
+    if(e.key === 'Escape'){ closeDrawers(); $('moreMenu').classList.add('hide'); }
+    if((e.metaKey || e.ctrlKey) && e.key === 'Enter'){ e.preventDefault(); generateDeck(); }
+  });
+
+  // overflow menu
+  $('btnMore').onclick = e => { e.stopPropagation(); $('moreMenu').classList.toggle('hide'); };
+  document.addEventListener('click', e=>{ if(!e.target.closest('.menuWrap')) $('moreMenu').classList.add('hide'); });
+  $('moreMenu').addEventListener('click', ()=> $('moreMenu').classList.add('hide'));
+  $('btnCaption').onclick = () => $('captionWrap').classList.toggle('hide');
 
   $('toggleKey').onclick = () => {
     const k = $('apiKey');
     k.type = k.type === 'password' ? 'text' : 'password';
-    $('toggleKey').textContent = k.type === 'password' ? 'show' : 'hide';
+    $('toggleKey').textContent = k.type === 'password' ? 'Show' : 'Hide';
   };
   ['apiKey','textModel','imageModel','niche'].forEach(id=>$(id).addEventListener('input', saveSettings));
+  $('apiKey').addEventListener('input', ()=> setConn(''));
   $('remember').onchange = saveSettings;
   $('apiShape').onchange = saveSettings;
 
@@ -1154,14 +1511,15 @@ function init(){
     $('testConn').disabled = true;
     try{
       const r = await callModel({model: cfg().textModel, parts:[{type:'text', text:'Reply with the single word: ok'}]});
-      log('connection ok — model said: ' + (r.text||'(empty)').trim().slice(0,80), 'o');
-    }catch(e){ log('connection failed: '+e.message,'e'); }
+      setConn('on');
+      log('connected — model replied: ' + (r.text||'(empty)').trim().slice(0,60), 'o');
+    }catch(e){ setConn('err'); log('connection failed: '+e.message,'e'); }
     $('testConn').disabled = false;
   };
 
-  document.querySelectorAll('.tabs button').forEach(b=>{
+  document.querySelectorAll('#modeTabs button').forEach(b=>{
     b.onclick = () => {
-      document.querySelectorAll('.tabs button').forEach(x=>x.classList.remove('on'));
+      document.querySelectorAll('#modeTabs button').forEach(x=>x.classList.remove('on'));
       b.classList.add('on');
       $('modeA').classList.toggle('hide', b.dataset.mode !== 'A');
       $('modeB').classList.toggle('hide', b.dataset.mode !== 'B');
@@ -1169,6 +1527,8 @@ function init(){
     };
   });
 
+  $('hookInput').addEventListener('input', e => autosize(e.target));
+  $('closeSuggest').onclick = () => $('suggestPanel').classList.add('hide');
   $('surprise').onclick = surprise;
   $('reroll').onclick = surprise;
   $('genDeck').onclick = generateDeck;
@@ -1178,9 +1538,9 @@ function init(){
   $('showRaw').onclick = () => { log('raw model output:\n' + (S.lastRaw||'(none)'), 'w'); };
   $('retryDeck').onclick = generateDeck;
 
-  $('pickFiles').onclick = () => $('fileInput').click();
   $('fileInput').onchange = e => addExamples(e.target.files);
   const dz = $('drop');
+  dz.onclick = () => $('fileInput').click();
   ['dragenter','dragover'].forEach(ev=>dz.addEventListener(ev, e=>{ e.preventDefault(); dz.classList.add('over'); }));
   ['dragleave','drop'].forEach(ev=>dz.addEventListener(ev, e=>{ e.preventDefault(); dz.classList.remove('over'); }));
   dz.addEventListener('drop', e=>{ if(e.dataTransfer.files.length) addExamples(e.dataTransfer.files); });
@@ -1194,7 +1554,7 @@ function init(){
     persistProfiles();
     S.styleKey = 'saved:' + (at >= 0 ? at : S.saved.length-1);
     buildStyles();
-    log('profile "'+n+'" saved to the style picker','o');
+    log('style "'+n+'" saved','o');
   };
 
   $('capInput').addEventListener('input', ()=>{ S.caption = $('capInput').value; autosave(); });
@@ -1227,12 +1587,13 @@ function init(){
     S.slides.push({id:uid(), kind:S.slides.length?'slide':'hook', title:'New slide', body:'', scene:'', img:'', status:''});
     buildGrid(); autosave();
   };
-  $('clearDeck').onclick = () => { if(confirm('Clear the deck?')){ S.slides = []; S.caption=''; $('capInput').value=''; buildGrid(); autosave(); } };
+  $('clearDeck').onclick = () => { if(confirm('Clear the deck?')){ S.slides = []; S.caption=''; $('capInput').value=''; OPEN.clear(); buildGrid(); autosave(); } };
 
   bindControls();
   syncControls();
   buildStyles();
   buildProfileForm();
+  refreshDeckChrome();
 
   restoreProject().then(async ok=>{
     syncControls(); buildStyles();
@@ -1240,8 +1601,9 @@ function init(){
     buildGrid();
     if(ok){
       S.slides.forEach(s=>{ if(s.img) setImage(s, s.img); });
-      log('restored '+S.slides.length+' slides from autosave','o');
+      $('saveState').textContent = 'restored';
     }
+    if(!cfg().key){ openDrawer('drawerSettings'); $('apiKey').focus(); }
     log('ready — '+HOOK_META.kept+' hook templates loaded');
   });
 }

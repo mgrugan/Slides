@@ -1,0 +1,1187 @@
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Carousel Builder</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link id="gfonts" rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:ital,wght@0,400..900;1,400..900&family=Archivo:ital,wght@0,400..900;1,400..900&family=Anton&family=Poppins:ital,wght@0,400;0,600;0,800;1,800&family=Bebas+Neue&family=Montserrat:ital,wght@0,400..900;1,400..900&display=swap">
+<style>
+:root{
+  --bg:#0e0f12; --panel:#16181d; --panel2:#1c1f26; --line:#2a2e37; --line2:#3a404c;
+  --fg:#e7e9ee; --dim:#8b93a3; --accent:#59d98a; --accent2:#4a9ef5; --bad:#ff6b6b; --warn:#f5c451;
+}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--fg);font:13px/1.45 ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+body{padding:10px 12px 150px}
+h1,h2,h3{margin:0;font-weight:700}
+h1{font-size:14px;letter-spacing:.02em}
+section{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:10px;margin-bottom:10px}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.row.tight{gap:6px}
+.col{display:flex;flex-direction:column;gap:4px}
+label{color:var(--dim);font-size:11px;text-transform:uppercase;letter-spacing:.05em}
+input,select,textarea,button{font:inherit;color:var(--fg);background:var(--panel2);border:1px solid var(--line2);border-radius:6px;padding:6px 8px;outline:none}
+input:focus,select:focus,textarea:focus{border-color:var(--accent2)}
+input[type=checkbox]{accent-color:var(--accent);width:14px;height:14px;padding:0;vertical-align:-2px}
+input[type=color]{padding:2px;width:42px;height:30px}
+input[type=range]{accent-color:var(--accent);background:none;border:none;padding:0;width:150px}
+textarea{width:100%;resize:vertical;min-height:60px;font:13px/1.4 ui-monospace,SFMono-Regular,Menlo,monospace}
+button{cursor:pointer;background:#242832;border-color:var(--line2)}
+button:hover{background:#2d323e}
+button.primary{background:var(--accent);color:#08170e;border-color:#3fbf70;font-weight:700}
+button.primary:hover{background:#6ee89a}
+button.ghost{background:transparent}
+button.danger{color:var(--bad)}
+button:disabled{opacity:.45;cursor:not-allowed}
+.mini{font-size:11px;padding:3px 6px}
+.hint{color:var(--dim);font-size:11px}
+.bar{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.sep{width:1px;height:20px;background:var(--line2)}
+.grow{flex:1 1 auto;min-width:80px}
+.tabs{display:flex;gap:4px}
+.tabs button{border-radius:6px 6px 0 0;border-bottom:none}
+.tabs button.on{background:var(--accent2);color:#04121f;font-weight:700;border-color:var(--accent2)}
+.styles{display:flex;gap:8px;overflow-x:auto;padding-bottom:2px}
+.styleCard{flex:0 0 auto;width:132px;background:var(--panel2);border:2px solid var(--line);border-radius:8px;padding:6px;cursor:pointer;position:relative}
+.styleCard.on{border-color:var(--accent)}
+.styleCard canvas{width:100%;height:88px;border-radius:4px;display:block;background:#000}
+.styleCard .nm{font-size:11px;font-weight:700;margin-top:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.styleCard .ar{font-size:10px;color:var(--dim)}
+.styleCard .acts{position:absolute;top:8px;right:8px;display:none;gap:2px}
+.styleCard:hover .acts{display:flex}
+.styleCard .acts button{padding:1px 4px;font-size:10px;background:#000a;border-color:#0000}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:10px}
+.slide{background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:8px;display:flex;flex-direction:column;gap:6px}
+.slide canvas{width:100%;height:auto;border-radius:4px;background:#000;display:block}
+.slide textarea{min-height:36px;font-size:12px}
+.slide .hd{display:flex;justify-content:space-between;align-items:center;gap:6px}
+.tag{font-size:10px;padding:1px 5px;border-radius:99px;border:1px solid var(--line2);color:var(--dim)}
+.tag.hook{color:var(--warn);border-color:var(--warn)}
+.st{font-size:10px;letter-spacing:.04em;text-transform:uppercase}
+.st.queued{color:var(--dim)} .st.generating{color:var(--accent2)} .st.done{color:var(--accent)} .st.failed{color:var(--bad)}
+#log{position:fixed;left:0;right:0;bottom:0;max-height:120px;overflow:auto;background:#0b0c0fee;border-top:1px solid var(--line);padding:4px 10px;font:11px/1.4 ui-monospace,Menlo,monospace;color:var(--dim);white-space:pre-wrap}
+#log .e{color:var(--bad)} #log .o{color:var(--accent)} #log .w{color:var(--warn)}
+.cands{display:flex;flex-direction:column;gap:4px;margin-top:6px}
+.cand{background:var(--panel2);border:1px solid var(--line2);border-radius:6px;padding:6px 8px;cursor:pointer}
+.cand:hover{border-color:var(--accent)}
+.notice{background:#3a2f10;border:1px solid var(--warn);color:#ffe9b0;border-radius:6px;padding:6px 8px;margin-top:8px;display:flex;gap:8px;align-items:center}
+.hide{display:none!important}
+.drop{border:1px dashed var(--line2);border-radius:8px;padding:14px;text-align:center;color:var(--dim)}
+.drop.over{border-color:var(--accent);color:var(--accent)}
+.thumbs{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px}
+.thumbs img{height:74px;border-radius:4px;border:1px solid var(--line2)}
+.pf{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:6px;margin-top:8px}
+.pf .col input,.pf .col select{width:100%}
+.catbox{display:flex;gap:8px;flex-wrap:wrap;align-items:center;font-size:11px;color:var(--fg);text-transform:none;letter-spacing:0}
+.catbox label{color:var(--fg);text-transform:none;font-size:11px;letter-spacing:0;display:flex;gap:3px;align-items:center}
+</style>
+
+<section id="setup">
+  <div class="bar">
+    <h1>Setup</h1>
+    <div class="sep"></div>
+    <label for="apiKey">Gemini key</label>
+    <input id="apiKey" type="password" class="grow" placeholder="AIza..." autocomplete="off" style="min-width:220px">
+    <button id="toggleKey" class="mini">show</button>
+    <label for="textModel">Text model</label><input id="textModel" value="gemini-3.6-flash" style="width:170px">
+    <label for="imageModel">Image model</label><input id="imageModel" value="gemini-3.1-flash-image" style="width:190px">
+    <label for="apiShape">API shape</label>
+    <select id="apiShape">
+      <option value="auto">auto</option>
+      <option value="interactions">interactions</option>
+      <option value="generateContent">generateContent</option>
+    </select>
+    <button id="testConn">Test connection</button>
+  </div>
+  <div class="bar" style="margin-top:6px">
+    <label style="text-transform:none;letter-spacing:0;color:var(--fg);font-size:12px">
+      <input type="checkbox" id="remember"> Remember on this device
+    </label>
+    <span class="hint">this stores the key in plain text in this browser — fine for a local file, don't host this page anywhere public.</span>
+    <div class="sep"></div>
+    <label style="text-transform:none;letter-spacing:0;color:var(--fg);font-size:12px">
+      <input type="checkbox" id="sendImageCfg" checked> send imageConfig/responseModalities
+    </label>
+  </div>
+</section>
+
+<section id="stylesSec">
+  <div class="bar"><h1>Style</h1><span class="hint">one style per deck — switching re-renders captions instantly</span></div>
+  <div class="styles" id="styleCards"></div>
+  <div id="imageryNotice" class="notice hide">
+    <span>Imagery style differs from the images already generated.</span>
+    <button id="regenAllImgs" class="mini">Regenerate all images</button>
+    <button id="dismissNotice" class="mini ghost">Dismiss</button>
+  </div>
+</section>
+
+<section id="hookLib">
+  <div class="bar">
+    <h1>Hook library</h1><span class="hint" id="hookCount"></span>
+    <div class="sep"></div>
+    <label for="niche">Niche</label><input id="niche" class="grow" placeholder="e.g. amateur golfers trying to break 90" style="min-width:240px">
+    <button id="surprise">Surprise me</button>
+    <button id="reroll" class="ghost">Reroll</button>
+  </div>
+  <div class="catbox" id="catBox" style="margin-top:6px"></div>
+  <div class="cands" id="cands"></div>
+</section>
+
+<section id="modes">
+  <div class="tabs">
+    <button data-mode="A" class="on">Mode A — Hook</button>
+    <button data-mode="B">Mode B — Clone from examples</button>
+  </div>
+
+  <div id="modeA" style="padding-top:10px">
+    <div class="col"><label for="hookInput">Hook (slide 1 title — the promise, no facts)</label>
+      <textarea id="hookInput" placeholder="7 Realizations That Will Make You Better at Golf"></textarea></div>
+    <div class="bar" style="margin-top:8px">
+      <label for="slideCount">Slides</label>
+      <select id="slideCount"></select>
+      <label style="text-transform:none;letter-spacing:0;color:var(--fg);font-size:12px">
+        <input type="checkbox" id="autoImages" checked> generate images after writing</label>
+      <button id="genDeck" class="primary">Generate deck</button>
+      <button id="genAllImages">Generate all images</button>
+      <span class="hint" id="deckStatus"></span>
+    </div>
+    <div id="rawRetry" class="notice hide">
+      <span class="grow">Model returned something that didn't parse as JSON.</span>
+      <button id="showRaw" class="mini">Show raw</button><button id="retryDeck" class="mini">Retry</button>
+    </div>
+  </div>
+
+  <div id="modeB" class="hide" style="padding-top:10px">
+    <div class="drop" id="drop">Drop 1–8 screenshots here, or <button id="pickFiles" class="mini">choose files</button>
+      <input type="file" id="fileInput" accept="image/*" multiple class="hide"></div>
+    <div class="thumbs" id="exThumbs"></div>
+    <div class="bar" style="margin-top:8px">
+      <button id="extract" class="primary">Extract style profile</button>
+      <button id="rebuildCopy">Rebuild this deck's copy in that style</button>
+      <span class="hint" id="cloneStatus"></span>
+    </div>
+    <div id="profileForm" class="pf"></div>
+    <div class="bar" style="margin-top:8px">
+      <input id="profileName" placeholder="profile name" style="width:200px">
+      <button id="saveProfile">Save profile to style picker</button>
+    </div>
+  </div>
+</section>
+
+<section id="renderCtl">
+  <div class="bar">
+    <h1>Render</h1>
+    <label>Aspect</label><select id="cAspect"><option>9:16</option><option>4:5</option><option>1:1</option></select>
+    <label>Treatment</label><select id="cTreat"><option value="outlined">outlined</option><option value="label-boxes">label-boxes</option><option value="plain">plain</option></select>
+    <label>Font</label><input id="cFont" style="width:130px">
+    <label>Weight</label><select id="cWeight"><option>400</option><option>600</option><option>700</option><option>800</option><option>900</option></select>
+    <label style="text-transform:none;letter-spacing:0;color:var(--fg);font-size:12px"><input type="checkbox" id="cItalic"> italic</label>
+    <label>Align</label><select id="cAlign"><option>center</option><option>left</option><option>right</option></select>
+    <label>Text</label><input type="color" id="cText">
+    <label>Stroke</label><input type="color" id="cStroke">
+    <label>Box</label><input type="color" id="cLabelBg">
+  </div>
+  <div class="bar" style="margin-top:6px">
+    <label>Title <span id="vTitle" class="hint"></span></label><input type="range" id="rTitle" min="0.02" max="0.11" step="0.001">
+    <label>Body <span id="vBody" class="hint"></span></label><input type="range" id="rBody" min="0.015" max="0.075" step="0.001">
+    <label>Stroke w <span id="vStroke" class="hint"></span></label><input type="range" id="rStroke" min="0" max="24" step="1">
+    <label>Text top <span id="vTop" class="hint"></span></label><input type="range" id="rTop" min="0.02" max="0.85" step="0.005">
+    <label>Hook top <span id="vHookTop" class="hint"></span></label><input type="range" id="rHookTop" min="0.02" max="0.8" step="0.005">
+  </div>
+</section>
+
+<section id="outputSec">
+  <div class="bar">
+    <h1>Output</h1>
+    <button id="dlAll">Download all (ZIP)</button>
+    <button id="copyCap">Copy caption</button>
+    <button id="exportProj">Export project</button>
+    <button id="importProj">Import project</button>
+    <input type="file" id="importFile" accept="application/json" class="hide">
+    <button id="addSlide" class="ghost">+ slide</button>
+    <button id="clearDeck" class="ghost danger">Clear deck</button>
+    <span class="hint" id="saveState"></span>
+  </div>
+  <div class="col" style="margin-top:6px"><label for="capInput">Caption</label><textarea id="capInput" style="min-height:44px"></textarea></div>
+</section>
+
+<div class="grid" id="slideGrid"></div>
+<div id="log"></div>
+
+<script>
+/* ============================ hook library (parsed from the PDF at build time) ============================ */
+const HOOK_DATA = [
+{c:"Educational",h:["This represents your X before, during, and after X","Here's exactly how much (insert action/item) you need to (insert result)","Can you tell us how to (insert result) in 60 seconds?","This is what (insert thing) looks like when you're (insert action). And this is what they look like when you're not (insert action).","I'm going to tell you how to get (Insert result), (insert mind blowing method).","It took me 10 years to learn this but I'll teach it to you in less than 1 minute.","When you get (insert item/result) here are the # things you got to do right away.","If you don't have (insert item/action), do (insert item/action).","My money rules as a (insert description) working towards financial independence.","Money can buy you (insert item) but it can not buy you (insert result).","Here's how to develop a (insert skill) so strong that you physically can't stop (doing skill).","This is what (insert #) of (insert item) looks like.","If I woke up (insert pain point) tomorrow, and wanted to (insert dream result) by (insert time) here's exactly what I would do.","If you're a (insert target audience) and you want (insert","dream result) by (insert avenue) then listen to this video.","If you are (insert age group or range) do not do (insert action).","As an (insert trait) responsible (insert age) year old with a goal to (insert goal) here are 3 things I will never regret doing.","Not to flex, but I'm fretty f*cking good at (insert skill/niche).","This is what (insert object/item) looks like when you are using/doing (insert product/service).","Are you still (insert action)? I've got (insert result) in (insert time frame) and I have never (insert action).","3 Youtube channels that will teach you more than any (insert industry/niche) degree.","I think I just found the biggest (insert niche/industry) cheat code.","Here are 3 people who will make you a better (insert title).","I see you doing nothing but (insert action) after (insert event) so follow this agenda to avoid that.","Want to be the first (insert dream result) in your family?","This is how many (insert item) you need to (insert result).","Everyone tells you to (insert action) but nobody actually tells you how to do it. Here is a # second step by step tutorial that you can save.","If you're (insert age range) these are the # things you need to do so you don't end up (insert pain point) by (insert age).","If I were starting over in my (insert age range) with no (insert item) here are the top # things I would do to (insert dream result).","Here are some slightly unethical (insert industry/niche) hacks that you should know if you're (insert target audience).","Here's exactly how you're gonna lock in if you want to (insert dream result).","This is the same exact (insert thing) but the first is/got (insert result and the second is/got X","If you want to end up (insert pain point) then skip this video.","We have never used (insert noun) in our home because we have found it to be generally (insert trait/traits).","(insert action) for (insert period of time) and you will get (insert dream result).","If you're between the ages of (insert age) to (insert age) and you feel like (insert pain point).","(insert before state) to (insert after state) in # simple steps in under # of seconds.","If you're trying to (insert dream results) then here is the one (insert thing) you should do.","How long do you think you have to (insert action) to (insert result).","If you want to do this, first do this.","If you're trying to (insert dream result) and you haven't got a clue what to (insert action) on a daily basis I am going to show you an example.","I'm gonna save you # of minutes off your next workout with # of simple tips.","If I only had (insert time frame) in the (insert location/place) this is exactly what I would do to get (insert dream result).","How long can you skip (insert action) before losing (insert result).","If you want to (insert dream result) a week for the next (insert weeks) without (insert pain point) then listen up.","If you just turned (insert age) and you don't want to (insert pain point) then you should do the following # things immediately.","You can have a perfect (insert dream result) by simply dumbing it down.","Did you know that this, this, this, and this get (insert dream result).","Don't start doing (insert action) until you learn how to do this.","In 60 seconds i'm going to teach you more about (insert thing) than you have ever learned in your entire life.","Everyone tells you to (insert action) but no one actually shows you how to do it. Here is a # second step by step tutorial that you can save for later.","If you're in your (insert 20's, 30's, 40's, 50's, 60', etc) then these are the # of things you need to do to make sure you don;t end up (insert pain point) by (insert age).","(Insert noun) loses (Insert noun) on this, so they can make (insert noun) on this.","You have (insert noun) tomorrow but you have no time to (insert action). Here's how you save your (insert noun).","(Insert scenario) and (Insert dream result), here are the # of steps to get (insert dream result).","Everyone tells you to do (insert action) but you think it's too late because you are (Insert age). I am a (insert occupation) and these are # of things you need to know in your (Insert age).","(Insert target audience) if you're serious about playing at the next level.","You only have to be dialed in on # of things to be an elite (insert title).","Don't hate me but I don't really mind (insert noun).","Best ways to save money while (insert action).","This is every way to (insert action).","What if I told you this (insert item) could (insert result).","Did you know that if you (insert action, (Insert action), (insert action), etc.","The (insert thing) you have now in you (insert age group) is so (insert noun).","At age (insert age) the age that many (insert target audience) is when (insert pain point).","Listen if you're not forcing your (insert person/persons) to (insert action) in their (insert current state) don't expect them to be (insert trait) in their (insert after state).","Would you rather watch your (insert person/persons) (insert pain point) or join them in their (insert niche) journey to save their lives?","This is the amount of (insert noun) you would lose per day in a (insert state).","If your in a (insert dream result) journey, this is exactly what you need to do to (insert dream goal) in # simple steps.","If you told me # of years ago I'd be (insert dream result) I wouldn't have believed you.","If your getting (insert adjective) or know someone (insert adjective) there are # of incredulity important things you need to make sure you can do physically in order to (dream result).","If you don't want to fail (insert life event).","I crammed the hardest (insert noun) and (insert dream result).","If you're cooked for your (insert life event) but still can't find the motivation to do (insert action) you're gonna want to see this.","Here's the difference between (insert title), (insert title), and (insert title).","If I were in my (insert age range) here is exactly how I would avoid (insert bad result).","Here's every (insert noun) that you actually need to know.","The most important things I will teach my kids as a (insert job title).","If you can't solve this (insert problem) in under 5 seconds go back to (insert pre-qualifying stage).","30 seconds of (insert industry) advice I give my best friend if he/she were starting from scratch.","I would do this before quitting your job.","If you do this you'll (insert result).","If your a (insert target audience) who (insert pain point) and you want to (insert dream result) let's go over a very simple # step plan you can follow to quickly (insert dream result).","Here are 5 books to (insert dream result) better than 99% of other people.","If you're somebody who (insert action) and your goal is to (insert dream result) and (insert dream result) at the same time. Then here are my # best tips.","If you can't do (insert action).","If you can do # of (insert action), than you can do # of (insert action).","If your mom didn't teach you how to make (insert","noun) growing up, don't worry i'm your mommy now. Never lose a game of (insert game) for the rest of your life.","Did you know that if you... (Insert action), (insert action), (insert action), etc","I am a professional (insert industry) hacker, and here's every hack at (insert store/location/event/etc).","I have a very long list of (insert noun) that I (insert action) that I gate keep from other people. But today I feel like giving back so I am going to tell you.","I am going to teach you how to identify a good (insert noun) to a bad (insert noun).","I went to (insert school type) so you don't have to.","Ranking all the most popular (insert noun), so I can rank them from worst to best.","Here is how I (insert action) as a (insert label) (insert age).","You wouldn't get (insert bad result) when you (insert action) if you (insert action).","This is harder than getting into Harvard.","Now how much does it really cost to (insert action).","This is why no one remembers you.","I'm 20 which means my teenage years are officially over, so here;s everything I learned from the 7 most weirdest years of my life.","If you're a (target audience) and you want to become (insert dream result) by (insert action) then listen to this video because you have such a big advantage and I will tell you how to conquer it.","If you take (insert noun) it will (insert result).","I just made a website called (insert the longest but","most relatable website name). How to turn just one (insert noun) into a lifetime of free (insert noun).","Things that are damaging your (insert noun) without you even realizing it.","If you have when you see a girl and she just has (insert dream result).","I've (insert dream result) despite having (insert pain point) and this is the routine that did it.","Swap these (insert noun) for better (insert result).","Did you know that this, this, and this target (insert dream result).","Your (insert noun) looks like this and you want them to look like this.","Okay (insert pain point), how about we don't f up (insert current year)","This is the program/steps I would follow if I was trying to (insert dream result).","If your (insert noun) looks anything like this, these are not (insert noun) these are (insert noun) and here is how you can get (insert dream result).","Here are some (insert action) you can do without (insert noun).","Let's find out what (insert noun) you are in # steps.","Most people can only do (insert action) when trying to (insert action) but as an (insert title) you should be able to (insert action).","As an (insert title) you should be able to do this, if you can't (insert diagnosis).","If you're an (insert title) you should be able to do this, this, and this. If you can't I got you, just do this # step/routine/program to (insert dream result).","If you have (insert pain point), (insert pain point), and (insert pain point) you might be (insert action) wrong.","If you feel like your never (insert point) here is everything you need for a (insert dream result).","Do you have a (insert pain point) don't waste your money trying to (insert solution) it's just going to come back.","If giving yourself (insert result) causes (insert pain point), (insert pain point), and (insert pain point) here is how I cheat it.","You don't have (insert pain point), your not (insert adjective), your not (insert adjective) you just need to (insert solution) and I am going to tell you how to do it.","Worst thing you can do for your (insert thing) is to ignore your (insert noun) when (insert scenario).","Ladies, you can do all the (insert action) but that's not going to do sh*t for your (insert noun).","Never (insert action) first and then (insert action).","What happens when you go X hours/days/weeks/years without (insert noun).","There is no doubt in my mind that (insert action) are the best (insert noun) for your (insert noun).","What I wish I knew at (insert age) instead of (insert age).","You're damaging your (insert noun) if you (insert noun) looks like this or like this.","My most complemented (insert noun) of (insert year).","I have been dating my girlfriend/boyfriend for # years here are # basics I learned that every guy/girl should do for a partner in (insert scenario).","When I say I (insert action) everyday and I don't (insert action) everyday people always ask me...","# of ways to raise (insert adjective) children.","It's okay f you mom didn't talk to you about","The reason you can't (insert dream result) to get that (insert dream result) you keep talking about is because...","This is your (insert noun) on a regular day, this is you (insert noun) on (insert scenario).","You guys know this look, when someone perfectly (insert action) and (insert action) I am obsessed with this (insert noun).","You crave (insert noun) on your (insert scenario) here's why.","This is you (insert noun) when you (insert action), and this is your (insert noun) when you (insert action).","Stop (insert action) if you actually want to (insert dream result).","This is how much (insert dream result) you achieve if you (insert action), and this is how much (insert dream result) if you (insert action) and these # of hacks.","If you want to (insert # of dream result) per week this is how you are going to do it.","This is for the homies who promised (insert person/persons) and nice and fancy (insert noun).","What if I told you, you could (insert action) for only (insert low cost).","Why did it take me over # years to realize you can make (insert result) in # minutes.","Don't hate me but I don't really mind (insert basic niche thing) but don;t worry I am going to show you how to make it way better.","(insert dream result) and (insert dream result) with these # of tips. For reference I have (insert personal result).","If you have a (insert dream result) keep scrolling. Today we are going to talk about a (insert routine, method","strategy) to (insert dream result) Did you know that if you (insert action), (insert action), (insert action), etc.","Here's exactly how much (insert noun) you can make with under (insert dollar amount).","The lack of clinical studies on (insert noun) isn't because it doesn't work, it's because...","You'll never get (insert dream result) in your (insert age range) if you don;t do these 3 things when you turn (insert age).","# lessons, # of (insert person/persons), in # of days/weeks/months.","I make more money than doctors, engineers, and lawyers and no I didn't go to college for more than 6 years to get a degree.","I worked at (insert company) for X months/years and now I am exposing everything they keep from customers.","This is what (insert money amount) will get you in (insert location).","How much do I need to make or buy a (insert price) (insert noun).","I make (insert hourly rate) can I qualify/buy (insert loan/noun).","Let's see what your monthly payment would look like if you owned (insert noun).","Lets see what $1,800 a month gets you in (insert location).","If you are paying over (insert price amount) for a (insert noun), you might as well buy a (insert noun).","I have made a spreadsheet with over (insert large number) of (insert noun).","There is one thing above all that sets the top (insert title) apart from the rest.","This is how I would (insert action) if I were starting from scratch).","If you're spending a lot of money on (insert noun) then you need to try this (insert recipe/method/strategy) because it's super easy and (insert dream outcome).","If you have a (insert noun) you have probably experienced this.","It looks like you haven't done (insert noun) since (insert time frame).","I don't know who needs to see this but if you have a (insert symptom) this is how I literally (insert dream result) every single time.","Oh look I found (insert $), that means I am going to (insert verb) I only need this.","One (insert noun), one (insert noun), and you have (insert time frame).","The reason your (insert noun) sucks, is because you have no freaking (insert adjective).","You've heard of the viral (insert method/strategy/noun name) right? Well I invested that!","(insert noun) I would make for you based on your favorite (insert noun).","Here are (insert #) of (insert noun) from (insert noun) that I am going to (insert verb) in (insert time frame).","How we saved (insert $) on our (insert noun), and one thing we wish we did differently.","This is everything I bought at (insert store) today to stay (insert adjective) at (insert age).","(insert verb) is expensive. Here is how to (insert noun) for (insert time frame) for only (insert $).","How to (insert verb) you (insert noun) from a (insert title).","How many (insert nouns) can you make with only (insert $).","This is every way to make (insert noun).","If I have to learn (insert noun) again here's 5 tips of everything I would do in # seconds.","(insert company/individual) if I (insert verb) (insert noun) for you this is what I would do.","This is what it would (insert adjective) like if (insert number) of (insert noun) were in one (insert noun).","This (insert adjective) (insert noun) gets (insert verb) by this (insert adjective) (insert noun).","In this video see if you can tell what's real and what's (inset noun).","I have no idea why I have no (insert adjective/noun).","I avoid all toxic (insert noun), here is how to clean up your (insert noun).","Here are # of questions I ask before (insert verb).","Since (insert noun) from (insert prace/location) are basically (insert fact), you might as well learn how to make them from home.","Every wonder how the same (insert noun) can result in drastically different (insert noun).","Here's what to look for when buying (insert noun) in (insert location).","If your (insert noun) look like this, and this pay attention.","Today I am going to show you have to make the perfect (insert noun) because I went to (insert school) so you don't have to.","It took me # full hours to (insert verb) this (insert noun) and I originally allotted myself # minutes.","(Insert noun) (insert noun) (insert noun) where the 3 themes for this (insert noun). And you guys I delivered.","Take your (insert noun) from this to this.","I have to ask, girl, how do you (insert adjective) so good?","I got to (insert verb) for (insert noun) (insert time), but let me just (insert verb) for a bit.","Give me 10 seconds and I will let you know what one suits you best.","Give me 10 seconds and I will let you know if you have a (insert noun) or a (insert noun).","Anyone even notice how some people look naturally (insert adjective) without doing anything crazy.","If you've ever secretly (insert action) and hope no one noticed this is for you.","Today we are going to play did you know (insert noun) edition.","If this is your first time being (insert adjective) I am (insert name) and I am trying to make it (insert adjective) to (insert verb) by using (insert noun).","My (insert noun) never (insert pain point) no matter what I do.","Here are # of ways to make (insert noun).","Those little (insert nouns) are called (insert name) I am a (insert title) and I am going to show you how (insert result).","You want to know why it takes (insert noun) to get (insert result) again.","If your (insert noun) goes (insert result) when you (insert verb) while (insert noun) and (insert adjective) really (insert result) by now you know you have (insert noun) so why aren't you doing a (insert noun) routine.","If your (insert noun) is (insert adjective) like this, you are likely (insert diagnosis).","Stop buying your (insert noun) like this, and start buying them like this.","Did you know this tip, it's going to blow your mind.","If I (insert action) right now would you believe me if I told you (insert truth).","This is what (insert noun) looks like. I am a pro (insert title) and this is the proper way to (insert action).","Does it actually matter what type of (insert noun) you use.","You would need to (insert verb) (insert number) (insert noun) today to get the same (insert result) you grandparents obtained from just (insert verb) (insert number).","This is what you would (insert verb) for (insert person) if you weren't terrified to talk to them.","When making (insert noun) the (insert noun) is just as important as the (insert noun).","Today I am going to show you the # most common ways to order your (insert noun) at a (insert place/location).","Guys this is so nerdy but it's the coolest thing I have ever done with my (insert noun).","Here are # of (insert noun) from across the world, let's break them down to their core components.","There are way too many (insert noun) in the world that sort of all look that same, but are they?","(insert noun), (insert noun), (insert noun), are the basic components of a (insert noun).","Here's a little (insert noun) 101 for you.","These are the 3 most common mistakes I see when people are making (insert noun).","A quick guide to (insert verb) (insert noun) some basic and some unusual.","I see so many people using their (insert noun) just like this or maybe like this even when you (insert action). So let me show you the trick to perfectly (insert action).","Here's how the form of (insert noun) you add into (insert noun) affects them.","Why (insert action) like a normal person, when you can be a psycho instead.","This is everything I got for free on my (insert event).","(insert noun) is my second (insert noun) so here are # of (insert noun) that I used to do a lot and I recommend my students as well.","If you gave me (insert time frame) to get a job as a (insert title) this is what I would do.","Did you know if you have a (insert noun), (insert noun), (insert noun), (insert noun), (insert noun) then you can (insert dream result).","If you're the person who told me this I could kiss you right now because it literally saved my life.","I bought all the (insert noun) so you could find out which are the best in each category and which is not worth your money.","Here's how I get people the best (insert noun) on (insert noun).","Did you know that there are # types of (insert noun).","Here's how you can guess an almost perfect number every single time.","Here is how I make (insert noun) that lasts up to (insert time frame) and only costs (insert $).","I teach (insert noun) to people like they are in kindergarten, and it's time for class.","(insert noun) can be reversed so let's talk about # things you can do to improve your (insert noun).","This is how much (insert noun) you would lose at the end of the day with a (insert metric) (insert noun).","Did you know your (insert noun) are programmed to make your (insert result).","This might be the ultimate (insert person) hack.","To (insert verb) the (insert metric) in this (insert noun) the average would have to (insert action) for (insert time frame).","If you (insert verb) this (insert noun) this is the amount of (insert noun) your body would (insert result).","The worst (insert noun) that you will regret buying for your (insert noun) is right here.","(insert noun) how to (insert action) and still (insert dream result).","Use this, to pay for this.","I paid (insert $) to build this (insert noun) from scratch).","If I told you, you would (insert result) form (insert action) you would probably believe me right? Well here's the thing...","How to budget with a (insert $) salary using this special (insert name) technique.","I spent (insert $) on new (insert noun) for my (insert noun).","Here's a quick what to (insert result) (insert metric) of you (insert noun) legally.","(insert adjective) won't get this but hopefully you will.","This is the exact order in which you should be (insert verb) for all of your (insert noun).","Why is it we are all so stressed about (insert noun) but we also all have a (insert noun) in (insert location).","Today my kids (insert noun) is due. So let's (insert action).","There are # things I like to do when I buy a new (insert noun).","Here are # of things you have been putting off around","the house that you can get done in # minutes.","Show me the method of the best way to (insert result).","# things everyone needs to know how to fix in an (insert location).","Why does nobody talk about the cost of (insert action).","Top # ways not to (insert action) to the (insert person) you (insert noun).","Top # deadliest (insert noun) that can kill (insert living thing) in one (insert verb).","So this is (insert weight) of (insert noun) if I (insert verb) that to a (insert noun) what is that equivalent to for humans.","What is this? This is your (insert description of visual) and this is this #1 reason that (insert noun) die.","The easiest way to keep you (insert noun) (insert adjective) is to pretend...","If you're wanting to transfer your (insert noun) from this into (insert noun).","Let's see how many (insert noun) we can get out of this.","This was the most popular (insert noun) in all of (insert year).","Did you know that you could (insert verb) a year's worth of (insert noun) in (insert time frame).","Give me 60 seconds to show you how to (insert action) for the first time after (insert life event).","Want a (insert noun) that (insert dream result) even when you (insert action).","Mom/Dad of # of kids, here is how I treat being a mom/dad as a job.","# minutes ago (insert pain point) and had (insert pain","point) if you want to (insert dream result), here is how you do it under # minutes.","If you have a (insert noun) in your house and a (insert noun) I am going to show you guys the # of the best things we did to (insert dream outcome).","If I could suggest any tip to any (insert person) out these it would be this.","If you want to do this in (insert year). If you want (insert dream result) you have 3 main options to make it happen. I am going to go over them right now.","Your (insert noun) is to (insert adjective) and (insert adjective). Here are # of (insert noun) to (insert result).","If you (insert verb) and (insert action) and it doesn't (insert result) it's time to (insert action).","I just made over # of (insert noun) in under (insert time) and I will show you how I did it.","If you want to add (insert noun) to you (insert noun) in (insert year) and you don't know what (insert noun) to get I got you.","If you storing your (insert noun) in (insert noun) stop what you're doing and watch this video.","We spent $ of (insert noun) for our family of #, and this will last us (insert time frame).","People always ask me (insert name) (insert fact) (insert question) well, let's find out.","If you're wondering why when you (insert action) and don't (insert result). Then proceed to (insert action) and (insert result). It's because you are not doing this.","Whatever you do, do not let you (insert person) (insert action).","I am sick of hearing this word (insert word).","It starts off like this...","After (insert time frame) of research here is why I choose (insert noun) and started (insert action).","Does your (insert person) (insert action) like this?","If you have a (insert person) at home, then (insert action) will dramatically change their (insert noun).","I bought this (insert noun) for (insert $) and let me show you what I did next.","In (insert year) the (insert company/person) introduced the (insert noun).","Here's the only way I will ever (insert action).","So I spent (insert $) at (insert store) on my last trip.","I turned one (insert noun) into # different (insert noun).","(insert company) did not sponsor me this year, so here is how to make their (insert noun) at home.","Want a (insert person) who (insert dream result) every time, even when you don't (insert noun/action).","It's (insert noun) season, so let's make a (insert noun) for your (insert person).","Your favorite (insert noun) hacks from (insert year).","# years as a (insert occupation) you guys still don't believe me when I say these things.","It's wild to think (insert type of stores) still sell (insert noun) for (insert result). But not everyone knows they actually (insert result).","I am not a DIY guy/girl but I am going to show you how I spent (insert $) to transform my (insert noun).","3 (insert noun) we do not recommend for the first time (insert noun) owners/users.","People keep asking me what to do with (insert noun).","I am going to show you how to (insert verb) your (insert noun) so they don't (insert pain point).","# things you should never put in the (insert noun).","Almost everyone thinks they know how to (insert action).","Let's start by mixing (insert noun) and (insert noun) and I am going to give it a good shake. What happens?","Let's get this brand new (insert noun) (insert action) so we can put it to good use.","This one mistake can actually kill your (insert living thing).","This is kind of gross but I had to share.","We are going to text (insert noun), today on how (insert adjective) is it.","All you need is a (insert amount) of (insert noun) and you can turn (insert amount) of (insert noun) into","(insert result). Here are # (insert noun) that you should never (insert action).","If I can't do it in one step, I am not doing it. This is the #1 most efficient way to (insert verb) (insert noun).","When (insert occurrence) you will probably need a better (insert noun) than this.","I found out why (insert noun) wasn't (insert result). So I am going to tell you what you're doing wrong.","This is the ultimate master trick to (insert result) in just # minutes.","Did you know you only need # of ingredients to make (insert noun).","I am willing to bet, this (insert noun) is older than you.","Did you know our chicken is dunked in chlorine?","The viral (insert noun) hack that landed me in (insert news/magazine outlet).","I am a # generation (insert title) and I hope this shows you why you should (insert action) when (insert task).","Here are the # (insert noun) items you need to throw in the garbage right now.","We're going to see if it's true, that (insert noun) are so filled with toxins that they don't burn when you hit them with a blow torch.","Believe it or not, this simple device can prevent (insert pain point), (insert pain point), and (insert pain point).","Here's why I never use a (insert noun).","Did you know you could take a (insert noun) like this, and quick (insert action).","Here are # (insert noun) as a (insert title) I would never own.","Want to find out what's hiding inside one of these (insert noun) when they are not properly maintenanced?","What I eat in a day on the (insert noun) diet.","These are # of (insert noun) I would not own as a (insert title).","You should be able to look at her/his (insert noun) and see if come up to her/his (insert noun) here.","If you see (insert symptom), (insert symptom) especially on a (insert type of noun) you better worry about what's called (insert name).","If you have a (insert noun) and you see that the (insert noun) is (insert observation) that's a dead giveaway that they are (insert action).","Here are # human foods that can kill your (insert living thing).","Before you ever take you (insert living thing) on a (insert action) for the first time you need to watch this.","(insert name) what is your (insert title) trigger?","What's the most overrated (insert noun)?","Here are the # (insert noun) that are the least likely to (insert result).","If you (insert action) for (insert timeframe) what would happen?","This (insert noun) has something in it called (insert","name). (insert verb) enough of these and they will kill you.","Here are # of things, every (insert person) should keep in their (insert noun).","Man this, (insert noun) in (insert location) is trash. Maybe I should just get this cheap (insert noun). Yeah I wouldn't do that if I were you.","This (insert noun) isn't bad for you. Yeah it has some (insert noun) but what does that even mean?","So most people don't know that on a (insert noun) there is one (insert noun) every (insert noun) owner always (insert action).","0 calorie (insert noun) I am not joking these are literally 0 calories.","This guy bought a failing (insert type) company for (insert noun). Now it's worth over (insert $).","Stop wearing (insert noun), it really is just like wearing (insert analogy to represent damage).","We all have that one (insert label) in our life.","But it's just an (insert noun) and it's (insert positive) how bad could it be? Well this (insert noun) has the same amount of (insert metric) as # (insert noun).","What if I told you that you could eat this entire jar of (insert noun) for less calories than 2 servings of their (insert noun).","A # calorie deficit per day, for a month should be around (insert pounds/kilos) of weight loss.","Welcome back to \"I can't (insert dream result)\" a series where I show you (insert routine/tutorial/steps to insert result) that take less than (insert time) to do/make.","What I am (insert verb) on my (insert goal) journey, (insert result) last month.","If your (insert current state) you can't just (insert result) like everyone else.","After over a decade of (insert action) here is what I wish someone would have told me from the start.","To everyone just doing (insert #) (insert action). Stop that.","If you want to (insert dream result), (insert action) is the worst thing you can do.","This is (insert metric) the exact same amount of (insert noun) you build everyday. If you (insert action) hard (insert #) times per week.","You want you (insert noun) to look like these? So did this guy.","If I had 90 days to go from being (insert current state) to (insert dream result) here's exactly how I would do it!","You are (insert adjective) than you think.","You can put on/take off (insert metric) on your (insert mile/exercise/vertical/etc) in one workout with these simple tips.","If you have (insert symptom) you probably have (insert condition).","If you (insert action) but don't when to (insert action). You could be losing up to (insert metric) of you (insert dream result) without even realizing it.","If your (insert verb) (insert noun) and then (insert noun) and then (insert noun) that is literally the worst thing you could be doing.","The worst possible thing that can happen to a man/woman is developing (insert result).","I grew about # (insert metric) in the past year at (insert age) by fixing my (insert condition) and (insert condition).","Person #1: (insert large number) Person #2: What are you doing? Person #1: (insert action) I want to get a (insert dream result) before (insert time).","So you want to impress you (insert person) when you (insert action) this (insert upcoming time).","Person #1: What aren't my (insert noun) (insert adjective)? Person #2: It's because your (insert common mistake)","If you want to be the (insert adjective) person in the room, it all starts when you (insert action).","If you have (insert pain point) but not much time to (insert action) and you want to (insert result) then save these (insert noun) and (insert noun) steps/routines/tips.","I've had a (insert drea result) since I was (insert age).","The reason I can (insert result) and be comfortable, not have any (insert pain point) is this right here.","I spent (insert #) whole years with (insert condition) so you don't have too.","I have a (insert metric) (insert noun) because this is one of my workouts/routines/steps/tips/strategies/methods.","If you can't (insert skill), then follow this one minute routine/progressional/tutorial and you will have (insert skill) by the end of this video.","If your (insert current state) then the easiest way to have (insert dream state) is to have (insert result).","What would happen to you (insert noun) if you only (insert action) for an entire week.","Taking a (insert noun) can increase your (insert result) but only with one strategy.","If you're serious about getting (insert result) then this is the only video you will ever need so save it for later and watch till the end.","If I had to start over and (insert verb) my (insert noun) from scratch, these are the only (insert noun) I would do for someone that is new to (insert noun).","Let's see what's inside (insert noun).","This is the reason (insert noun) is the size they are.","Here is a tier list of the best (insert noun) sources based off of how good they are for you (insert noun).","I don't really show the (insert noun) a lot of love because I don't like (insert action) but today I am going to show you (insert action).","What if I told you to (insert verb) # (insert noun) everyday?","What would happen if you (insert dangerous action).","F*ck it, I am going to role # of (insert noun) in 60 seconds.","This is what a full (insert time) (insert action) looks like at top # (insert school) in (insert location).","What's hommies, I am going to give you a cash course of what (insert noun) to ask for, based on what you want that (insert noun) to do for you.","If your between the heights (insert height) to (insert height).","This is a great trick.","(insert $) in (insert time) and people still think you need a 9-5.","They say you can't (insert result) with (insert noun) but they're wrong.","Here are # of pricing mistakes we made when starting our (insert business).","# things I'd do if I were to re-start (insert industry/niche/occupation/hobby).","The (insert noun) of a (insert noun) will tell you a lot about the (insert noun).","Here are some space saving (insert noun) hacks that saved our small space.","Do you feel (insert pain point) by your (insert noun) consistent (insert pain point).","My friends and I turned this (insert adjective) (insert noun) into this (insert adjective) (insert noun) in just (insert time).","(insert noun) used to have (insert trait), now they don't.","Here is a complete cost breakdown to build my (insert sqft) home.","It cost (insert $) to build my own (insert noun), acting as my own general contractor. Here is the complete coast breakdown.","I paid (insert $) to build my own dream home and pool as an (insert title). Here is the complete cost breakdown.","I've (insert verb) over (insert #) of (insert noun) here are # things I would never do.","If you want to (insert verb) in an exceptional (insert noun) you have got to stop half-assing things.","It's also super hard to get (insert result) especially with the (insert condition).","It has taken me # years if (insert occupation/skill/hobby) to realize I have been (insert action) wrong this entire time.","Remember (insert method/strategy name) for you next (insert noun).","Remember (insert #) (insert noun) combo for you next (insert noun).","(insert industry/niche) tips for if you're broke.","What (insert noun) and (insert noun) do I really need?","Every time you (insert action) your passing you (insert adjective) (insert noun) just because you don't know what they are.","Alright you little DIY freaks here's how to build the sauciest (insert noun) of all time.","Normally I would never say this but please stop (insert action) until you're ready to (insert action).","(insert noun) for all the (insert condition) guys/girls out there.","How to take better (insert noun).","This is every single (insert noun) in my collection.","For people who (insert action) and are also into (insert noun) what the hell are we doing.","Here's how to build a good (insert noun) rotation.","This guy has made (insert $) profit in one day using the technique he is about to use.","This book will teach you more about the (insert niche/industry/topic) than all of these books here.","If you wear a (insert noun) or (insert noun) with (insert noun) and a different (insert trait) (insert noun) then you have (insert result).","Every (insert noun) explained in one sentence.","If you keep failing your (insert noun), just figure out where you're failing it.","How long does it take to complete the impossible mile.","(insert noun) is believed to be super bad for us. Causing (insert symptom), (insert symptom), (insert symptom), and even (insert symptom).","(insert noun) can make you go bald!","I'll tell you a story, We have # (insert noun) that were invented to solve 3 different problems.","How to start your (insert noun) from scratch.","Exposing the only (insert noun) you will ever need.","How to dress like a (insert person).","Every (insert store type) has a million (insert noun) with different (insert noun). But some of them are more special than others.","This is exactly how you and your friends are going to get (insert result) before this (insert time).","If you're afraid to (insert action), then (insert action).","If you want to start a (insert noun) in (insert year) here are some things you are going to need.","Putting you on brands you may have never heard of."]},
+{c:"Comparison",h:["This is an (insert noun), and this is an (insert noun).","This (insert noun) and this (insert noun) have the same amount of (insert noun).","A lot of people ask me what's better (insert option #1) or (insert option #2) for (insert dream result) I achieved (insert dream result) doing one of these and it's not even close.","For this (insert item) you could have all of these (insert item).","He/she always (insert action), and he/she does (insert action).","For this (insert noun), you could have all of (insert noun).","This (option #1) has (insert noun) in it, and (option #2) has (insert noun) in it.","This group didn't (insert action) and this group did.","For this (insert noun), you could have this whole (insert noun).","This is (insert metric) of (insert noun) for (insert price), and this is also (insert metric) of (insert noun) for (insert price).","How long would it take you to go from (insert before state) like this (with pain point) to (insert dream result) with (insert desire).","If you're between the ages # - # and you want to become (insert dream result) and I mean really (insert dream result). Then you have to do these # things.","This (insert noun) has (insert metric) and will get you (insert dream result), and this (insert noun) has (insert metric) and will get you (insert dream result).","One (insert noun), and # of my (insert noun) have the same (insert metric).","This is a (insert noun) from (insert restaurant/store/place) for (insert metric), and this is the same (insert noun) from (insert restaurant/store/place) for (insert metric).","This is a (insert noun), this is also a (insert noun).","This is (insert noun) before you (insert action), this is (insert noun) after you (insert action).","These two groups (insert similar result) but this group (insert result).","The (insert noun) offers you a (option #1) and a (option #2) what do you choose?","(insert #) (insert noun) I would have this one if I was (insert verb), and I would have this one if I was (insert verb).","This is (insert noun) at (insert metric), and it's perfect for (insert verb). This is (insert noun) at (insert metric).","This is (insert metric) of (insert noun), this is also (insert metric).","(insert metric) and (insert metric) both sides are (insert adjective) and look the same. Let's see why.","Both these (insert noun) are exactly the same. I have not changed a single (insert noun). But this one is (insert metic) and this one is (insert metric).","Would you feel more (insert trait) in this (insert noun) or this one?","Both groups gained the same amount of (insert noun). Expect this grouped (insert action) # days a week, and this group (insert action) #.","You will (insert result) a week if you (insert action) on a (insert journey). But you will only (insert result) this much a week if you (insert action) on a (insert journey).","This is what your (insert noun) looks like when you don't take (insert noun). And this is what your (insert noun) looks like when you take (insert noun).","This is me after (insert action) in the (insert location) with (insert condition). And this is me just (insert action) in the middle of (insert location)."]},
+{c:"Myth Busting",h:["This is why doing (insert action) makes you (insert pain point).","This is how you (insert dream result) while (insert guilty pleasure).","If you're really a (insert dream result), why aren't you doing (insert common belief)?","Just because you do (insert action) doesn't make you a good (insert label).","If you are (insert action) just once per (month/day/year) than you are f*ucked.","This is me when I (insert action) (insert frequency), and this is me still (insert action) (insert frequency).","No your (insert noun) is not cause (insert result).","Let me de-influence you from (insert action).","More (insert target audience) need to hear this, (insert common belief) will not (insert result).","It's time to throw away your (insert item), you don't need it anymore.","They said, \"(insert famous cliché or quote)\" That's a lie.","Don't (insert action) until you've done this one thing.","You cannot be (insert dream result) before you enter (insert age group).","I stopped acting like the (insert person/title) in my life and you shouldn't be the (insert person/title) either.","Your life is boring because you don't (insert action).","This is (insert large number) worth of (insert noun).","Just because you have never (insert action) before, doesn't make you a (insert label) person.","This is how we think we (insert pain point), but you would have to (insert action) on top of (insert action) # of times for that to happen.","(Insert noun) is actually a really good (Insert noun) for (insert result).","# things I would never (insert action) in my (insert age range) if I wanted to (insert dream result) by (insert age range).","If you look in the mirror and notice (insert observation) here's what you do to (insert dream result).","I haven't done (insert common action) in over # years, and it's healed (insert noun).","(insert dream outcome) that don't taste/look like pure bootyhole.","You are not (insert bad label), you are not (insert bad label), you just can't (insert adjective).","My biggest regret in (insert life event) was (insert accomplishment).","(insert action) I have never (insert action) before, to prove (insert action) is easy.","For the price of this many (insert noun) at the (insert place/store/restaurant) you could make this many at home.","If you (insert action) this (insert noun) then yes i'm judging you.","You are (insert action) too many (insert noun) that you didn't know.","I have never met a single person that (insert action), (insert action), (insert action), (insert action), and still has time to (insert dream result).","(insert well known person or brand) is trying to get this video removed from the internet because he/she exposes their product for being (insert negative result). Watch this now before it's gone.","What if I told you making your own (insert noun) is actually super easy and only costs (insert price).","I said it before and I am going to say it again (insert mind blowing fact).","There is absolutely no reason for you to be (insert pain point) every single day just because you are trying to (insert dream result).","Don't make the mistake of (insert action), (insert action), (insert action).","You are not bad at (insert action), you probably were just never taught how to (insert action).","If you're a young (insert person) and you are a (insert result) (insert title), let me tell you something you got a bright future buddy.","Believe it or not this (insert noun) was not (insert verb) with a (insert noun).","(insert noun) are not (insert adjective) and they are not a cop-out. I think they can actually be made into something really really (insert adjective).","If your (insert noun) are not lasting you at least (insert time frame) you are probably doing them wrong.","This is why you should always (insert verb) your (insert noun) before (insert verb).","You're using your (insert noun) wrong and I am going to show you how to use it the right way.","Everyone on the internet is going to tell you making (insert noun) is impossible. But I am going to show you how to make them from home.","I will let you in on a secret (insert verb) is the easiest thing in the world.","Are you still (insert verb) (insert noun) like this? While I worked at (insert noun) and let me show you how to do it like a pro.","Instead of (insert verb) (insert noun) like this, try this method instead.","(insert verb) does not mean your (insert adjective), it means your just (insert adjective).","If you (insert action) like this, then you're doing it wrong.","I am going to hold you hand while I tell you this. If you only have # of (insert noun) you are not doing it the right way.","# things you should never put in your (insert noun).","(insert noun) are not as disgusting as you think.","(insert noun) is better for (insert result) than (insert noun). And yes I am going to back up my claim with studies.","Being (insert result) is not just based on (insert noun). You may not believe this but I could have been (insert adjective) then this guy/girl if I had just changed a few things."]},
+{c:"Storytelling",h:["I started my (insert business) when I was (insert age) with (insert $).","X years ago my (insert person) told me (insert quote).","I have (insert time) to get my sh*t together.","I don't have a backup plan so this kind of needs to work.","This is how my (insert event/item/result) changed my life.","So about a month ago my (insert person) and I did (insert action).","I have (insert action) over (insert #) in my life.","This is a picture of my (insert what picture is).","X years ago I decided to (insert decision).","Yesterday I was at (insert location) when I noticed something (insert adjective).","X years ago I was (insert action) because I (insert pain","point). Is it possible to (insert action) while (insert action) in X days.","When is it time to do (insert action).","So I did (insert action) last week.","When I was (insert description) I was always (insert bad habit).","If you are anything like me, you take your (insert event/item) very seriously.","In (insert time), I went from (insert before state) to (insert after state).","X years ago we (insert action) to (insert result).","Hi I am (insert first name) and I am starting (insert business) from scratch.","This is the story of how I managed to do (insert achievement).","I am (insert age) having an identity crisis.","This is probably the scariest thing I have ever done.","This girl/boy was in her/his flop era.","Is it possible for (insert description) to make (insert $) a month?","So I recently started feeling \"the pressure\" everyone talks about.","After X years of I (insert action) because I realized one thing: (insert statement).","It all started when (insert person) (insert action).","I'm (insert action) in (insert time) and I just (insert action).","I'm (insert age) and I'm not ashamed to admit that >>","X days/weeks/months/years into my (insert action), my worst nightmare became my reality.","It all started when this boy/girl, (insert action).","X days/weeks/months ago my (insert person) and I (insert action), (insert action), and (insert action) this is how it's going.","X days/months/years ago my (insert person) told me (insert statement)","I woke up this morning thinking about (insert thought)","X days/months/years I (insert life event) and decided to quit (insert bad habit)","X days/months/years I started (insert action) again after being stuck at (insert pain point)","X days/months/years I started (insert action) thinking it would magically solve (insert pain point) but here is what ended up happening","I am an X year old (insert occupation) from (insert location) and I just (insert action)","This is how my X changed my life","X days/months/years ago I decided to (insert decision)","X days/months/years ago I was (insert action) because I (insert pain point)","Is it possible to (insert dream result) while (insert action) in X days","I am starting/started a (insert business) from scratch","X days/months/years ago I quit (insert habit)","X days/months/years ago I stopped (insert action/or habit) and started (insert action/or habit)","Is it possible for (insert avatar) to (insert dream result)?","I did everything right/wrong","So I recently started feeling (insert feeling) everyone talks about","After X years of (insert action/or habit) I stopped/started (insert action/or habit)","X days/months/years ago (insert people) (insert action)","The secret is out I am (insert action)","I got (insert dream result) without (pain point/points) here's how","I developed an X addiction so strong I physically can not stop (insert action)","X years it took me from (insert bad situation/result) to (insert good situation/result)","X Months/Years ago I (insert action) to (insert action)","There is nothing more embarrassing than X","I am a (insert title) by day and a (insert title) by night","Come with me to make (insert object)","Come with me to break up with (insert object/company/etc)","I started (insert business) at (age/life event) and I had no idea I would (insert result/outcome)","You know the feminine urge to open (insert business)","It's been (insert time) since we (insert experience)","I think (insert belief/opinion) so I have been taking matters into my own hands","I was shocked when I found out (insert fact)","This is how I got to (insert cool opportunity) in my X week/month/year of doing/starting (insert business or job)","What happens when you (insert action) then you end up (insert result) but you (insert challenge)","What if I told you that (insert dream result) without (insert pain point)","I went on # of (insert noun) this year, and here is the one trait I learned that you need to have to (insert dream result).","X days/months/years ago I was (insert action), every waking hour because I was (insert trait) and I wanted (insert result).","X days/months/years ago I was (insert life event), because I was (insert action) instead of (insert action).","This is (insert person) we have known each other from X years, X days, X hours, X minutes.","Put a finger down if you told the entire internet you were going to create a (insert noun) without having any idea how to (insert action) or any idea how to start?","I think (insert noun) should be better than this, so i;ve been taking matters into my own hands.","This is me (insert life state), yes my (insert observation) all my (insert persons) were (insert action) but I couldn't because I had to (insert scenario)","I used to be in a super toxic relationship back in (insert time frame) so let me tell you about it.","How I married my middle school/highschool/college girlfriend/boyfriend.","(insert person) always expects you to have (insert result) but the problem is....","My (insert label) (insert name) and I, started (insert business) in (insert year).","X days/months/years ago my (insert label) (insert name) and I (insert action) to (insert result).","You are not (insert label) is something I wish I could have told my younger self.","Is it possible to get (insert dream result) with only (insert action) for only 1 day.","I have no idea what I am doing at (insert place).","I got (insert result) at (insert age) and (insert result) by (insert age) if you are scared about (insert result) this is for you.","Is it possible to (insert action) successful (insert noun) for (insert noun) in just 1 hour?","(insert year) - I think I am going to (insert goal).","So I bought this (insert noun) last week and quickly realized I have no idea how to (insert action).","X days/months/years ago I bought a (insert noun) as a (insert age) with a full-time (insert job).","We (insert action) over # of the most (insert adjective) (insert profession) and # responded.","I hate to say this but my wake up call wasn't as (insert scenario) no my first wake up call was (insert scenario).","Is it possible to get (insert dream result) without your daddy being the CEO of apple.","If you're new to this channel let me catch you up.","The worst part about being a (insert title) is I literally do not...","Living in a (insert adjective) household has led me to literally having (insert bad result).","Nothing could have prepared me for how it feels being in your (insert age group) and (insert situation).","So apparently your frontal lobe does not develop fully until your age 25, so here are some things I have realized since it came in.","I tried a # hour (insert noun) routine, which is much harder than you think.","You think you're a (insert label)? Well let me introduce you to my life.","My (insert person) and I tried a whole (insert time frame) without (insert action).","(insert quote) the first time I heard this I was (insert action), and my (insert person) just dropped that line out of nowhere.","Build a (insert noun) with me while I (insert action).","It was until I build # of (insert noun) and completed over # of (insert noun) that I realized (insert action) is not really that complicated.","X days/months/years ago me and my (insert person)","bought (insert noun) for (insert price). I am (insert life event) in (insert time frame) and I just wrote a letter that I wish my (insert age) self would have read.","I am leaving my (insert salary) dream job at (insert company) to (insert action).","This is day # of making fake (insert noun) for our dream clients until one of them starts working with us.","X days/months/years ago I went extremely viral for (insert action).","Have you ever wondered why (insert noun) (insert adjective) is much better than (insert noun).","For those of you who don't know I have been bootstrapping a (insert business type) to see how big I can scale it.","When I told my (insert person) I was going to start doing this he/she thought it was the worst idea ever.","These are dumb things I have done in (insert stage) of (insert action) for my (insert noun).","This (insert noun) single handedly changed my career.","Have you ever tried to (insert action) something that was supposed to look like this but ended up looking like this.","Hi my name is (insert name) and this was me (insert time frame) ago a (insert label) in (insert noun).","I (insert action) to every (insert person) in the world. Here is how many people responded.","What happens when you (insert action), (insert action), (insert action), etc.","Ever since I was (insert adjective) my (insert person) made it very clear to me that he/she was (insert adjective) about certain aspects of (insert noun).","One day you're gonna get dumped. Not by your girlfriend, not by your boyfriend, not by your fiance, not by your spouse. But by your (insert noun).","I am (insert name) (insert age) you might know me from my (insert accomplishment), (insert accomplishment), or (insert accomplishment).","I was today years old when I found out that if you have (insert trait), (insert noun) will look really (insert adjective) on you.","People are shocked to hear that these are my natural (insert noun).","Have you ever noticed that some (insert noun) feel (insert description) while others feel (insert description).","This video got # of views, with a lot of (insert adjective) feedback. Let's try it out and see if it makes a difference to my (insert noun).","If you've ever come across one of my reels and thought (insert adjective) that woman/man has (insert adjective) (insert noun). But here's a little secret: my (insert noun) was not always like this.","Welcome back to my (insert noun) series where I will be teaching you everything I know, no gatekeeping here.","After (insert time period) of having (insert bad result) come get my (insert noun) done with me.","Hi I am (insert name) and I am a (insert negative label).","Here is how I lost a (insert time frame) of my life.","I feel really bad for saying this but sometimes you just need to (insert harsh truth).","As you may know I have been (insert action) to (insert dream result).","I (insert action) almost everyday for a week and here is what happened.","(insert action) everyday has literally changed my life. In","particular helping me (insert dream result). I had this weird idea that if I added some (insert action), (insert action), (insert action), etc...","Did you know that if you combined (insert noun), (insert noun), (insert noun), etc...","When you're sad but then you remember you have (insert noun).","I spent (insert price) on a (insert noun) here's all the (insert noun) I got.","You know those days where it feels like (insert scenario) well today was that day for me.","I have (inset amount of thing), (insert amount of time), and a pipe dream to get ready for (insert event).","So I was just (insert action) to do my (insert action) of the day when I saw that...","Welcome back to another episode of (insert series name) where I (insert action).","We are not even (insert time frame) into (insert year) and have gone from being a (insert before state) to (insert after state).","I worked (insert hours) in just (insert days) making all of this (insert noun) for my (insert noun).","If you told (insert age) me that I wouldn't be a (insert title) I would probably tell you to go screw yourself.","I (insert action) all of the (insert noun) you want with all the (insert adjective) that you need.","Someone just (insert negative result) my business.","Can you please pack my (insert price) (insert noun) with me? Of course!","The ultimate assembly video of my (insert huge metric) (insert noun).","I am on a journey to find the best (insert noun) for (insert target audience) and today we went to (insert","location). Here's how I made a wireless (insert noun) that is valued at (insert price).","We pretty much (insert action) our entire (insert noun) into (insert noun).","X days/weeks/months/years ago I purchased (insert price) (insert noun) as a (insert label) with only a (insert price) deposit.","For our entire # year relationship my (insert person) has been hiding something pretty important from me.","I always had the biggest dream of (insert dream).","(Insert noun) is cringe right now but let me tell you what a game changer it was for me.","Hey everyone I am (insert name) I am (insert age) and I am starting a (insert business) from scratch.","I didn't realize how bad I lost myself.","I just left my (insert salary) a year new grad job, and now I am just a disappointment.","Me and my (insert person) are supposed to be (insert action), but instead we (insert action).","My (insert person) wanted a (insert noun) for (insert event) so I said thanks for the suggestion but that's not my vibe and made them (insert noun) instead.","I've (insert verb) this almost every single day of my entire life.","Buying things I don't need because I have adult money.","A fun fact about my (insert person) (insert name) is.","My entire life I grew up (insert adjective) and (insert adjective) it was just my (insert person) raising the # of","us. I spent an entire (insert time) (insert verb) but was it a waste of time?","I am about to go on the biggest bender of my entire life!","I think I am getting (insert verb) today.","Welcome back to me (insert verb) my (insert person) (insert noun).","I always wondered what it was like to (insert action).","So (insert time frame) ago me and my (insert person) had a little too much fun.","Selling (insert noun) at (insert location) has made me more money than my (insert person/title) and today I am going to be investing that money into (insert noun).","Welcome back to day #, where I (insert verb) a (insert noun) everyday until I am (insert adjective)","(Insert person), (Insert person), or that one (Insert person) we just don't have (insert title) like we did back then.","Day # of trying to (insert action) all year.","This was the (insert noun) that changed my life forever.","Over # of you saw this video.","Today I woke up and realized (insert realization).","Remember that time you were (insert adjective) so you (insert action) but the moment (insert person) (insert verb) you (insert action).","Okay real talk, I wasn't always this (insert adjective).","Is it possible to stop (insert pain point) and (insert dream result) in (insert time frame) even if you're in","(insert noun) and all of your (insert person) think getting (insert verb) is (insert trait).","I had just (insert time) to (insert verb) (insert #) of (insert noun) for a (insert person). And you have until the end of the video to guess who they are for.","I only have (insert time) to finish over (insert number) of (insert noun) orders, including (insert number) of (insert noun), (insert number) of (insert noun), (insert number) of (insert noun), and (insert noun).","I (insert verb) (insert number) (insert noun) and I had to throw (insert number) of them away.","Have you ever seen (insert #) (insert noun) in one place?","I have a confession. I have no problem (insert verb) for my (insert noun) but it's the process of actually (insert noun) that feels so (insert adjective).","I am (insert age) and I have an identity crisis.","I have been a (insert title) for # years of my life I started when I was # years old working at (insert location/place) in (insert location).","When I was growing up one (insert noun) I always (insert verb) with my (insert person) was (insert noun).","Once upon a time we bought a (insert noun) on (insert noun)","If I want my (insert person) to be (insert dream result one day) that means I got to (insert action) now.","Hi I am (insert name) and I have been secretly (insert action) for # years.","Can you name something more terrifying than a (insert person) with a (insert noun).","# months/years ago my friends and I started a (insert business). And it turned out to be the biggest (insert result).","This is the ultimate assembly video of my (insert noun).","So (insert time) ago my (insert person) and I bought a (insert noun).","I am on a journey to find the best (insert noun) for (insert person) and today we (insert action).","This week I tried to see if I could (insert result) for all of my (insert noun) just by (insert action) the night before.","In (insert year) I started (insert action) and I gave my life to (insert person).","I lied to the (insert person) who (insert action).","Something I never thought I would have on my bingo card as a (insert title) was...","I had to spend (insert &) on this free (insert noun) before it even started.","I just left my 9-5 corporate job to start my (insert business.","I feel like # years ago I had my life together as a (insert title) but just slowly over time things have shifted.","(insert year) I met my (insert person) when working at (insert job).","My house has this weird (insert trait) and it's haunted me ever since I first toured.","My (insert person) and I moved in together and ended up losing (insert $).","X years ago we decided we wanted to know exactly where our (insert noun) was coming from.","I made (insert $) doing (insert side hustle) as a side hustle.","I have no intention of...","Growing up my parents used to get upset when I (insert action), (insert action), or (insert action) they would get frustrated.","Hi my name is (insert name) and this is my home.","This is how much (insert adjective) (insert noun) cost me in (insert location) and a (insert age) (insert occupation).","Nearly # years/months ago today I packed my bags and left for (insert location), thinking I would only be gone for (insert time).","I am attempting to be the first person to (insert goal), day #.","When we first moved to the (insert location), my (insert person) bought a (insert noun) in (insert location).","My (insert person) told me he/she wanted a (insert noun) and instead of waiting around I decided to build it right now.","My parents had # sons/daughters/kids thiers me, my (insert person), and (insert person).","(insert time) I bought a (insert adjective) (insert noun) because it's cheaper than a (insert adjective) (insert noun).","Did you know that if you wake up at (insert time), and (insert action)...","I already know I am going to get a bunch of hate for this but the (insert noun) is getting taken out today.","People know me for nearly losing (insert noun) and dying in (insert location).","I am going to do it, i'm going to flip this... house.","Dude, it's day #. And I almost went (insert result).","My (insert person) lives (insert exact number of miles) away from my house.","Why am I (insert action) at # months pregnant?","Last year for (insert holiday) we (insert action).","We spent all day (insert action), burning through (insert metric) of (insert noun), and now I am having a fully blown (insert noun) choice crisis.","Day # of my (insert persons) room makeover. Which I kind of took to the extreme but let's start from the beginning.","Every year we make the questionable decision of (insert decision).","This is what I (insert action) in a day as someone who is trying to (insert action) less and (insert action) more.","I have been (insert title) for (insert time) now, and I have gained (insert #) of followers just by sharing (insert content type).","My (insert person) hasn't (insert action) in over # years.","# years ago my (insert person) and I started (insert action).","I have a problem. Which is that my (insert noun) it (insert pain point) and (insert pain point). So i'm going to build my own (insert noun) that has (insert benefit).","This week in fatherhood/motherhood I am please to report that I (insert result).","Some say the strongest bond is between (insert person) and his/her (insert person).","Hi i'm (insert name) and I am a (insert title), this is my (insert person) and he/she loves (insert noun).","What is this massive stack of (insert noun) that I am holding in my hand, well it is the (insert noun) for the (insert number) of (insert noun) I have done this year.","I (insert traumatic event) at (insert age) but it's what happened after that, that actually changed my life.","I was walking past this (insert store) when I say they had (insert noun).","Fourtnely my (insert person) and I have a tendency to be a little bit impulsive.","Would you buy a house with no (insert noun), well my (insert person) did!","How long does it take to catch (insert high number) of (insert noun)?","We got an insane deal on our (insert noun) a year ago because it needed to be (insert action).","There is a man/woman that comments on every single video I upload.","Buying (insert noun) that need a lot of work, can work out in your favor.","In # days I am selling my (insert noun) and moving out of the country.","I think of my (insert noun) as my own personal (insert noun).","It's been (insert time) since I bought my dream (insert noun), and I want to take you through what the last (insert time) has been like.","(insert $) home (insert bad result) in just # time/months.","Come with me to (insert action) the (insert title) didn't (insert action).","I am revmong all my (insert noun) friendly upgrades before we (insert action). Today we are removing (insert noun).","Let's try to unclog a (insert noun).","This is what my morning looks like while (insert situation).","Last night at around (insert time) (insert person) began textbook stage one (insert scenario).","After many years of total neglect my basement is finally getting much needed TLC.","How (insert action) ended with a (insert person) at my house telling me how lucky we are that (insert accident) didn't happen.","Customer called me up because they had (insert situation) and wanted it (insert result) immediately.","While my kids were taking a nap I went to (insert action) when I realized (insert realization).","My one goal this year was to showcase just how interesting (insert noun) is.","I don't usually cry, but yesterday I did. And it wasn't because of (insert reason).","You know when I started making (insert noun) I should have known this day would come.","I got a (insert noun) and it did not turn out to be what I expected.","About a (insert time) ago I got in trouble for having too many (insert nouns).","I baited this (insert google rating) (insert title) with this (insert noun) in excellent condition to see if they would rip me off.","I took my (insert person) to (insert location) to try this (insert noun) and it actually caught something.","I opened up a (insert business/store) in the middle of (insert location) and I can't believe how much money I made.","I took a (insert hour) and (insert minute) (insert noun) to (insert location) and here's how it went.","This is life as a (insert noun) addict part (insert #).","Welcome back to the journey of how I got (insert result).","Come take a (insert noun) with me that I did not (insert action) for at all.","It's been (insert time) since I have seen myself with (insert feature) and that's all about to change.","This was me when I was (insert pain point), (insert pain point), and (insert pain point).","From being (insert state), to (insert state), back to (insert state), to (insert state), to now being (insert current state) in (insert time) I have built tons of knowledge when it comes to (insert result).","I have (insert event) in (insert time) and I have not started (insert action). And if I don't do well I have to (insert consequence).","Today I am eating like (insert person) for the full day and I am going to see how much weight I gain by the end of the day.","(insert time ago) my (insert person) (insert action) when my (insert person) passed away.","(insert time) I started accepting the choice to (insert drastic change).","2 years, no (insert noun), and today's the first time I get to use (insert noun).","Does this stuff actually work?","I am letting (insert business type) companies, control my (insert noun).","So I am (insert age) and I work nights at (insert store)","that's the dream life right?","So it's been a week and I am already on (insert number) of followers.","So when I was (insert age) I started taking (insert noun) and at (insert age) I had to (insert action).","I used to always be the guy that had a (insert condition), (insert condition), and always struggled with (insert condition).","My (insert person) takes me to the doctor, because I am (insert age) and already (insert action).","It has come to my attention that some of you guys think I am actually (insert result) when I do (insert content type).","A little over (insert time) ago I posted a video about the benefits of (insert action).","I did (insert action) everyday for one year, and here's what's different.","I can confidently say the only reason I can (insert verb) (insert metric) is simply because of the way I choose to (insert verb).","# days ago I quit (insert noun) as a (insert age) (insert title), and started (insert noun) for literally one reason.","A competitor showed up at my job trying to get me fired.","I damaged a customer's property and here's how I handled it.","A customer (insert result) and tried to avoid paying.","I was harassed by (insert noun) so I had to do this.","Alright this is officially day #1, trying to make (insert $) a month with (insert business).","I am a retired (insert title) who now owns a (insert business). So come with me to collect the quarters.","Did you know you can start your own (insert business ) from home without (insert pain point), (insert pain point), and (insert pain point).","I would like to welcome you to my (insert location).","Let me show yall how to make (insert $) per day, but installing a simple (insert noun).","Have you ever thought about starting your own (insert business)?","Day # of trying a new hobby to recover from burnout.","My (insert noun) made me (insert $) last month, and what's crazy about this is I used no money to start this business.","Make (insert noun) and (insert noun) with me from my online (insert business) and a (insert label).","Hi i'm (insert name) a (insert #) generation (insert title) who shares tips about (insert niche) and (insert result).","Welcome to day # of starting my life over at (insert age).","I have something to address, over the last week I have gained (insert #) of followers.","This is how I ended up taking the biggest risk of my life.","In 1 year I (insert verb) over (insert pounds) of (insert noun) in my extremely small (insert location).","I f*cked up. I bought literally a (insert metric) of (insert noun). And for the last (insert time) I have been turning them into (insert results).","I finally built it. For the last # years I've been turning (insert noun) into (insert noun).","Is it possible to go from (insert before state) to (insert after state) just by (insert action).","We are now at day #, since starting my (insert project).","Proof that a (insert noun) can totally transform a space.","Alright today we are building this (insert $) (insert adjective) (insert noun).","Here is how we transformed my (insert persons) (insert location) from this to this using (insert noun).","There;s probably a reason why most people don't (insert action).","I bought this (insert noun) for (insert $). And today my (insert person) and I will find out if it (insert result).","I can't stand this (insert noun), let's transform it.","Over the past # days I (insert action) on # of (insert nouns). In doing that I have gained over (insert #) of followers. So here's the thing.","Over the last (insert time) I have been finding a lot of cool things over (insert location). And today I am finally finishing my (insert project).","Do you ever (insert situation), yeah well that's my job.","I bought this (insert noun) for (insert $), and I am going to make it worth over (insert $) without changing the product in any way.","This might be the coolest DIY I have ever made.","Some people call it a problem but I call it (insert noun) genius.","With the (insert life event) coming, it's time to (insert action)."]},
+{c:"Random",h:["This is my (insert item) and this is (insert random action) if I were (insert random action).","You're losing your boyfriend/girlfriend this week to (insert event/hobby).","What (insert title) says vs what they mean.","(insert trend) is the most disgusting trend on social media.","I do not believe in (insert common belief), I believe in (insert your belief).","If you like these (insert job title), you'll probably like my (insert work).","(insert big brand) didn't want to sponsor this video, let me show you what they're missing out on.","I am trying a different (insert noun) for each letter of the alphabet.","My (insert person) has never been in the (insert place) before let's see if she can tell who is (insert adjective) or not.","If I get this in, then I have to (insert verb)."]},
+{c:"Authority",h:["My (insert before state) used to look like this and now they look like this.","10 YEARS it took me from (insert before state) to (insert after state).","How to turn this into this in X simple steps.","(insert big result) from (insert item/thing). Here's how you can do it in X steps.","Over the past (insert time) I've grown my (insert thing) from (insert before) to (insert after).","Just # (insert item/action) took my client from (insert before) to (insert after).","My customer/client got (insert dream result) without (insert pain point).","If I were to create a collab campaign for (insert big","brands) here's how I would do it. How I got my (insert item/thing) from this to this.","I became a (insert achievement) at (insert age) and if I could give you X pieces of advice it would be...","Everyone is complimenting on my (insert noun) because of one (insert noun) routine that I do.","I lost over (insert metric) in (insert time frame) and here are the # of things I would do if I was to start all over.","My customer/client got (insert dream result) with out (insert pain point) and here's how.","I am in a (insert noun) and these # habits dramatically transformed my (insert noun).","I got (insert dream result) on all of my (insert noun) with minimal (insert action) and here's how.","If I were to create a (insert noun) today this is how I would do it.","If I ever made it to the news I thought it would at least be for something illegal, turns out it's for (insert dream result).","(insert well known brand) commented that I am their new favorite (insert title).","What I (insert action) in a day as someone who has achieved (insert dream result).","I literally used to have a (insert before state).","My (insert noun) went from this to this in the last (insert time frame) and this is what I done.","I have been pretty much doing the same (insert noun) for the past (insert time frame) and they have legit (insert dream result).","When I was (insert before state) I was constantly (insert pain point).","In (insert year) my business made (insert dollar amount).","As a (insert title) for several years whose (insert action) I often get asked (insert name) (insert question).","I have never ended (insert noun) with a (insert result) or below.","He/she (insert action) for one day and got (insert dream result).","I jumped my (insert noun) from (insert before state) to (insert dream result).","This used to be my (insert noun) this is my (insert noun) now.","I have been able to go from this, to this.","Things I wish I knew before my (insert noun) that took me from this to this.","The (insert noun) I (insert action) everyday that took me from this, to this.","I went from this to this.","No because my transformation from (insert age) to (insert age) ought to be studied.","After (insert dream result) here is one thing I learned the hard way so you don't have to.","Okay bish you don't need to (insert action) to (insert dream result) coming from someone who (insert dream result).","I (insert dream result) in the past (insert time frame), here's proof.","Here's how my student/client/customer went from (insert before result) to (insert after result) and (insert symptom due to result).","% of the time when I am in (insert situation) I get (insert result), and today I will be showing you my (insert noun) routine so I can help you achieve (insert dream result).","This is how I got my (insert noun) from this to this completely natural.","Nobody believes me if I say I went from this to this.","These are the products I use to keep (insert noun) (insert noun) and (insert adjective) as a (insert title).","Same recipe but different (insert noun). For this (insert noun) I used my # tips to make (insert dream result) at home and you can really tell it makes a big difference.","(insert noun) is my second (insert noun) and here are the # (insert noun) I did over, and over, and over again to improve my (insert noun).","How I took this (insert title) from 0 to (insert #) of (insert noun) in 1 week.","I am only (insert metric) but I have became one of the best (insert title) in the world."]},
+{c:"Day In The Life",h:["We all have the same 24 hours in a day so here I am putting my 24 hours to work.","Day 1 of starting over my whole entire life.","So okay being an (insert target audience), my days vary quite a lot from one another.","Day in the life of a (insert adjective) person.","Welcome back to the day in the life of two (insert label) trying to build the next (insert business).","I am a # year old (insert title), and I am heading to (insert event/location).","This is a day in the life of a (insert title) (insert noun) edition.","Come to work with me as a (insert title).","Day # of turning from (insert before state) to (insert after state) and suddenly I don't want to be (insert after state) anymore.","Come with me to earn $ per day, with (insert avenue).","Day # trying to make (insert $) by the end of the year, by (insert method).","Day in the life of a future millionaire.","Day in the life as a (insert title) (insert noun) edition.","This is what an average day of a (insert title) looks like a week out from (insert event)."]}
+].flatMap(g=>g.h.map(t=>({t,c:g.c})));
+const HOOK_META = {kept:926,dropped:94};
+
+/* ============================ tiny helpers ============================ */
+const $ = id => document.getElementById(id);
+const clamp = (v,a,b) => Math.max(a,Math.min(b,v));
+const clone = o => JSON.parse(JSON.stringify(o));
+const uid = () => Math.random().toString(36).slice(2,9);
+function log(msg, cls){
+  const d = document.createElement('div');
+  if(cls) d.className = cls;
+  d.textContent = new Date().toLocaleTimeString() + '  ' + msg;
+  $('log').appendChild(d); $('log').scrollTop = 1e9;
+}
+function debounce(fn, ms){ let t; return (...a)=>{ clearTimeout(t); t=setTimeout(()=>fn(...a),ms); }; }
+
+/* ============================ style presets ============================ */
+/* add a preset = append one object here */
+const PRESETS = [
+  {
+    name:'Photographic', builtin:true,
+    aspect_ratio:'9:16',
+    imagery:'photographic',
+    image_prompt_suffix:'photorealistic editorial photograph, natural light, shallow depth of field, rich colour, cinematic composition, no text of any kind',
+    caption_treatment:'outlined',
+    font_family:'Inter', font_weight:800, italic:false,
+    text_color:'#FFFFFF', stroke_color:'#000000', stroke_width:9,
+    label_bg:'#FFFFFF',
+    title_size_pct:0.050, body_size_pct:0.033,
+    text_block_top_pct:0.60, hook_top_pct:0.36,
+    text_align:'center',
+    structure:'hook promise, then one idea per slide, each with a short punchy title and 2-3 sentence body',
+    voice:'direct second person, blunt, no hedging'
+  },
+  {
+    name:'Flat cartoon', builtin:true,
+    aspect_ratio:'4:5',
+    imagery:'flat-vector-cartoon',
+    image_prompt_suffix:'flat vector cartoon illustration, bold black outlines, simple saturated colour blocking, minimal shading, clean graphic style, no text of any kind',
+    caption_treatment:'label-boxes',
+    font_family:'Archivo', font_weight:800, italic:true,
+    text_color:'#0B0B0B', stroke_color:'#000000', stroke_width:0,
+    label_bg:'#FFFFFF',
+    title_size_pct:0.055, body_size_pct:0.038,
+    text_block_top_pct:0.62, hook_top_pct:0.10,
+    text_align:'center',
+    structure:'hook cover, then numbered points, one per slide',
+    voice:'punchy, plainspoken, coach-like'
+  }
+];
+
+const ASPECTS = { '9:16':[1080,1920], '4:5':[1080,1350], '1:1':[1080,1080] };
+const NO_TEXT_CLAUSE = 'Absolutely no text anywhere in the image: no words, no letters, no numbers, no captions, no subtitles, no signage, no labels, no logos, no watermarks, no user interface, no charts or diagrams with writing. Purely a picture.';
+
+/* ============================ state ============================ */
+const S = {
+  profile: clone(PRESETS[0]),
+  styleKey: 'preset:0',
+  slides: [],
+  caption: '',
+  examples: [],        // {dataUrl, b64}
+  candidates: [],
+  lastRaw: '',
+  lastDeckReq: null,
+  saved: []            // saved profiles from localStorage
+};
+const IMG_CACHE = {};   // slide.id -> HTMLImageElement
+
+/* ============================ config / persistence ============================ */
+const LS = {
+  key:'cb.key', models:'cb.models', niche:'cb.niche', cats:'cb.cats',
+  profiles:'cb.profiles', project:'cb.project', remember:'cb.remember', shape:'cb.shape'
+};
+function cfg(){
+  return {
+    key: $('apiKey').value.trim(),
+    textModel: $('textModel').value.trim(),
+    imageModel: $('imageModel').value.trim(),
+    shape: $('apiShape').value
+  };
+}
+function loadSettings(){
+  try{
+    const m = JSON.parse(localStorage.getItem(LS.models)||'{}');
+    if(m.text) $('textModel').value = m.text;
+    if(m.image) $('imageModel').value = m.image;
+    const sh = localStorage.getItem(LS.shape); if(sh) $('apiShape').value = sh;
+    const rem = localStorage.getItem(LS.remember) === '1';
+    $('remember').checked = rem;
+    if(rem) $('apiKey').value = localStorage.getItem(LS.key) || '';
+    $('niche').value = localStorage.getItem(LS.niche) || '';
+    S.saved = JSON.parse(localStorage.getItem(LS.profiles)||'[]');
+  }catch(e){ log('settings load failed: '+e.message,'e'); }
+}
+function saveSettings(){
+  localStorage.setItem(LS.models, JSON.stringify({text:$('textModel').value, image:$('imageModel').value}));
+  localStorage.setItem(LS.shape, $('apiShape').value);
+  localStorage.setItem(LS.remember, $('remember').checked ? '1':'0');
+  if($('remember').checked) localStorage.setItem(LS.key, $('apiKey').value);
+  else localStorage.removeItem(LS.key);
+  localStorage.setItem(LS.niche, $('niche').value);
+}
+
+/* ---- IndexedDB, because a deck of 1080x1920 JPEGs does not fit in localStorage ---- */
+let _db;
+function idb(){
+  if(_db) return Promise.resolve(_db);
+  return new Promise((res,rej)=>{
+    const r = indexedDB.open('carousel-builder',1);
+    r.onupgradeneeded = () => r.result.createObjectStore('kv');
+    r.onsuccess = () => { _db = r.result; res(_db); };
+    r.onerror = () => rej(r.error);
+  });
+}
+async function idbPut(k,v){ const db = await idb(); return new Promise((res,rej)=>{ const t=db.transaction('kv','readwrite'); t.objectStore('kv').put(v,k); t.oncomplete=res; t.onerror=()=>rej(t.error); }); }
+async function idbGet(k){ const db = await idb(); return new Promise((res,rej)=>{ const t=db.transaction('kv','readonly'); const q=t.objectStore('kv').get(k); q.onsuccess=()=>res(q.result); q.onerror=()=>rej(q.error); }); }
+
+function projectJSON(withImages){
+  return {
+    v:1, profile:S.profile, styleKey:S.styleKey, caption:S.caption,
+    slides:S.slides.map(s=>({id:s.id,kind:s.kind,title:s.title,body:s.body,scene:s.scene,status:s.status,
+      img: withImages ? (s.img||'') : ''}))
+  };
+}
+const autosave = debounce(async ()=>{
+  try{
+    localStorage.setItem(LS.project, JSON.stringify(projectJSON(false)));
+    await idbPut('project', projectJSON(true));
+    $('saveState').textContent = 'saved ' + new Date().toLocaleTimeString();
+  }catch(e){ $('saveState').textContent = 'autosave failed: '+e.message; }
+}, 500);
+
+async function restoreProject(){
+  let p = null;
+  try{ p = await idbGet('project'); }catch(e){}
+  if(!p){ try{ p = JSON.parse(localStorage.getItem(LS.project)||'null'); }catch(e){} }
+  if(!p) return false;
+  S.profile = p.profile || S.profile; S.styleKey = p.styleKey || S.styleKey;
+  S.caption = p.caption||''; S.slides = (p.slides||[]).map(s=>({...s, status:s.img?'done':(s.status||'')}));
+  $('capInput').value = S.caption;
+  return true;
+}
+
+/* ============================ API adapter ============================ */
+/* One place to change if Google moves the endpoint again. parts: [{type:'text',text}|{type:'image',mime,b64}] */
+const BASE = 'https://generativelanguage.googleapis.com/v1beta';
+
+function bodyInteractions(model, parts, opts){
+  const input = parts.map(p => p.type === 'text'
+    ? {type:'text', text:p.text}
+    : {type:'image', mime_type:p.mime||'image/jpeg', data:p.b64});
+  const b = {model, input};
+  if(opts.wantImage && opts.imageCfg){
+    b.generation_config = {response_modalities:['TEXT','IMAGE'], image_config:{aspect_ratio:opts.aspect}};
+  }
+  return b;
+}
+function bodyGenerateContent(model, parts, opts){
+  const p = parts.map(x => x.type === 'text'
+    ? {text:x.text}
+    : {inline_data:{mime_type:x.mime||'image/jpeg', data:x.b64}});
+  const b = {contents:[{role:'user', parts:p}]};
+  if(opts.wantImage && opts.imageCfg){
+    b.generationConfig = {responseModalities:['TEXT','IMAGE'], imageConfig:{aspectRatio:opts.aspect}};
+  }
+  return b;
+}
+function parseResponse(j){
+  const out = {text:'', images:[]};
+  const eatPart = p => {
+    if(!p) return;
+    if(typeof p.text === 'string') out.text += p.text;
+    const inl = p.inline_data || p.inlineData;
+    if(inl && inl.data) out.images.push('data:'+(inl.mime_type||inl.mimeType||'image/png')+';base64,'+inl.data);
+    if(p.type === 'text' && typeof p.text === 'string') { /* already counted */ }
+    if(p.type === 'image' && p.data) out.images.push('data:'+(p.mime_type||'image/png')+';base64,'+p.data);
+    if(p.image && p.image.data) out.images.push('data:'+(p.image.mime_type||'image/png')+';base64,'+p.image.data);
+  };
+  // generateContent shape
+  if(j.candidates) for(const c of j.candidates) for(const p of ((c.content&&c.content.parts)||[])) eatPart(p);
+  // interactions shape (output / outputs / content arrays of typed parts)
+  const arrs = [j.output, j.outputs, j.content, j.response, j.result].filter(Array.isArray);
+  for(const a of arrs) for(const p of a){
+    eatPart(p);
+    if(p && Array.isArray(p.content)) for(const q of p.content) eatPart(q);
+  }
+  if(!out.text && typeof j.text === 'string') out.text = j.text;
+  return out;
+}
+
+async function rawCall(shape, model, parts, opts){
+  const c = cfg();
+  const url  = shape === 'interactions' ? BASE + '/interactions'
+                                        : BASE + '/models/' + encodeURIComponent(model) + ':generateContent';
+  const body = shape === 'interactions' ? bodyInteractions(model, parts, opts)
+                                        : bodyGenerateContent(model, parts, opts);
+  let r;
+  try{
+    r = await fetch(url, {method:'POST', headers:{'x-goog-api-key':c.key,'Content-Type':'application/json'}, body:JSON.stringify(body)});
+  }catch(e){
+    throw new Error('network/CORS failure calling ' + url + ' — ' + e.message +
+      ' (if this is CORS, the browser console will say so; the API is supposed to allow browser calls)');
+  }
+  const txt = await r.text();
+  let j = null; try{ j = JSON.parse(txt); }catch(e){}
+  if(!r.ok){
+    const err = new Error('HTTP ' + r.status + ' from ' + url + '\n' + txt.slice(0,1200));
+    err.status = r.status; err.raw = txt; err.shape = shape;
+    throw err;
+  }
+  return parseResponse(j || {});
+}
+
+let AUTO_SHAPE = null;   // whichever shape answered first this session
+/* wantImage: ask for an image back. Returns {text, images[]} */
+async function callModel({model, parts, wantImage=false, aspect='9:16'}){
+  const c = cfg();
+  if(!c.key) throw new Error('No API key. Paste one into Setup.');
+  const opts = {wantImage, aspect, imageCfg: $('sendImageCfg').checked};
+  let order = c.shape === 'auto' ? ['interactions','generateContent'] : [c.shape];
+  if(c.shape === 'auto' && AUTO_SHAPE) order = [AUTO_SHAPE].concat(order.filter(s=>s!==AUTO_SHAPE));
+  let firstErr = null;
+  for(let i=0;i<order.length;i++){
+    try{
+      const res = await rawCall(order[i], model, parts, opts);
+      if(c.shape === 'auto' && AUTO_SHAPE !== order[i]){
+        AUTO_SHAPE = order[i];
+        log('note: using the "'+AUTO_SHAPE+'" request shape for this session — pin it in the API shape dropdown to skip the probe','w');
+      }
+      return res;
+    }catch(e){
+      if(!firstErr) firstErr = e;
+      log('API error ['+order[i]+']: '+e.message,'e');
+      // targeted, logged retry: some models reject the image config fields
+      if(wantImage && opts.imageCfg && /modalit|image_config|imageConfig|aspect/i.test(e.raw||e.message||'')){
+        log('retrying ['+order[i]+'] without responseModalities/imageConfig','w');
+        try{ return await rawCall(order[i], model, parts, {...opts, imageCfg:false}); }catch(e2){ log('retry failed: '+e2.message,'e'); }
+      }
+      if(i === order.length-1) throw firstErr;
+    }
+  }
+}
+
+/* ============================ defensive JSON ============================ */
+function extractJSON(text, wantArray){
+  if(!text) throw new Error('empty response');
+  let t = text.trim();
+  t = t.replace(/^```(?:json)?/i,'').replace(/```$/,'').trim();
+  const fence = t.match(/```(?:json)?([\s\S]*?)```/i);
+  if(fence) t = fence[1].trim();
+  const open = wantArray ? '[' : '{', close = wantArray ? ']' : '}';
+  const a = t.indexOf(open), b = t.lastIndexOf(close);
+  const cand = (a >= 0 && b > a) ? t.slice(a, b+1) : t;
+  try{ return JSON.parse(cand); }
+  catch(e){
+    try{ return JSON.parse(t); }
+    catch(e2){ const err = new Error('JSON parse failed: '+e.message); err.raw = text; throw err; }
+  }
+}
+
+/* ============================ fonts ============================ */
+const LOADED_FONTS = new Set(['Inter','Archivo','Anton','Poppins','Bebas Neue','Montserrat']);
+function ensureFont(fam){
+  if(!fam || LOADED_FONTS.has(fam)) return;
+  LOADED_FONTS.add(fam);
+  const l = document.createElement('link');
+  l.rel = 'stylesheet';
+  l.href = 'https://fonts.googleapis.com/css2?family=' + encodeURIComponent(fam).replace(/%20/g,'+') +
+           ':ital,wght@0,400;0,700;0,800;0,900;1,700;1,800;1,900&display=swap';
+  document.head.appendChild(l);
+  log('loading font "'+fam+'" from Google Fonts');
+}
+async function fontReady(p){
+  ensureFont(p.font_family);
+  try{
+    await document.fonts.load(((p.italic?'italic ':'') + (p.font_weight||800) + ' 80px "' + p.font_family + '"'));
+    await document.fonts.ready;
+  }catch(e){ log('font load issue: '+e.message,'w'); }
+}
+
+/* ============================ canvas rendering ============================ */
+function fontStr(p, size){
+  return (p.italic ? 'italic ' : '') + (p.font_weight||800) + ' ' + Math.round(size) + 'px "' + (p.font_family||'Inter') + '", Inter, sans-serif';
+}
+function wrap(ctx, text, maxW){
+  const out = [];
+  for(const para of String(text||'').split(/\n+/)){
+    const words = para.split(/\s+/).filter(Boolean);
+    if(!words.length) continue;
+    let line = words[0];
+    for(let i=1;i<words.length;i++){
+      const t = line + ' ' + words[i];
+      if(ctx.measureText(t).width <= maxW) line = t;
+      else { out.push(line); line = words[i]; }
+    }
+    out.push(line);
+  }
+  return out;
+}
+function roundRect(ctx,x,y,w,h,r){
+  r = Math.min(r, h/2, w/2);
+  ctx.beginPath();
+  ctx.moveTo(x+r,y); ctx.lineTo(x+w-r,y); ctx.quadraticCurveTo(x+w,y,x+w,y+r);
+  ctx.lineTo(x+w,y+h-r); ctx.quadraticCurveTo(x+w,y+h,x+w-r,y+h);
+  ctx.lineTo(x+r,y+h); ctx.quadraticCurveTo(x,y+h,x,y+h-r);
+  ctx.lineTo(x,y+r); ctx.quadraticCurveTo(x,y,x+r,y); ctx.closePath();
+}
+function anchorX(p,W){
+  const m = W*0.07;
+  return p.text_align === 'left' ? m : p.text_align === 'right' ? W-m : W/2;
+}
+function drawLines(ctx, lines, p, size, x, y, W, H){
+  const treat = p.caption_treatment || 'outlined';
+  ctx.font = fontStr(p, size);
+  ctx.textBaseline = 'middle';
+  ctx.textAlign = p.text_align === 'left' ? 'left' : p.text_align === 'right' ? 'right' : 'center';
+  const lh = treat === 'label-boxes' ? size*1.42 : size*1.20;
+  let cy = y + lh/2;
+  for(const ln of lines){
+    if(treat === 'label-boxes'){
+      const w = ctx.measureText(ln).width, padX = size*0.34, padY = size*0.20;
+      const bw = w + padX*2, bh = size*1.02 + padY*2;
+      let bx = ctx.textAlign === 'left' ? x : ctx.textAlign === 'right' ? x-bw : x-bw/2;
+      ctx.fillStyle = p.label_bg || '#FFFFFF';
+      roundRect(ctx, bx, cy-bh/2, bw, bh, size*0.28);
+      ctx.fill();
+      ctx.fillStyle = p.text_color || '#000000';
+      ctx.fillText(ln, x, cy + size*0.03);
+    } else {
+      if(treat === 'outlined' && (p.stroke_width||0) > 0){
+        ctx.lineJoin = 'round'; ctx.miterLimit = 2;
+        ctx.lineWidth = (p.stroke_width||8) * (H/1920);
+        ctx.strokeStyle = p.stroke_color || '#000';
+        ctx.strokeText(ln, x, cy);
+      }
+      ctx.fillStyle = p.text_color || '#fff';
+      ctx.fillText(ln, x, cy);
+    }
+    cy += lh;
+  }
+  return cy - lh/2 - y;
+}
+function blockHeight(size, n, treat){ return n * (treat === 'label-boxes' ? size*1.42 : size*1.20); }
+
+function renderSlide(slide, canvas, p){
+  p = p || S.profile;
+  const [W,H] = ASPECTS[p.aspect_ratio] || ASPECTS['9:16'];
+  if(canvas.width !== W || canvas.height !== H){ canvas.width = W; canvas.height = H; }
+  const ctx = canvas.getContext('2d');
+  ctx.clearRect(0,0,W,H);
+
+  const img = IMG_CACHE[slide.id];
+  if(img && img.complete && img.naturalWidth){
+    const s = Math.max(W/img.naturalWidth, H/img.naturalHeight);
+    const dw = img.naturalWidth*s, dh = img.naturalHeight*s;
+    ctx.drawImage(img, (W-dw)/2, (H-dh)/2, dw, dh);
+  } else {
+    const g = ctx.createLinearGradient(0,0,0,H);
+    g.addColorStop(0,'#1b2530'); g.addColorStop(1,'#0d1116');
+    ctx.fillStyle = g; ctx.fillRect(0,0,W,H);
+  }
+
+  const isHook = slide.kind === 'hook';
+  const tSize = (p.title_size_pct||0.05) * H * (isHook ? 1.4 : 1);
+  const bSize = (p.body_size_pct||0.033) * H;
+  const maxW = W*0.86 - (p.caption_treatment==='label-boxes' ? tSize*0.7 : 0);
+  const x = anchorX(p,W);
+
+  ctx.font = fontStr(p, tSize);
+  const tLines = wrap(ctx, slide.title, maxW);
+  ctx.font = fontStr(p, bSize);
+  const bLines = isHook ? [] : wrap(ctx, slide.body, maxW);
+
+  const treat = p.caption_treatment || 'outlined';
+  const gap = bLines.length ? bSize*0.7 : 0;
+  const totalH = blockHeight(tSize, tLines.length, treat) + gap + blockHeight(bSize, bLines.length, treat);
+  let top = (isHook ? (p.hook_top_pct != null ? p.hook_top_pct : 0.34) : (p.text_block_top_pct != null ? p.text_block_top_pct : 0.6)) * H;
+  top = clamp(top, H*0.01, H - totalH - H*0.02);
+
+  const used = drawLines(ctx, tLines, p, tSize, x, top, W, H);
+  if(bLines.length) drawLines(ctx, bLines, p, bSize, x, top + used + gap, W, H);
+}
+
+/* ============================ slide grid ============================ */
+function setImage(slide, dataUrl, cb){
+  slide.img = dataUrl;
+  const im = new Image();
+  im.onload = () => { IMG_CACHE[slide.id] = im; drawOne(slide.id); cb && cb(); };
+  im.onerror = () => log('image decode failed for slide '+slide.id,'e');
+  im.src = dataUrl;
+  IMG_CACHE[slide.id] = im;
+}
+function drawOne(id){
+  const s = S.slides.find(x=>x.id===id); if(!s) return;
+  const c = document.querySelector('canvas[data-id="'+id+'"]'); if(!c) return;
+  renderSlide(s, c);
+}
+function drawAll(){ for(const s of S.slides) drawOne(s.id); }
+
+function buildGrid(){
+  const g = $('slideGrid'); g.innerHTML = '';
+  S.slides.forEach((s,i)=>{
+    const d = document.createElement('div'); d.className = 'slide';
+    d.innerHTML =
+      '<div class="hd"><span class="tag '+(s.kind==='hook'?'hook':'')+'">'+(i+1)+' · '+s.kind+'</span>'+
+      '<span class="st '+(s.status||'')+'" data-st="'+s.id+'">'+(s.status||'')+'</span></div>'+
+      '<canvas data-id="'+s.id+'"></canvas>'+
+      '<textarea data-f="title" placeholder="title">'+(s.title||'')+'</textarea>'+
+      (s.kind==='hook' ? '' : '<textarea data-f="body" placeholder="body">'+(s.body||'')+'</textarea>')+
+      '<textarea data-f="scene" placeholder="scene (picture only)">'+(s.scene||'')+'</textarea>'+
+      '<div class="row tight">'+
+        '<button class="mini" data-a="img">Regenerate image</button>'+
+        '<button class="mini" data-a="up">Upload own</button>'+
+        '<button class="mini" data-a="dl">JPEG</button>'+
+        '<button class="mini ghost" data-a="left">←</button>'+
+        '<button class="mini ghost" data-a="right">→</button>'+
+        '<button class="mini ghost danger" data-a="del">delete</button>'+
+        '<input type="file" accept="image/*" class="hide" data-a="file">'+
+      '</div>';
+    g.appendChild(d);
+
+    d.querySelectorAll('textarea').forEach(t=>{
+      t.addEventListener('input', ()=>{ s[t.dataset.f] = t.value; drawOne(s.id); autosave(); });
+    });
+    d.querySelector('[data-a=img]').onclick = () => genImage(s, true);
+    d.querySelector('[data-a=up]').onclick = () => d.querySelector('[data-a=file]').click();
+    d.querySelector('[data-a=file]').onchange = e => {
+      const f = e.target.files[0]; if(!f) return;
+      const rd = new FileReader();
+      rd.onload = () => { setImage(s, rd.result, autosave); setStatus(s,'done'); };
+      rd.readAsDataURL(f);
+    };
+    d.querySelector('[data-a=dl]').onclick = () => downloadSlide(i);
+    d.querySelector('[data-a=del]').onclick = () => { S.slides.splice(i,1); buildGrid(); autosave(); };
+    d.querySelector('[data-a=left]').onclick = () => { if(i>0){ const t=S.slides[i-1]; S.slides[i-1]=S.slides[i]; S.slides[i]=t; buildGrid(); autosave(); } };
+    d.querySelector('[data-a=right]').onclick = () => { if(i<S.slides.length-1){ const t=S.slides[i+1]; S.slides[i+1]=S.slides[i]; S.slides[i]=t; buildGrid(); autosave(); } };
+    renderSlide(s, d.querySelector('canvas'));
+  });
+}
+function setStatus(s, st, err){
+  s.status = st; s.error = err||'';
+  const el = document.querySelector('[data-st="'+s.id+'"]');
+  if(el){ el.className = 'st '+st; el.textContent = st + (err ? ' · '+err.slice(0,40) : ''); el.title = err||''; }
+}
+
+/* ============================ style picker ============================ */
+function allStyles(){
+  return PRESETS.map((p,i)=>({key:'preset:'+i, p})).concat(S.saved.map((p,i)=>({key:'saved:'+i, p})));
+}
+function drawThumb(canvas, p){
+  const [W,H] = ASPECTS[p.aspect_ratio] || ASPECTS['9:16'];
+  const scale = 240/W;
+  canvas.width = 240; canvas.height = Math.round(H*scale);
+  const ctx = canvas.getContext('2d');
+  const g = ctx.createLinearGradient(0,0,0,canvas.height);
+  if(p.imagery && /cartoon|vector|illustrat/i.test(p.imagery)){ g.addColorStop(0,'#14532d'); g.addColorStop(1,'#0b3a1f'); }
+  else { g.addColorStop(0,'#3b4756'); g.addColorStop(1,'#141a21'); }
+  ctx.fillStyle = g; ctx.fillRect(0,0,canvas.width,canvas.height);
+  const tp = clone(p); tp.title_size_pct = 0.075; tp.stroke_width = (p.stroke_width||0)*0.5;
+  const fake = {id:'thumb', kind:'slide', title:'Sample caption line', body:'', scene:''};
+  // draw caption only
+  const sz = tp.title_size_pct * canvas.height;
+  ctx.font = fontStr(tp, sz);
+  const lines = wrap(ctx, fake.title, canvas.width*0.86);
+  drawLines(ctx, lines, tp, sz, anchorX(tp, canvas.width), canvas.height*0.45, canvas.width, canvas.height);
+}
+function buildStyles(){
+  const wrapEl = $('styleCards'); wrapEl.innerHTML = '';
+  allStyles().forEach(({key,p})=>{
+    const d = document.createElement('div');
+    d.className = 'styleCard' + (key === S.styleKey ? ' on' : '');
+    d.innerHTML = '<canvas></canvas><div class="nm">'+(p.name||'unnamed')+'</div><div class="ar">'+(p.aspect_ratio||'')+' · '+(p.caption_treatment||'')+'</div>'+
+      (key.startsWith('saved:') ? '<div class="acts"><button data-a="ren">ren</button><button data-a="del">del</button></div>' : '');
+    wrapEl.appendChild(d);
+    ensureFont(p.font_family);
+    drawThumb(d.querySelector('canvas'), p);
+    d.onclick = e => {
+      const a = e.target.dataset && e.target.dataset.a;
+      const idx = parseInt(key.split(':')[1],10);
+      if(a === 'ren'){ const n = prompt('Rename profile', p.name); if(n){ S.saved[idx].name = n; persistProfiles(); buildStyles(); } return; }
+      if(a === 'del'){ if(confirm('Delete profile "'+p.name+'"?')){ S.saved.splice(idx,1); persistProfiles(); buildStyles(); } return; }
+      applyStyle(key, p);
+    };
+  });
+}
+function persistProfiles(){ localStorage.setItem(LS.profiles, JSON.stringify(S.saved)); }
+function applyStyle(key, p){
+  const old = S.profile;
+  S.styleKey = key;
+  S.profile = clone(p);
+  syncControls();
+  buildStyles();
+  fontReady(S.profile).then(()=>{ buildGrid(); });
+  const differs = old.imagery !== S.profile.imagery || old.image_prompt_suffix !== S.profile.image_prompt_suffix;
+  $('imageryNotice').classList.toggle('hide', !(differs && S.slides.some(s=>s.img)));
+  autosave();
+}
+
+/* ============================ render controls ============================ */
+function syncControls(){
+  const p = S.profile;
+  $('cAspect').value = p.aspect_ratio || '9:16';
+  $('cTreat').value = p.caption_treatment || 'outlined';
+  $('cFont').value = p.font_family || 'Inter';
+  $('cWeight').value = String(p.font_weight || 800);
+  $('cItalic').checked = !!p.italic;
+  $('cAlign').value = p.text_align || 'center';
+  $('cText').value = p.text_color || '#FFFFFF';
+  $('cStroke').value = p.stroke_color || '#000000';
+  $('cLabelBg').value = p.label_bg || '#FFFFFF';
+  $('rTitle').value = p.title_size_pct ?? 0.05;
+  $('rBody').value = p.body_size_pct ?? 0.033;
+  $('rStroke').value = p.stroke_width ?? 8;
+  $('rTop').value = p.text_block_top_pct ?? 0.6;
+  $('rHookTop').value = p.hook_top_pct ?? 0.34;
+  $('vTitle').textContent = (+$('rTitle').value).toFixed(3);
+  $('vBody').textContent = (+$('rBody').value).toFixed(3);
+  $('vStroke').textContent = $('rStroke').value;
+  $('vTop').textContent = (+$('rTop').value).toFixed(2);
+  $('vHookTop').textContent = (+$('rHookTop').value).toFixed(2);
+}
+function bindControls(){
+  const live = (id, fn) => { $(id).addEventListener('input', ()=>{ fn(); syncControls(); drawAll(); autosave(); }); };
+  live('cTreat', ()=> S.profile.caption_treatment = $('cTreat').value);
+  live('cFont',  ()=> { S.profile.font_family = $('cFont').value; fontReady(S.profile).then(drawAll); });
+  live('cWeight',()=> S.profile.font_weight = +$('cWeight').value);
+  live('cItalic',()=> S.profile.italic = $('cItalic').checked);
+  live('cAlign', ()=> S.profile.text_align = $('cAlign').value);
+  live('cText',  ()=> S.profile.text_color = $('cText').value);
+  live('cStroke',()=> S.profile.stroke_color = $('cStroke').value);
+  live('cLabelBg',()=> S.profile.label_bg = $('cLabelBg').value);
+  live('rTitle', ()=> S.profile.title_size_pct = +$('rTitle').value);
+  live('rBody',  ()=> S.profile.body_size_pct = +$('rBody').value);
+  live('rStroke',()=> S.profile.stroke_width = +$('rStroke').value);
+  live('rTop',   ()=> S.profile.text_block_top_pct = +$('rTop').value);
+  live('rHookTop',()=> S.profile.hook_top_pct = +$('rHookTop').value);
+  $('cAspect').addEventListener('input', ()=>{ S.profile.aspect_ratio = $('cAspect').value; drawAll(); autosave(); });
+}
+
+/* ============================ hook library UI ============================ */
+const CATS = [...new Set(HOOK_DATA.map(h=>h.c))];
+function buildCats(){
+  let on = [];
+  try{ on = JSON.parse(localStorage.getItem(LS.cats)||'null') || CATS.slice(); }catch(e){ on = CATS.slice(); }
+  const box = $('catBox'); box.innerHTML = '<span class="hint">categories:</span>';
+  CATS.forEach(c=>{
+    const n = HOOK_DATA.filter(h=>h.c===c).length;
+    const l = document.createElement('label');
+    l.innerHTML = '<input type="checkbox" '+(on.includes(c)?'checked':'')+' value="'+c+'"> '+c+' <span class="hint">('+n+')</span>';
+    l.querySelector('input').onchange = () => localStorage.setItem(LS.cats, JSON.stringify(enabledCats()));
+    box.appendChild(l);
+  });
+}
+function enabledCats(){ return [...$('catBox').querySelectorAll('input:checked')].map(i=>i.value); }
+
+async function surprise(){
+  const cats = enabledCats();
+  const pool = HOOK_DATA.filter(h=>cats.includes(h.c));
+  if(!pool.length) return log('no categories enabled','w');
+  const niche = $('niche').value.trim() || 'general';
+  const pick = pool[Math.floor(Math.random()*pool.length)];
+  $('cands').innerHTML = '<div class="hint">adapting a '+pick.c+' template…</div>';
+  const sys =
+'You turn viral hook templates into cover-slide headlines for a static image carousel.\n' +
+'TEMPLATE (category: '+pick.c+'): "'+pick.t+'"\n' +
+'NICHE: '+niche+'\n' +
+'STYLE VOICE: '+(S.profile.voice||'direct, plainspoken')+'\n\n' +
+'Rules:\n' +
+'1. Fill every (insert ...) placeholder with something concrete and specific to the niche. No placeholder, bracket or parenthetical may survive into the output.\n' +
+'2. Mutate the template. Change wording, rhythm and framing so it reads native to the niche and the style voice. The template is a structural starting point, not a sentence to complete.\n' +
+'3. Most of these hooks were written for talking-head video and open with a spoken address or a piece to camera. Rewrite anything like that into something that works as a static cover slide someone sees for half a second while scrolling: no "hey guys", no "watch this", no "in this video", no direct-to-camera address. If this template cannot survive that translation, invent a hook in the same category and spirit instead of forcing it.\n' +
+'4. Never invent a statistic, a study or a number you are not confident is real.\n' +
+'5. Max ~14 words. No emoji, no hashtags, no quotation marks around the whole line.\n\n' +
+'Return ONLY a JSON array of exactly three different candidate strings.';
+  try{
+    const r = await callModel({model: cfg().textModel, parts:[{type:'text', text:sys}]});
+    const arr = extractJSON(r.text, true);
+    S.candidates = (Array.isArray(arr) ? arr : []).map(String).slice(0,3);
+    renderCands(pick);
+  }catch(e){
+    $('cands').innerHTML = '<div class="hint">failed — see log</div>';
+    log('surprise me failed: '+e.message,'e');
+    if(e.raw) log('raw: '+String(e.raw).slice(0,600),'e');
+  }
+}
+function renderCands(pick){
+  const box = $('cands'); box.innerHTML = '';
+  if(pick){ const h = document.createElement('div'); h.className='hint'; h.textContent = 'from ['+pick.c+'] '+pick.t; box.appendChild(h); }
+  S.candidates.forEach(c=>{
+    const d = document.createElement('div'); d.className='cand'; d.textContent = c;
+    d.onclick = () => { $('hookInput').value = c; $('hookInput').focus(); };
+    box.appendChild(d);
+  });
+}
+
+/* ============================ Mode A — deck generation ============================ */
+function deckPrompt(hook, n){
+  const p = S.profile;
+  return (
+'You write short-form social carousels. Write a '+n+'-slide deck.\n\n' +
+'HOOK (slide 1 title, verbatim or lightly tightened): "'+hook+'"\n' +
+'STYLE VOICE: '+(p.voice||'direct second person, blunt')+'\n' +
+'DECK STRUCTURE: '+(p.structure||'hook, then one idea per slide')+'\n' +
+'IMAGERY: '+(p.imagery||'photographic')+'\n\n' +
+'Rules:\n' +
+'- Slide 1 is the hook and carries the promise only: title from the hook, no fact, no body copy. The first fact starts on slide 2.\n' +
+'- Second person, direct. The pattern that works is: what you do wrong, then what people who are good at this do, then why it costs you. Two or three short sentences per body. No hedging, no emoji, no "consider".\n' +
+'- Never invent a statistic, a study or a number. If a claim needs a number and you are not confident it is real, write the claim without one.\n' +
+'- "scene" describes only what is in the picture: subject, setting, light, camera framing. It never asks for words, numbers, logos, text or UI. Keep one region of the frame calm and uncluttered so a caption can sit over it.\n' +
+'- No call-to-action slide.\n' +
+'- Titles are short (max ~7 words). Bodies max ~32 words.\n\n' +
+'Return ONLY JSON of this exact shape:\n' +
+'{"slides":[{"kind":"hook","title":"...","scene":"..."},{"kind":"slide","title":"...","body":"...","scene":"..."}],"caption":"post caption with hashtags"}'
+  );
+}
+async function generateDeck(){
+  const hook = $('hookInput').value.trim();
+  if(!hook) return log('type a hook first','w');
+  const n = +$('slideCount').value;
+  $('rawRetry').classList.add('hide');
+  $('deckStatus').textContent = 'writing…';
+  S.lastDeckReq = {hook,n};
+  try{
+    const r = await callModel({model: cfg().textModel, parts:[{type:'text', text: deckPrompt(hook,n)}]});
+    S.lastRaw = r.text;
+    const j = extractJSON(r.text, false);
+    loadDeck(j);
+    $('deckStatus').textContent = S.slides.length + ' slides written';
+    if($('autoImages').checked) generateAllImages();
+  }catch(e){
+    $('deckStatus').textContent = 'failed';
+    S.lastRaw = e.raw || S.lastRaw || e.message;
+    $('rawRetry').classList.remove('hide');
+    log('deck generation failed: '+e.message,'e');
+  }
+}
+function loadDeck(j){
+  const arr = Array.isArray(j.slides) ? j.slides : [];
+  S.slides = arr.map((s,i)=>({
+    id: uid(),
+    kind: (i === 0 || s.kind === 'hook') ? 'hook' : 'slide',
+    title: String(s.title||''), body: String(s.body||''), scene: String(s.scene||''),
+    img: '', status: ''
+  }));
+  S.caption = String(j.caption||'');
+  $('capInput').value = S.caption;
+  for(const k in IMG_CACHE) delete IMG_CACHE[k];
+  buildGrid(); autosave();
+}
+
+/* ============================ images ============================ */
+function imagePrompt(slide){
+  const p = S.profile;
+  const top = slide.kind === 'hook' ? (p.hook_top_pct ?? 0.34) : (p.text_block_top_pct ?? 0.6);
+  const region = top < 0.36 ? 'upper third' : top < 0.58 ? 'middle band' : 'lower third';
+  return (slide.scene || slide.title) + '. ' +
+    (p.image_prompt_suffix || '') + ' ' +
+    'Aspect ratio ' + (p.aspect_ratio||'9:16') + ', full-bleed composition. ' +
+    'Keep the ' + region + ' of the frame visually calm, uncluttered and even in tone so a caption can be placed over it. ' +
+    NO_TEXT_CLAUSE;
+}
+async function genImage(slide, single){
+  setStatus(slide,'generating');
+  try{
+    const r = await callModel({model: cfg().imageModel, parts:[{type:'text', text: imagePrompt(slide)}], wantImage:true, aspect:S.profile.aspect_ratio});
+    if(!r.images.length) throw new Error('no image in response' + (r.text ? ' — model said: '+r.text.slice(0,200) : ''));
+    setImage(slide, r.images[0], autosave);
+    setStatus(slide,'done');
+  }catch(e){
+    setStatus(slide,'failed', e.message);
+    log('image failed (slide '+(S.slides.indexOf(slide)+1)+'): '+e.message,'e');
+  }
+  if(single) autosave();
+}
+async function runQueue(items, limit, worker){
+  let i = 0;
+  const runners = Array.from({length:Math.min(limit, items.length)}, async ()=>{
+    while(i < items.length){ const k = i++; await worker(items[k]); }
+  });
+  await Promise.all(runners);
+}
+async function generateAllImages(){
+  if(!S.slides.length) return;
+  S.slides.forEach(s=>{ if(s.status !== 'done' || !s.img) setStatus(s,'queued'); });
+  const todo = S.slides.filter(s=>s.status === 'queued');
+  await runQueue(todo, 3, genImage);
+  autosave();
+  log('image pass finished','o');
+}
+async function regenAllImages(){
+  S.slides.forEach(s=>setStatus(s,'queued'));
+  await runQueue(S.slides.slice(), 3, genImage);
+  $('imageryNotice').classList.add('hide');
+  autosave();
+}
+
+/* ============================ Mode B — clone ============================ */
+function downscale(file, max){
+  return new Promise((res,rej)=>{
+    const rd = new FileReader();
+    rd.onload = () => {
+      const im = new Image();
+      im.onload = () => {
+        const s = Math.min(1, max/Math.max(im.width,im.height));
+        const c = document.createElement('canvas');
+        c.width = Math.round(im.width*s); c.height = Math.round(im.height*s);
+        c.getContext('2d').drawImage(im,0,0,c.width,c.height);
+        const url = c.toDataURL('image/jpeg', 0.85);
+        res({dataUrl:url, b64:url.split(',')[1]});
+      };
+      im.onerror = rej; im.src = rd.result;
+    };
+    rd.onerror = rej; rd.readAsDataURL(file);
+  });
+}
+async function addExamples(files){
+  const list = [...files].slice(0, 8 - S.examples.length);
+  for(const f of list){
+    try{ S.examples.push(await downscale(f, 1024)); }catch(e){ log('could not read '+f.name,'e'); }
+  }
+  const t = $('exThumbs'); t.innerHTML = '';
+  S.examples.forEach((ex,i)=>{
+    const im = document.createElement('img'); im.src = ex.dataUrl; im.title = 'click to remove';
+    im.onclick = () => { S.examples.splice(i,1); addExamples([]); };
+    t.appendChild(im);
+  });
+  $('cloneStatus').textContent = S.examples.length + ' example(s)';
+}
+const PROFILE_FIELDS = [
+  ['name','text'],['aspect_ratio','select:9:16,4:5,1:1'],['imagery','text'],['image_prompt_suffix','text'],
+  ['caption_treatment','select:outlined,label-boxes,plain'],['font_family','text'],['font_weight','number'],
+  ['italic','check'],['text_color','color'],['stroke_color','color'],['stroke_width','number'],['label_bg','color'],
+  ['title_size_pct','number'],['body_size_pct','number'],['text_block_top_pct','number'],['hook_top_pct','number'],
+  ['text_align','select:center,left,right'],['structure','text'],['voice','text']
+];
+function buildProfileForm(){
+  const f = $('profileForm'); f.innerHTML = '';
+  PROFILE_FIELDS.forEach(([k,type])=>{
+    const c = document.createElement('div'); c.className = 'col';
+    let input;
+    if(type.startsWith('select:')){
+      input = document.createElement('select');
+      type.slice(7).split(',').forEach(o=>{ const op = document.createElement('option'); op.value = op.textContent = o; input.appendChild(op); });
+    } else {
+      input = document.createElement('input');
+      input.type = type === 'number' ? 'number' : type === 'color' ? 'color' : type === 'check' ? 'checkbox' : 'text';
+      if(type === 'number') input.step = 'any';
+    }
+    const v = S.profile[k];
+    if(type === 'check') input.checked = !!v; else input.value = (v ?? '');
+    input.oninput = () => {
+      S.profile[k] = type === 'check' ? input.checked : type === 'number' ? +input.value : input.value;
+      if(k === 'font_family') fontReady(S.profile).then(drawAll); else drawAll();
+      syncControls(); autosave();
+    };
+    c.innerHTML = '<label>'+k+'</label>'; c.appendChild(input);
+    f.appendChild(c);
+  });
+}
+async function extractProfile(){
+  if(!S.examples.length) return log('drop some screenshots first','w');
+  $('cloneStatus').textContent = 'reading examples…';
+  const sys =
+'You are reverse-engineering the visual style of a social media carousel from screenshots.\n' +
+'Return ONLY JSON with exactly these keys:\n' +
+'{"aspect_ratio":"9:16|4:5|1:1","imagery":"photographic|flat-vector-cartoon|3d-render|...",' +
+'"image_prompt_suffix":"the look, lighting and rendering style to append to every scene prompt",' +
+'"caption_treatment":"outlined|label-boxes|plain","font_family":"closest common web font available on Google Fonts",' +
+'"font_weight":800,"italic":false,"text_color":"#FFFFFF","stroke_color":"#000000","stroke_width":7,"label_bg":"#FFFFFF",' +
+'"title_size_pct":0.029,"body_size_pct":0.026,"text_block_top_pct":0.40,"hook_top_pct":0.30,"text_align":"center",' +
+'"structure":"how the deck is sequenced","voice":"how the copy sounds"}\n\n' +
+'Sizes are a fraction of canvas HEIGHT (cap height of the drawn glyphs relative to full image height), so the profile survives an aspect change. ' +
+'text_block_top_pct is the top of the caption block on a body slide; hook_top_pct the same for the cover slide. ' +
+'image_prompt_suffix must describe only rendering style and must never ask for text, logos or UI. ' +
+'Judge the treatment: "label-boxes" if lines sit in filled rounded rectangles, "outlined" if the type has a contrasting stroke, otherwise "plain".';
+  const parts = [{type:'text', text:sys}].concat(S.examples.map(e=>({type:'image', mime:'image/jpeg', b64:e.b64})));
+  try{
+    const r = await callModel({model: cfg().textModel, parts});
+    const j = extractJSON(r.text, false);
+    j.name = $('profileName').value.trim() || 'Cloned style';
+    S.profile = Object.assign(clone(S.profile), j);
+    S.styleKey = '';                       // no preset is active any more
+    buildStyles();
+    $('cAspect').value = S.profile.aspect_ratio;
+    buildProfileForm(); syncControls();
+    await fontReady(S.profile);
+    drawAll();
+    $('cloneStatus').textContent = 'profile extracted — edit below, then save';
+    log('style profile extracted','o');
+  }catch(e){
+    $('cloneStatus').textContent = 'failed';
+    log('profile extraction failed: '+e.message,'e');
+    if(e.raw) log('raw: '+String(e.raw).slice(0,800),'e');
+  }
+}
+async function rebuildCopy(){
+  if(!S.examples.length) return log('drop the deck screenshots first','w');
+  $('cloneStatus').textContent = 'rewriting the deck…';
+  const p = S.profile;
+  const sys =
+'These screenshots are one carousel. Rewrite this deck\'s own copy, keeping its subject and running order, in this voice: ' +
+(p.voice||'direct second person') + '. Structure: ' + (p.structure||'hook then one idea per slide') + '.\n' +
+'- Slide 1 is the hook and carries the promise only, no body copy.\n' +
+'- Second person, direct. Two or three short sentences per body. No hedging, no emoji.\n' +
+'- Never invent a statistic, a study or a number. Drop numbers you are not confident are real.\n' +
+'- "scene" describes only what is in the picture and never asks for words, numbers, logos, text or UI.\n' +
+'Return ONLY JSON: {"slides":[{"kind":"hook","title":"...","scene":"..."},{"kind":"slide","title":"...","body":"...","scene":"..."}],"caption":"..."}';
+  const parts = [{type:'text', text:sys}].concat(S.examples.map(e=>({type:'image', mime:'image/jpeg', b64:e.b64})));
+  try{
+    const r = await callModel({model: cfg().textModel, parts});
+    S.lastRaw = r.text;
+    loadDeck(extractJSON(r.text, false));
+    $('cloneStatus').textContent = 'deck rebuilt — generate images when ready';
+  }catch(e){
+    $('cloneStatus').textContent = 'failed';
+    log('rebuild failed: '+e.message,'e');
+  }
+}
+
+/* ============================ output ============================ */
+function slideCanvas(i){
+  const s = S.slides[i];
+  const c = document.createElement('canvas');
+  renderSlide(s, c);
+  return c;
+}
+function downloadSlide(i){
+  const url = slideCanvas(i).toDataURL('image/jpeg', 0.92);
+  const a = document.createElement('a');
+  a.href = url; a.download = String(i+1).padStart(2,'0') + '.jpg';
+  a.click();
+}
+function loadScript(src){
+  return new Promise((res,rej)=>{ const s = document.createElement('script'); s.src = src; s.onload = res; s.onerror = ()=>rej(new Error('could not load '+src)); document.head.appendChild(s); });
+}
+async function downloadZip(){
+  if(!S.slides.length) return;
+  try{
+    if(!window.JSZip) await loadScript('https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js');
+    const zip = new JSZip();
+    for(let i=0;i<S.slides.length;i++){
+      const b64 = slideCanvas(i).toDataURL('image/jpeg',0.92).split(',')[1];
+      zip.file(String(i+1).padStart(2,'0')+'.jpg', b64, {base64:true});
+    }
+    if(S.caption) zip.file('caption.txt', S.caption);
+    const blob = await zip.generateAsync({type:'blob'});
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob); a.download = 'carousel.zip'; a.click();
+    setTimeout(()=>URL.revokeObjectURL(a.href), 5000);
+  }catch(e){
+    log('ZIP failed ('+e.message+') — falling back to one-by-one downloads','w');
+    for(let i=0;i<S.slides.length;i++) downloadSlide(i);
+  }
+}
+
+/* ============================ wiring ============================ */
+function init(){
+  loadSettings();
+  for(let i=2;i<=12;i++){ const o = document.createElement('option'); o.value = o.textContent = i; if(i===7) o.selected = true; $('slideCount').appendChild(o); }
+  $('hookCount').textContent = HOOK_META.kept + ' templates (' + HOOK_META.dropped + ' dropped in parsing)';
+  buildCats();
+
+  $('toggleKey').onclick = () => {
+    const k = $('apiKey');
+    k.type = k.type === 'password' ? 'text' : 'password';
+    $('toggleKey').textContent = k.type === 'password' ? 'show' : 'hide';
+  };
+  ['apiKey','textModel','imageModel','niche'].forEach(id=>$(id).addEventListener('input', saveSettings));
+  $('remember').onchange = saveSettings;
+  $('apiShape').onchange = saveSettings;
+
+  $('testConn').onclick = async () => {
+    $('testConn').disabled = true;
+    try{
+      const r = await callModel({model: cfg().textModel, parts:[{type:'text', text:'Reply with the single word: ok'}]});
+      log('connection ok — model said: ' + (r.text||'(empty)').trim().slice(0,80), 'o');
+    }catch(e){ log('connection failed: '+e.message,'e'); }
+    $('testConn').disabled = false;
+  };
+
+  document.querySelectorAll('.tabs button').forEach(b=>{
+    b.onclick = () => {
+      document.querySelectorAll('.tabs button').forEach(x=>x.classList.remove('on'));
+      b.classList.add('on');
+      $('modeA').classList.toggle('hide', b.dataset.mode !== 'A');
+      $('modeB').classList.toggle('hide', b.dataset.mode !== 'B');
+      if(b.dataset.mode === 'B' && !$('profileForm').children.length) buildProfileForm();
+    };
+  });
+
+  $('surprise').onclick = surprise;
+  $('reroll').onclick = surprise;
+  $('genDeck').onclick = generateDeck;
+  $('genAllImages').onclick = generateAllImages;
+  $('regenAllImgs').onclick = regenAllImages;
+  $('dismissNotice').onclick = () => $('imageryNotice').classList.add('hide');
+  $('showRaw').onclick = () => { log('raw model output:\n' + (S.lastRaw||'(none)'), 'w'); };
+  $('retryDeck').onclick = generateDeck;
+
+  $('pickFiles').onclick = () => $('fileInput').click();
+  $('fileInput').onchange = e => addExamples(e.target.files);
+  const dz = $('drop');
+  ['dragenter','dragover'].forEach(ev=>dz.addEventListener(ev, e=>{ e.preventDefault(); dz.classList.add('over'); }));
+  ['dragleave','drop'].forEach(ev=>dz.addEventListener(ev, e=>{ e.preventDefault(); dz.classList.remove('over'); }));
+  dz.addEventListener('drop', e=>{ if(e.dataTransfer.files.length) addExamples(e.dataTransfer.files); });
+  $('extract').onclick = extractProfile;
+  $('rebuildCopy').onclick = rebuildCopy;
+  $('saveProfile').onclick = () => {
+    const n = $('profileName').value.trim() || S.profile.name || 'Saved style';
+    const p = clone(S.profile); p.name = n; delete p.builtin;
+    const at = S.saved.findIndex(x=>x.name === n);
+    if(at >= 0) S.saved[at] = p; else S.saved.push(p);
+    persistProfiles();
+    S.styleKey = 'saved:' + (at >= 0 ? at : S.saved.length-1);
+    buildStyles();
+    log('profile "'+n+'" saved to the style picker','o');
+  };
+
+  $('capInput').addEventListener('input', ()=>{ S.caption = $('capInput').value; autosave(); });
+  $('copyCap').onclick = () => navigator.clipboard.writeText(S.caption||'').then(()=>log('caption copied','o'), e=>log('clipboard blocked: '+e.message,'e'));
+  $('dlAll').onclick = downloadZip;
+  $('exportProj').onclick = () => {
+    const blob = new Blob([JSON.stringify(projectJSON(true),null,1)], {type:'application/json'});
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'carousel-project.json'; a.click();
+    setTimeout(()=>URL.revokeObjectURL(a.href),5000);
+  };
+  $('importProj').onclick = () => $('importFile').click();
+  $('importFile').onchange = e => {
+    const f = e.target.files[0]; if(!f) return;
+    const rd = new FileReader();
+    rd.onload = async () => {
+      try{
+        const p = JSON.parse(rd.result);
+        S.profile = p.profile || S.profile; S.styleKey = p.styleKey || S.styleKey;
+        S.caption = p.caption || ''; $('capInput').value = S.caption;
+        S.slides = (p.slides||[]).map(s=>({...s, id:s.id||uid(), status:s.img?'done':''}));
+        for(const k in IMG_CACHE) delete IMG_CACHE[k];
+        syncControls(); buildStyles(); await fontReady(S.profile); buildGrid();
+        S.slides.forEach(s=>{ if(s.img) setImage(s, s.img); });
+        autosave(); log('project imported','o');
+      }catch(err){ log('import failed: '+err.message,'e'); }
+    };
+    rd.readAsText(f);
+  };
+  $('addSlide').onclick = () => {
+    S.slides.push({id:uid(), kind:S.slides.length?'slide':'hook', title:'New slide', body:'', scene:'', img:'', status:''});
+    buildGrid(); autosave();
+  };
+  $('clearDeck').onclick = () => { if(confirm('Clear the deck?')){ S.slides = []; S.caption=''; $('capInput').value=''; buildGrid(); autosave(); } };
+
+  bindControls();
+  syncControls();
+  buildStyles();
+  buildProfileForm();
+
+  restoreProject().then(async ok=>{
+    syncControls(); buildStyles();
+    await fontReady(S.profile);
+    buildGrid();
+    if(ok){
+      S.slides.forEach(s=>{ if(s.img) setImage(s, s.img); });
+      log('restored '+S.slides.length+' slides from autosave','o');
+    }
+    log('ready — '+HOOK_META.kept+' hook templates loaded');
+  });
+}
+init();
+</script>

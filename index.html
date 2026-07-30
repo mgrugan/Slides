@@ -687,26 +687,53 @@ function bodyGenerateContent(model, parts, opts){
   }
   return b;
 }
+/* Reads text and images out of a response without caring which shape it arrived in.
+   Known containers first; if those come up empty, walk the whole object. */
 function parseResponse(j){
   const out = {text:'', images:[]};
-  const eatPart = p => {
-    if(!p) return;
-    if(typeof p.text === 'string') out.text += p.text;
-    const inl = p.inline_data || p.inlineData;
-    if(inl && inl.data) out.images.push('data:'+(inl.mime_type||inl.mimeType||'image/png')+';base64,'+inl.data);
-    if(p.type === 'text' && typeof p.text === 'string') { /* already counted */ }
-    if(p.type === 'image' && p.data) out.images.push('data:'+(p.mime_type||'image/png')+';base64,'+p.data);
-    if(p.image && p.image.data) out.images.push('data:'+(p.image.mime_type||'image/png')+';base64,'+p.image.data);
+  const texts = [];
+  const pushText = v => { if(typeof v === 'string' && v.trim() && !texts.includes(v)) texts.push(v); };
+  const pushImg = (mime, data) => {
+    if(typeof data !== 'string' || data.length < 64) return;
+    out.images.push(data.startsWith('data:') ? data : 'data:'+(mime||'image/png')+';base64,'+data);
   };
-  // generateContent shape
-  if(j.candidates) for(const c of j.candidates) for(const p of ((c.content&&c.content.parts)||[])) eatPart(p);
-  // interactions shape (output / outputs / content arrays of typed parts)
-  const arrs = [j.output, j.outputs, j.content, j.response, j.result].filter(Array.isArray);
-  for(const a of arrs) for(const p of a){
-    eatPart(p);
-    if(p && Array.isArray(p.content)) for(const q of p.content) eatPart(q);
+  const eat = p => {
+    if(!p || typeof p !== 'object') return;
+    const inl = p.inline_data || p.inlineData || p.image || p.source;
+    if(inl && typeof inl === 'object')
+      pushImg(inl.mime_type || inl.mimeType || inl.media_type, inl.data || inl.b64_json || inl.base64);
+    if(typeof p.data === 'string' && /image/i.test(p.type || p.mime_type || p.mimeType || ''))
+      pushImg(p.mime_type || p.mimeType, p.data);
+    pushText(p.text); pushText(p.output_text);
+    if(typeof p.content === 'string') pushText(p.content);
+    if(Array.isArray(p.content)) p.content.forEach(eat);
+    if(Array.isArray(p.parts)) p.parts.forEach(eat);
+    if(p.content && typeof p.content === 'object' && !Array.isArray(p.content)) eat(p.content);
+    if(p.message) eat(p.message);
+    if(p.delta) eat(p.delta);
+  };
+  if(Array.isArray(j.candidates)) j.candidates.forEach(c => eat(c.content || c));
+  ['output','outputs','content','contents','response','result','results','messages','choices','data','items','parts']
+    .forEach(k => { const v = j[k]; if(Array.isArray(v)) v.forEach(eat); else if(v && typeof v === 'object') eat(v); });
+  eat(j);
+
+  const TEXTY = /text|content|message|output|answer|reply|completion|body|turns/i;
+  const NOISE = /^(id|model|role|type|name|uri|url|version|mime_type|mimeType|finish_reason|finishReason|index|object|created)$/i;
+  if(!texts.length && !out.images.length) deepWalk(j, false);
+  function deepWalk(node, inTexty){
+    if(!node || typeof node !== 'object') return;
+    if(Array.isArray(node)) return node.forEach(n => deepWalk(n, inTexty));
+    for(const k of Object.keys(node)){
+      if(/^(input|request|prompt|usage|safety|citation|metadata|grounding)/i.test(k)) continue;   // don't read back our own request
+      const v = node[k];
+      if(typeof v === 'string'){
+        if(NOISE.test(k)) continue;
+        if((TEXTY.test(k) || inTexty) && v.trim().length > 1) pushText(v);
+        else if(/^(data|b64_json|base64|image_bytes)$/i.test(k) && v.length > 512) pushImg(node.mime_type || node.mimeType, v);
+      } else deepWalk(v, inTexty || TEXTY.test(k));
+    }
   }
-  if(!out.text && typeof j.text === 'string') out.text = j.text;
+  out.text = texts.join('\n');
   return out;
 }
 
@@ -730,7 +757,10 @@ async function rawCall(shape, model, parts, opts){
     err.status = r.status; err.raw = txt; err.shape = shape;
     throw err;
   }
-  return parseResponse(j || {});
+  const res = parseResponse(j || {});
+  if(!res.text && !res.images.length)   // 200 but unreadable: show the shape so it can be handled
+    log('read nothing out of the ['+shape+'] response — raw: ' + txt.slice(0,700), 'w');
+  return res;
 }
 
 let AUTO_SHAPE = null;   // whichever shape answered first this session
@@ -1157,7 +1187,9 @@ async function suggestHook(){
   btn.disabled = true; btn.textContent = 'Thinking…';
   try{
     const {list, pick} = await fetchHooks();
-    if(!list.length) throw new Error('the model returned nothing usable');
+    if(!list.length) throw new Error(S.lastRaw
+      ? 'could not read a hook out of the reply — see Console in Settings'
+      : 'the model replied with nothing — see Console in Settings');
     S.candidates = list; S.lastPick = pick;
     applyHook(list[0]);
   }catch(e){

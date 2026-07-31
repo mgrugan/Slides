@@ -523,6 +523,8 @@ details summary:hover{color:var(--fg)}
       <button id="libClear" class="btn sm quiet">Clear</button>
       <input type="file" id="libFile" accept="application/json" class="hide">
     </div>
+    <input id="libSearch" placeholder="Search by subject — gym, fairway, bunker…">
+    <div class="cats" id="libTags"></div>
     <div class="tiny" id="libPickNote" style="color:var(--warn)"></div>
     <div id="libGrid" class="libGrid"></div>
   </div>
@@ -905,15 +907,120 @@ async function libClear(){
   LIB = []; renderLibrary();
 }
 const libBytes = () => LIB.reduce((a,x)=>a + (x.data ? x.data.length*0.75 : 0), 0);
-/* pick the best unused background: same shape and look first, then least used */
-function libPick(exclude, p){
+
+/* ---------------- local tagging: no model, no cost ----------------
+   Words that appear in every scene prompt (our own boilerplate and the style
+   suffix) carry no information, so they are dropped before tagging. */
+const STOP = new Set(('a an the of in on at to for with and or but if then than that this these those it its into over under ' +
+ 'from by as is are was were be been being no not any all some very more most much many few one two three ' +
+ 'shot image images picture pictures photo photograph photographic photorealistic real natural light lighting ' +
+ 'colour color rich cinematic composition editorial documentary framing camera feel style rendering render ' +
+ 'text letters numbers words captions caption subtitles signage labels logos logo watermark watermarks ui ' +
+ 'interface charts diagrams writing aspect ratio vertical horizontal full bleed frame region visually calm ' +
+ 'uncluttered even tone placed sits sit purely absolutely anywhere keep kept leave left third middle upper lower ' +
+ 'flat vector cartoon bold black outlines simple saturated blocking minimal shading clean graphic drone phone ' +
+ 'depth field shallow view scene background foreground').split(/\s+/));
+function tagsFrom(text){
+  const out = [];
+  for(let w of String(text||'').toLowerCase().split(/[^a-z0-9']+/)){
+    if(w.length < 3 || STOP.has(w)) continue;
+    if(w.length > 4 && w.endsWith('s') && !w.endsWith('ss')) w = w.slice(0,-1);   // crude singular
+    if(!STOP.has(w) && !out.includes(w)) out.push(w);
+    if(out.length >= 14) break;
+  }
+  return out;
+}
+/* rare words say more about an image than common ones */
+function libIDF(){
+  const df = {}, n = Math.max(1, LIB.length);
+  LIB.forEach(x=>new Set(x.tags||[]).forEach(t=>{ df[t] = (df[t]||0)+1; }));
+  return t => Math.log((n + 1) / ((df[t]||0) + 1)) + 0.2;
+}
+/* deterministic image stats on a 24px thumbnail: brightness, hue, and which
+   horizontal band is flattest — that band is where a caption will sit best */
+function analyzeImage(dataUrl){
+  return new Promise(res=>{
+    const im = new Image();
+    im.onerror = () => res(null);
+    im.onload = () => {
+      try{
+        const w = 24, h = Math.max(8, Math.round(24 * im.naturalHeight / im.naturalWidth));
+        const c = document.createElement('canvas'); c.width = w; c.height = h;
+        const ctx = c.getContext('2d', {willReadFrequently:true});
+        ctx.drawImage(im, 0, 0, w, h);
+        const px = ctx.getImageData(0,0,w,h).data;
+        const band = [[0,h/3],[h/3,2*h/3],[2*h/3,h]].map(([a,b])=>{
+          let n=0, sum=0, sq=0;
+          for(let y=Math.floor(a); y<Math.floor(b); y++) for(let x=0;x<w;x++){
+            const i = (y*w+x)*4;
+            const l = (px[i]*0.299 + px[i+1]*0.587 + px[i+2]*0.114)/255;
+            sum += l; sq += l*l; n++;
+          }
+          const mean = sum/n;
+          return {mean, sd: Math.sqrt(Math.max(0, sq/n - mean*mean))};
+        });
+        let r=0,g=0,b=0;
+        for(let i=0;i<px.length;i+=4){ r+=px[i]; g+=px[i+1]; b+=px[i+2]; }
+        const n = px.length/4;
+        r/=n*255; g/=n*255; b/=n*255;
+        const mx = Math.max(r,g,b), mn = Math.min(r,g,b);
+        let hue = 0;
+        if(mx !== mn){
+          hue = mx === r ? 60*(((g-b)/(mx-mn))%6) : mx === g ? 60*(((b-r)/(mx-mn))+2) : 60*(((r-g)/(mx-mn))+4);
+          if(hue < 0) hue += 360;
+        }
+        res({lum: +((r*0.299+g*0.587+b*0.114).toFixed(3)), hue: Math.round(hue), sat: +((mx-mn).toFixed(3)),
+             bands: band.map(x=>({m:+x.mean.toFixed(3), sd:+x.sd.toFixed(3)}))});
+      }catch(e){ res(null); }
+    };
+    im.src = dataUrl;
+  });
+}
+/* fill in tags and stats for anything saved before this existed, a few at a time */
+async function libEnrich(){
+  const todo = LIB.filter(x=>!x.tags || !x.stats);
+  for(const item of todo.slice(0, 40)){
+    if(!item.tags) item.tags = tagsFrom(item.scene);
+    if(!item.stats) item.stats = await analyzeImage(item.data);
+    await libSave(item);
+  }
+  if(todo.length) renderLibrary();
+}
+/* How well a saved background suits a slide. Higher is better. Pure arithmetic on
+   the prompt words and the image's own brightness/flatness — nothing is sent anywhere. */
+function libScore(item, slide, p, idf){
+  idf = idf || libIDF();
+  let s = 0;
+  s += item.aspect === (p.aspect_ratio||'9:16') ? 30 : -40;      // wrong shape gets cropped
+  s += item.imagery === (p.imagery||'') ? 12 : -6;
+
+  const want = new Set(tagsFrom((slide && (slide.scene || slide.title)) || ''));
+  if(want.size && item.tags && item.tags.length){
+    let hit = 0, total = 0;
+    want.forEach(t=>{ total += idf(t); if(item.tags.includes(t)) hit += idf(t); });
+    s += total ? 45 * (hit/total) : 0;                            // subject match, the main signal
+  }
+  const st = item.stats;
+  if(st){
+    // the caption's band should be the flattest part of the picture
+    const top = slide && slide.kind === 'hook' ? (p.hook_top_pct ?? 0.34) : (p.text_block_top_pct ?? 0.6);
+    const band = st.bands && st.bands[top < 0.36 ? 0 : top < 0.62 ? 1 : 2];
+    if(band){
+      s += (1 - Math.min(1, band.sd * 3)) * 14;                   // flat behind the words
+      const light = (S.profile.text_color || '#fff').toLowerCase();
+      const wantsDark = /f|e|d|c/.test(light[1] || 'f');          // white-ish type wants a darker band
+      s += (wantsDark ? (1 - band.m) : band.m) * 10;
+    }
+  }
+  s -= Math.min(18, (item.used||0) * 6);                          // spread usage around
+  if(item.lastUsed && Date.now() - item.lastUsed < 864e5) s -= 8; // used today, rest it
+  return s;
+}
+function libPick(exclude, p, slide){
   const free = LIB.filter(x=>!exclude.has(x.id));
   if(!free.length) return null;
-  const score = x =>
-    (x.aspect === p.aspect_ratio ? 0 : 100) +
-    (x.imagery === p.imagery ? 0 : 10) +
-    Math.min(9, x.used||0);
-  return free.slice().sort((a,b)=>score(a)-score(b) || (a.used||0)-(b.used||0))[0];
+  const idf = libIDF();
+  return free.reduce((best,x)=> libScore(x,slide,p,idf) > libScore(best,slide,p,idf) ? x : best, free[0]);
 }
 async function useFromLibrary(slide, item){
   setImage(slide, item.data, autosave);
@@ -1701,11 +1808,18 @@ function imagePrompt(slide){
     'Keep the ' + region + ' of the frame visually calm, uncluttered and even in tone so a caption can be placed over it. ' +
     NO_TEXT_CLAUSE;
 }
-function keepInLibrary(slide, dataUrl){
+async function keepInLibrary(slide, dataUrl){
   if(localStorage.getItem('cb.libSave') === '0') return;
-  libAdd({id: uid(), data: dataUrl, scene: slide.scene || slide.title || '',
+  const scene = slide.scene || slide.title || '';
+  const item = {id: uid(), data: dataUrl, scene,
+    tags: tagsFrom(scene + ' ' + (slide.title||'')),
     imagery: S.profile.imagery || '', aspect: S.profile.aspect_ratio || '9:16',
-    created: Date.now(), used: 0}).catch(e=>log('library save failed: '+e.message,'w'));
+    created: Date.now(), used: 0};
+  try{
+    await libAdd(item);
+    item.stats = await analyzeImage(dataUrl);      // brightness / flat-band analysis
+    await libSave(item);
+  }catch(e){ log('library save failed: '+e.message,'w'); }
 }
 /* Library-first: the cover always gets a fresh image, body slides come from the
    library until it runs dry, and only then does anything hit the API. */
@@ -1715,7 +1829,7 @@ function planImages(slides){
   const taken = new Set();
   for(const s of slides){
     if(!useLib || s.kind === 'hook'){ fresh.push(s); continue; }
-    const item = libPick(taken, S.profile);
+    const item = libPick(taken, S.profile, s);
     if(item){ taken.add(item.id); reused.push([s, item]); }
     else fresh.push(s);
   }
@@ -1784,24 +1898,56 @@ async function regenAllImages(){
 
 /* ============================ library UI ============================ */
 let LIB_PICK_FOR = null;         // slide awaiting a background from the library
+let LIB_FILTER = '';
+function libTopTags(){
+  const count = {};
+  LIB.forEach(x=>(x.tags||[]).forEach(t=>{ count[t] = (count[t]||0)+1; }));
+  return Object.entries(count).filter(([,n])=>n > 1).sort((a,b)=>b[1]-a[1]).slice(0,14);
+}
 function renderLibrary(){
   const grid = $('libGrid'); if(!grid) return;
   const b = libBytes();
   const size = b > 1048576 ? (b/1048576).toFixed(1)+' MB' : Math.round(b/1024)+' KB';
   $('libStats').textContent = LIB.length + (LIB.length === 1 ? ' background · ' : ' backgrounds · ') + size;
-  $('libPickNote').textContent = LIB_PICK_FOR ? 'Pick a background for that slide' : '';
+  $('libPickNote').textContent = LIB_PICK_FOR ? 'Best matches for that slide are first' : '';
+
+  const tagBox = $('libTags');
+  tagBox.innerHTML = '';
+  libTopTags().forEach(([t,n])=>{
+    const b = document.createElement('button');
+    b.textContent = t; b.title = n + ' backgrounds';
+    b.className = LIB_FILTER === t ? 'on' : '';
+    b.onclick = () => { LIB_FILTER = LIB_FILTER === t ? '' : t; $('libSearch').value = LIB_FILTER; renderLibrary(); };
+    tagBox.appendChild(b);
+  });
+
   grid.innerHTML = '';
   if(!LIB.length){
     grid.innerHTML = '<div class="tiny" style="color:var(--faint)">Empty. Every image you generate is saved here automatically.</div>';
     return;
   }
-  LIB.forEach(item=>{
+  const q = (LIB_FILTER || '').toLowerCase().trim();
+  let items = q
+    ? LIB.filter(x=>(x.tags||[]).some(t=>t.includes(q)) || (x.scene||'').toLowerCase().includes(q))
+    : LIB.slice();
+  // when choosing for a slide, order by fit instead of by date
+  if(LIB_PICK_FOR){
+    const idf = libIDF();
+    items = items.map(x=>({x, s: libScore(x, LIB_PICK_FOR, S.profile, idf)}))
+                 .sort((a,b)=>b.s-a.s).map(o=>o.x);
+  }
+  if(!items.length){
+    grid.innerHTML = '<div class="tiny" style="color:var(--faint)">Nothing matches "'+q+'".</div>';
+    return;
+  }
+  items.forEach((item,i)=>{
     const d = document.createElement('div');
     d.className = 'libItem';
+    const label = LIB_PICK_FOR && i < 3 ? 'best match' : (item.tags||[]).slice(0,2).join(' · ') || (item.aspect||'');
     d.innerHTML = '<img src="'+item.data+'" loading="lazy" alt="">'+
       '<button class="x" title="Delete">×</button>'+
-      '<div class="use">'+(item.aspect||'')+(item.used ? ' · used '+item.used+'×' : '')+'</div>';
-    d.title = item.scene || '';
+      '<div class="use">'+label+(item.used ? ' · '+item.used+'×' : '')+'</div>';
+    d.title = (item.scene || '') + ((item.tags||[]).length ? '\n\ntags: '+item.tags.join(', ') : '');
     d.querySelector('.x').onclick = e => { e.stopPropagation(); libDelete(item.id); };
     d.onclick = () => {
       if(!LIB_PICK_FOR) return;
@@ -2464,6 +2610,7 @@ function init(){
   bindToggle('batchApiToggle','cb.batchApi','Half price on','Half price off');
 
   $('btnLibrary').onclick = () => { LIB_PICK_FOR = null; openDrawer('drawerLibrary'); renderLibrary(); };
+  $('libSearch').addEventListener('input', e => { LIB_FILTER = e.target.value; renderLibrary(); });
   $('libExport').onclick = exportLibrary;
   $('libImport').onclick = () => $('libFile').click();
   $('libFile').onchange = e => { if(e.target.files[0]) importLibrary(e.target.files[0]); };
@@ -2543,7 +2690,8 @@ function init(){
   refreshDeckChrome();
 
   loadJobs(); renderJobs();
-  libLoad().then(renderLibrary).catch(e=>log('library load failed: '+e.message,'w'));
+  libLoad().then(()=>{ renderLibrary(); setTimeout(libEnrich, 1200); })   // tag older items in the background
+           .catch(e=>log('library load failed: '+e.message,'w'));
 
   restoreProject().then(async ok=>{
     syncControls(); buildStyles();

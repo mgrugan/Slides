@@ -19,7 +19,7 @@ const stub = () => {
     }
     if(u.includes('/batches/test-123')){
       window.__n.poll++;
-      if(window.__jobState !== 'JOB_STATE_SUCCEEDED') return J({name:'batches/test-123', state:window.__jobState});
+      if(window.__jobState !== 'JOB_STATE_SUCCEEDED') return J({name:'batches/test-123', state:window.__jobState, metadata:{state:window.__jobState}});
       return J({name:'batches/test-123', state:'JOB_STATE_SUCCEEDED', dest:{inlinedResponses:
         window.__reqKeys.map(k=>{ hue=(hue+53)%360; return {metadata:{key:k},
           response:{candidates:[{content:{parts:[{inlineData:{mimeType:'image/jpeg', data:mk(hue)}}]}}]}}; })}});
@@ -76,6 +76,11 @@ const job = await p.evaluate(()=>({
   jobRows: document.querySelectorAll('.jobRow').length,
   slideStates: S.batch.flatMap(d=>d.slides).map(s=>s.status).filter(x=>x==='queued').length
 }));
+// state moves pending -> running and the row reflects it
+await p.evaluate(()=>{ window.__jobState = 'JOB_STATE_RUNNING'; });
+await p.click('#jobCheck'); await p.waitForTimeout(800);
+const runningRow = await p.$eval('.jobRow', e=>e.className + ' | ' + e.textContent.trim());
+const note = await p.$eval('#jobsNote', e=>e.textContent.slice(0,60));
 // job completes
 await p.evaluate(()=>{ window.__jobState = 'JOB_STATE_SUCCEEDED'; });
 await p.click('#jobCheck');
@@ -90,5 +95,5 @@ const after = await p.evaluate((before)=>({
 await p.click('#btnLibrary'); await p.waitForTimeout(500);
 await p.screenshot({path:'ui-library.png'});
 const stats = await p.$eval('#libStats', e=>e.textContent);
-console.log(JSON.stringify({lib1, mirrored, lib2, job, after, stats, errs}, null, 1));
+console.log(JSON.stringify({lib1, mirrored, lib2, job, runningRow, note, after, stats, errs}, null, 1));
 await b.close();

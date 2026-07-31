@@ -246,6 +246,11 @@ details summary:hover{color:var(--fg)}
 .jobRow{display:flex;align-items:center;gap:8px;padding:7px 0;font-size:12.5px;color:var(--muted);border-top:1px solid var(--line)}
 .jobRow:first-child{border-top:none}
 .jobRow .sdot{width:6px;height:6px;border-radius:50%;background:var(--warn);flex:0 0 auto}
+.jobRow.running .sdot{background:var(--accent2);animation:pulse 1.6s ease-in-out infinite}
+.jobRow.succeeded .sdot{background:var(--ok)}
+.jobRow.failed .sdot,.jobRow.expired .sdot,.jobRow.cancelled .sdot{background:var(--bad)}
+.jobRow b{color:var(--fg);font-weight:500}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.35}}
 .batchRow canvas{width:44px}
 .batchRow .acts button{width:30px;height:30px}
 #batchSection{margin-top:44px}
@@ -1868,6 +1873,7 @@ async function pollJob(job){
     if(!r.ok) throw new Error('HTTP '+r.status+' '+txt.slice(0,200));
     const j = JSON.parse(txt);
     job.state = j.state || (j.metadata && j.metadata.state) || job.state;
+    job.checked = Date.now();
     const dest = (j.dest && j.dest.inlinedResponses) || (j.response && j.response.inlinedResponses);
     if(dest){
       let got = 0, failed = 0;
@@ -1919,19 +1925,27 @@ function renderJobs(){
   box.innerHTML = '';
   JOBS.slice(-6).reverse().forEach(job=>{
     const mins = Math.round((Date.now() - job.created)/60000);
+    const elapsed = mins < 60 ? mins + ' min' : (mins/60).toFixed(1) + ' h';
+    const state = (job.state || 'JOB_STATE_PENDING').replace('JOB_STATE_','').toLowerCase();
+    const ago = job.checked ? Math.round((Date.now() - job.checked)/1000) : null;
+    const check = ago === null ? 'not checked yet' : ago < 60 ? 'checked '+ago+'s ago' : 'checked '+Math.round(ago/60)+'m ago';
     const d = document.createElement('div');
-    d.className = 'jobRow';
-    d.innerHTML = '<span class="sdot"></span><span class="grow">'+job.count+' images · '+
-      (job.done ? (job.state||'done').replace('JOB_STATE_','').toLowerCase() : 'waiting · '+mins+' min')+'</span>';
+    d.className = 'jobRow ' + state;
+    d.innerHTML = '<span class="sdot"></span><span class="grow">'+job.count+' images · <b>'+state+'</b> · '+elapsed+
+      (job.done ? '' : ' <span style="color:var(--faint)">· '+check+'</span>')+'</span>';
     if(!job.done){
       const c = document.createElement('button'); c.className='btn sm quiet'; c.textContent='Cancel';
       c.onclick = ()=>cancelJob(job); d.appendChild(c);
     }
     box.appendChild(d);
   });
-  $('jobsNote').textContent = live.length
-    ? 'Half price, up to 24h. You can close the page — results land when you come back.'
-    : 'No jobs running.';
+  const oldest = live.length ? Math.min(...live.map(j=>j.created)) : 0;
+  const hrs = oldest ? (Date.now() - oldest)/3600000 : 0;
+  $('jobsNote').textContent = !live.length ? 'No jobs running.'
+    : hrs > 40 ? 'Past 40 hours. Google expires jobs at 48h with no results — consider cancelling and resubmitting in smaller batches.'
+    : hrs > 24 ? 'Past the 24h target. Jobs expire at 48h; results can still arrive before then.'
+    : 'Nothing arrives until the whole job finishes — the count is how many images it holds, not progress. '+
+      'Target is 24h, usually much faster. You can close the page.';
 }
 
 /* ============================ Mode C — batch ============================

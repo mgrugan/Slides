@@ -8,6 +8,8 @@ await p.goto('file:///home/user/Slides/index.html');
 await p.waitForTimeout(800);
 
 const B64 = 'A'.repeat(800);
+const JPEG = '/9j/4AAQSkZJRgABAQEBLAEsAAD' + 'A'.repeat(900);   // real JPEG magic prefix
+const PNG  = 'iVBORw0KGgo' + 'B'.repeat(900);
 const SHAPES = {
   // what the app already handled
   generateContent: {candidates:[{content:{parts:[{text:'HELLO'}]}}]},
@@ -29,6 +31,12 @@ const SHAPES = {
   imgTypedPart:    {output:[{type:'image', mime_type:'image/png', data:B64}]},
   imgNestedImage:  {output:[{content:[{image:{mime_type:'image/webp', data:B64}}]}]},
   imgB64Json:      {data:[{b64_json:B64, mime_type:'image/png'}]},
+  // what interactions actually did: image bytes delivered in a text-ish field
+  imgAsText:       {output:[{content:[{type:'text', text:JPEG}]}]},
+  imgAsContentStr: {output:[{type:'image', content:JPEG}]},
+  imgAsImageStr:   {output:[{image:JPEG}]},
+  imgOddKey:       {result:{media:[{blob:PNG}]}},
+  imgDataUrl:      {output:[{content:[{text:'data:image/jpeg;base64,'+JPEG}]}]},
 };
 
 const res = await p.evaluate(shapes => {
@@ -43,7 +51,7 @@ const res = await p.evaluate(shapes => {
 let pass = 0, fail = [];
 for(const [k,v] of Object.entries(res)){
   const wantImg = k.startsWith('img');
-  const ok = wantImg ? (v.imgs === 1 && v.imgOk)
+  const ok = wantImg ? (v.imgs >= 1 && v.imgOk && !v.text)
            : k === 'echoedInput' ? (v.text === 'HELLO')
            : (v.text === 'HELLO');
   ok ? pass++ : fail.push([k, JSON.stringify(v)]);

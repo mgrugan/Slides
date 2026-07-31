@@ -187,7 +187,9 @@ details summary:hover{color:var(--fg)}
 .tools svg{width:14px;height:14px;stroke:currentColor;fill:none;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
 .state{
   position:absolute;left:0;right:0;bottom:0;padding:7px 10px;font-size:11.5px;letter-spacing:.01em;
-  background:linear-gradient(transparent,#000000cc);color:#fff;display:flex;align-items:center;gap:6px}
+  background:linear-gradient(transparent,#000000cc);color:#fff;display:flex;align-items:center;gap:6px;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.state .sdot{flex:0 0 auto}
 .state.done{display:none}
 .state .sdot{width:5px;height:5px;border-radius:50%;background:currentColor}
 .state.generating{color:#dfe6ff} .state.queued{color:#b9b9c2} .state.failed{color:#ffb4b4}
@@ -823,15 +825,34 @@ function bodyGenerateContent(model, parts, opts){
   }
   return b;
 }
+/* base64 magic prefixes — how to tell an image from prose without being told */
+const IMG_MAGIC = [['/9j/','image/jpeg'], ['iVBORw0KGgo','image/png'], ['R0lGOD','image/gif'],
+                   ['UklGR','image/webp'], ['Qk0','image/bmp'], ['PHN2Zw','image/svg+xml'], ['AAAAI','image/heic']];
+function sniffImage(s){
+  if(typeof s !== 'string' || s.length < 512) return null;
+  const t = s.trim().replace(/^data:([^;,]+);base64,/, '');
+  if(/[^A-Za-z0-9+/=\s]/.test(t.slice(0,120))) return null;      // prose fails this immediately
+  for(const [magic, mime] of IMG_MAGIC) if(t.startsWith(magic)) return mime;
+  return null;
+}
 /* Reads text and images out of a response without caring which shape it arrived in.
    Known containers first; if those come up empty, walk the whole object. */
 function parseResponse(j){
   const out = {text:'', images:[]};
   const texts = [];
-  const pushText = v => { if(typeof v === 'string' && v.trim() && !texts.includes(v)) texts.push(v); };
+  /* Trust the bytes, not the field name: models return image data under text, content,
+     data, image, b64_json… Sniffing the magic prefix works whatever they call it. */
+  const pushText = v => {
+    if(typeof v !== 'string' || !v.trim()) return;
+    const mime = sniffImage(v);
+    if(mime) return pushImg(mime, v);
+    if(!texts.includes(v)) texts.push(v);
+  };
   const pushImg = (mime, data) => {
     if(typeof data !== 'string' || data.length < 64) return;
-    out.images.push(data.startsWith('data:') ? data : 'data:'+(mime||'image/png')+';base64,'+data);
+    const clean = data.trim().replace(/\s+/g,'');
+    out.images.push(clean.startsWith('data:') ? clean
+      : 'data:' + (sniffImage(clean) || mime || 'image/png') + ';base64,' + clean);
   };
   const eat = p => {
     if(!p || typeof p !== 'object') return;
@@ -840,6 +861,10 @@ function parseResponse(j){
       pushImg(inl.mime_type || inl.mimeType || inl.media_type, inl.data || inl.b64_json || inl.base64);
     if(typeof p.data === 'string' && /image/i.test(p.type || p.mime_type || p.mimeType || ''))
       pushImg(p.mime_type || p.mimeType, p.data);
+    for(const k in p){                                   // any string that IS an image, wherever it sits
+      const v = p[k];
+      if(typeof v === 'string' && sniffImage(v)) pushImg(p.mime_type || p.mimeType, v);
+    }
     pushText(p.text); pushText(p.output_text);
     if(typeof p.content === 'string') pushText(p.content);
     if(Array.isArray(p.content)) p.content.forEach(eat);
@@ -863,8 +888,9 @@ function parseResponse(j){
       if(/^(input|request|prompt|usage|safety|citation|metadata|grounding)/i.test(k)) continue;   // don't read back our own request
       const v = node[k];
       if(typeof v === 'string'){
-        if(NOISE.test(k)) continue;
-        if((TEXTY.test(k) || inTexty) && v.trim().length > 1) pushText(v);
+        if(sniffImage(v)) pushImg(node.mime_type || node.mimeType, v);      // bytes win over key names
+        else if(NOISE.test(k)) continue;
+        else if((TEXTY.test(k) || inTexty) && v.trim().length > 1) pushText(v);
         else if(/^(data|b64_json|base64|image_bytes)$/i.test(k) && v.length > 512) pushImg(node.mime_type || node.mimeType, v);
       } else deepWalk(v, inTexty || TEXTY.test(k));
     }
@@ -1512,7 +1538,10 @@ async function genImage(slide, single, attempt){
   setStatus(slide,'generating');
   try{
     const r = await callModel({model: cfg().imageModel, parts:[{type:'text', text: imagePrompt(slide)}], wantImage:true, aspect:S.profile.aspect_ratio});
-    if(!r.images.length) throw new Error('no image in response' + (r.text ? ' — model said: '+r.text.slice(0,200) : ''));
+    if(!r.images.length){
+      const said = r.text && !sniffImage(r.text) ? ' — model said: '+r.text.slice(0,140) : '';
+      throw new Error('no image in response' + said);
+    }
     setImage(slide, r.images[0], autosave);
     setStatus(slide,'done');
   }catch(e){

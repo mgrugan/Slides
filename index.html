@@ -1908,6 +1908,12 @@ async function pollJob(job){
         got++;
       });
       job.done = true;
+      S.batch.forEach(d=>{                      // decks the job just filled are complete now
+        if(!d.slides.length) return;
+        d.status = d.slides.every(s=>s.img) ? 'done'
+          : d.slides.some(s=>s.status === 'queued') ? 'written' : 'partial';
+      });
+      renderBatch();
       log('batch job finished: '+got+' images in'+(failed?', '+failed+' failed':'')+
           (skipped?', '+skipped+' kept as-is and sent to the library':''), failed ? 'w' : 'o');
       autosave();
@@ -2019,11 +2025,20 @@ async function runBatch(){
   BATCH_STOP = false;
   $('batchStop').classList.remove('hide');
   $('runBatch').disabled = true;
-  S.batch = hooks.map(h=>({id:uid(), hook:h, n:deckLen(h), slides:[], caption:'', status:'queued', error:''}));
+  /* Decks whose images are still owed by a live job must survive a new run —
+     otherwise results land nowhere and paid-for images are lost. */
+  const awaiting = S.batch.filter(d=>d.slides.some(s=>s._job && JOBS.some(j=>j.name === s._job && !j.done)));
+  const newDecks = hooks.map(h=>({id:uid(), hook:h, n:deckLen(h), slides:[], caption:'', status:'queued', error:''}));
+  if(awaiting.length){
+    S.batch = awaiting.concat(newDecks);
+    log('kept '+awaiting.length+' deck'+(awaiting.length>1?'s':'')+' still waiting on a batch job — new decks added below','w');
+  } else {
+    S.batch = newDecks;
+  }
   S.openBatch = -1;
   renderBatch();
 
-  await runQueue(S.batch, 2, async deck => {
+  await runQueue(newDecks, 2, async deck => {
     if(BATCH_STOP) return;
     deck.status = 'writing'; renderBatchRow(deck);
     try{
@@ -2045,22 +2060,23 @@ async function runBatch(){
   });
 
   if($('batchImgToggle').dataset.on === '1' && !BATCH_STOP){
-    const all = S.batch.filter(d=>d.status === 'written').flatMap(d=>d.slides);
+    // only this run's decks — decks retained from an earlier run are already paid for
+    const all = newDecks.filter(d=>d.status === 'written').flatMap(d=>d.slides);
     all.forEach(s=>{ s.status = 'queued'; });
-    const {fresh, reused} = planImages(all);
+    const {fresh: needGen, reused} = planImages(all);
     for(const [s, item] of reused) await useFromLibrary(s, item);
     if(reused.length) log(reused.length + ' backgrounds taken from the library — free','o');
-    if(fresh.length){
+    if(needGen.length){
       if($('batchApiToggle').dataset.on === '1'){
-        try{ await submitBatchJob(fresh); }
+        try{ await submitBatchJob(needGen); }
         catch(e){ log('batch job could not be submitted: '+apiError(e)+' — falling back to normal requests','w');
-                  await runQueue(fresh, 3, async s => { if(!BATCH_STOP){ await genImage(s); batchProgress(); } }); }
+                  await runQueue(needGen, 3, async s => { if(!BATCH_STOP){ await genImage(s); batchProgress(); } }); }
       } else {
-        await runQueue(fresh, 3, async s => { if(!BATCH_STOP){ await genImage(s); batchProgress(); } });
+        await runQueue(needGen, 3, async s => { if(!BATCH_STOP){ await genImage(s); batchProgress(); } });
       }
     }
   }
-  S.batch.forEach(d=>{
+  newDecks.forEach(d=>{
     if(d.status === 'written') d.status = d.slides.every(s=>s.img) ? 'done'
       : d.slides.some(s=>s.status === 'queued') ? 'written' : 'partial';
   });

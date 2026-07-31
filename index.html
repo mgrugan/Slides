@@ -813,6 +813,11 @@ const S = {
   saved: []            // saved profiles from localStorage
 };
 const IMG_CACHE = {};   // slide.id -> HTMLImageElement
+/* drop only decoded images no deck still refers to — batch decks keep theirs */
+function pruneImageCache(){
+  const live = new Set(S.slides.map(s=>s.id).concat(S.batch.flatMap(d=>d.slides.map(s=>s.id))));
+  for(const k in IMG_CACHE) if(!live.has(k)) delete IMG_CACHE[k];
+}
 
 /* ============================ config / persistence ============================ */
 const LS = {
@@ -913,6 +918,7 @@ function libPick(exclude, p){
 async function useFromLibrary(slide, item){
   setImage(slide, item.data, autosave);
   setStatus(slide,'done');
+  slide._job = null;
   item.used = (item.used||0) + 1;
   item.lastUsed = Date.now();
   libSave(item);
@@ -1365,7 +1371,7 @@ function buildGrid(){
     d.querySelector('[data-a=file]').onchange = e => {
       const f = e.target.files[0]; if(!f) return;
       const rd = new FileReader();
-      rd.onload = () => { setImage(s, rd.result, autosave); setStatus(s,'done'); };
+      rd.onload = () => { setImage(s, rd.result, autosave); setStatus(s,'done'); s._job = null; };
       rd.readAsDataURL(f);
     };
     d.querySelector('[data-a=dl]').onclick = () => downloadSlide(i);
@@ -1670,6 +1676,7 @@ async function generateDeck(){
   }
 }
 function loadDeck(j){
+  S.openBatch = -1;          // a new deck detaches the editor from any batch deck it was showing
   const arr = Array.isArray(j.slides) ? j.slides : [];
   S.slides = arr.map((s,i)=>({
     id: uid(),
@@ -1679,7 +1686,7 @@ function loadDeck(j){
   }));
   S.caption = String(j.caption||'');
   $('capInput').value = S.caption;
-  for(const k in IMG_CACHE) delete IMG_CACHE[k];
+  pruneImageCache();
   buildGrid(); autosave();
 }
 
@@ -1726,6 +1733,7 @@ async function genImage(slide, single, attempt){
     }
     setImage(slide, r.images[0], autosave);
     setStatus(slide,'done');
+    slide._job = null;                 // a manual result outranks a pending job's
     keepInLibrary(slide, r.images[0]);
   }catch(e){
     const q = quotaInfo(e);
@@ -1756,8 +1764,11 @@ async function runQueue(items, limit, worker){
 }
 async function generateAllImages(){
   if(!S.slides.length) return;
-  S.slides.forEach(s=>{ if(s.status !== 'done' || !s.img) setStatus(s,'queued'); });
-  const todo = S.slides.filter(s=>s.status === 'queued');
+  const onJob = S.slides.filter(s=>s._job && JOBS.some(j=>j.name === s._job && !j.done));
+  if(onJob.length) log(onJob.length+' slide'+(onJob.length>1?'s are':' is')+' already paid for in a batch job — skipping '+
+    (onJob.length>1?'them':'it')+'. Use Regenerate on a card to override.','w');
+  S.slides.forEach(s=>{ if((s.status !== 'done' || !s.img) && !onJob.includes(s)) setStatus(s,'queued'); });
+  const todo = S.slides.filter(s=>s.status === 'queued' && !onJob.includes(s));
   const {fresh, reused} = planImages(todo);
   for(const [s, item] of reused) await useFromLibrary(s, item);
   if(reused.length) log(reused.length + ' background' + (reused.length>1?'s':'') + ' taken from the library — free','o');
@@ -1858,7 +1869,7 @@ async function submitBatchJob(slides){
   JOBS.push({name, model, created: Date.now(), count: slides.length, state:'JOB_STATE_PENDING',
              slideIds: slides.map(s=>s.id)});
   saveJobs(); renderJobs(); startJobPolling();
-  slides.forEach(s=>setStatus(s,'queued','waiting on the batch job'));
+  slides.forEach(s=>{ s._job = name; setStatus(s,'queued','waiting on the batch job'); });
   log('batch job submitted: '+slides.length+' images at half price — results land here when Google finishes','o');
   return name;
 }
@@ -1876,22 +1887,29 @@ async function pollJob(job){
     job.checked = Date.now();
     const dest = (j.dest && j.dest.inlinedResponses) || (j.response && j.response.inlinedResponses);
     if(dest){
-      let got = 0, failed = 0;
+      let got = 0, failed = 0, skipped = 0;
       dest.forEach((item, i)=>{
         const key = (item.metadata && item.metadata.key) || item.key || job.slideIds[i];
         const slide = findSlide(key);
         if(!slide) return;
-        if(item.error){ failed++; setStatus(slide,'failed', apiError({raw: JSON.stringify(item.error)})); return; }
+        if(item.error){ failed++; if(slide._job === job.name) setStatus(slide,'failed', apiError({raw: JSON.stringify(item.error)})); return; }
         const out = parseResponse(item.response || item);
-        if(out.images.length){
-          setImage(slide, out.images[0], autosave);
-          setStatus(slide,'done');
+        if(!out.images.length){ failed++; if(slide._job === job.name) setStatus(slide,'failed','no image in the batch result'); return; }
+        if(slide._job !== job.name){
+          // filled by hand while the job ran — keep the work that's on screen, bank the batch image
           keepInLibrary(slide, out.images[0]);
-          got++;
-        } else { failed++; setStatus(slide,'failed','no image in the batch result'); }
+          skipped++;
+          return;
+        }
+        setImage(slide, out.images[0], autosave);
+        setStatus(slide,'done');
+        slide._job = null;
+        keepInLibrary(slide, out.images[0]);
+        got++;
       });
       job.done = true;
-      log('batch job finished: '+got+' images in'+(failed?', '+failed+' failed':''), failed ? 'w' : 'o');
+      log('batch job finished: '+got+' images in'+(failed?', '+failed+' failed':'')+
+          (skipped?', '+skipped+' kept as-is and sent to the library':''), failed ? 'w' : 'o');
       autosave();
     } else if(/FAILED|CANCELLED|EXPIRED/.test(job.state || '')){
       job.done = true;
@@ -2488,7 +2506,7 @@ function init(){
         S.profile = p.profile || S.profile; S.styleKey = p.styleKey || S.styleKey;
         S.caption = p.caption || ''; $('capInput').value = S.caption;
         S.slides = (p.slides||[]).map(s=>({...s, id:s.id||uid(), status:s.img?'done':''}));
-        for(const k in IMG_CACHE) delete IMG_CACHE[k];
+        pruneImageCache();
         syncControls(); buildStyles(); await fontReady(S.profile); buildGrid();
         S.slides.forEach(s=>{ if(s.img) setImage(s, s.img); });
         autosave(); log('project imported','o');
@@ -2500,7 +2518,7 @@ function init(){
     S.slides.push({id:uid(), kind:S.slides.length?'slide':'hook', title:'New slide', body:'', scene:'', img:'', status:''});
     buildGrid(); autosave();
   };
-  $('clearDeck').onclick = () => { if(confirm('Clear the deck?')){ S.slides = []; S.caption=''; $('capInput').value=''; OPEN.clear(); buildGrid(); autosave(); } };
+  $('clearDeck').onclick = () => { if(confirm('Clear the deck?')){ S.openBatch = -1; S.slides = []; S.caption=''; $('capInput').value=''; OPEN.clear(); buildGrid(); renderBatch(); autosave(); } };
 
   bindControls();
   syncControls();

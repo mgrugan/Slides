@@ -235,6 +235,15 @@ details summary:hover{color:var(--fg)}
 .styleCard .acts button{width:26px;height:26px;border-radius:6px;color:var(--muted)}
 .styleCard .acts button:hover{background:var(--raised2);color:var(--fg)}
 
+.batchRow canvas{width:44px}
+.batchRow .acts button{width:30px;height:30px}
+#batchSection{margin-top:44px}
+#batchHooks{background:none;border:none;padding:14px 14px 6px;font-size:14.5px;line-height:1.6;min-height:120px;
+  max-height:340px;overflow-y:auto;font-family:inherit;letter-spacing:-.01em}
+#batchStatus{white-space:nowrap}
+.batchRow .acts button{width:auto;height:28px;padding:0 10px;font-size:12px;display:flex;align-items:center;gap:5px}
+#batchHooks:focus{background:none}
+#batchHooks::placeholder{color:var(--faint)}
 #log{
   font:11.5px/1.6 ui-monospace,SFMono-Regular,Menlo,monospace;color:var(--faint);
   background:var(--bg);border:1px solid var(--line);border-radius:var(--r3);padding:10px;
@@ -286,6 +295,7 @@ details summary:hover{color:var(--fg)}
     <div class="seg" id="modeTabs">
       <button data-mode="A" class="on">Write from a hook</button>
       <button data-mode="B">Match a style</button>
+      <button data-mode="C">Batch</button>
     </div>
 
     <div id="modeA">
@@ -355,6 +365,37 @@ details summary:hover{color:var(--fg)}
         <button id="saveProfile" class="btn sm">Save to styles</button>
       </div>
     </div>
+
+    <div id="modeC" class="hide">
+      <div class="sheet">
+        <textarea id="batchHooks" rows="7" placeholder="One hook per line — each becomes its own deck."></textarea>
+        <div class="composerBar">
+          <button id="batchSuggest" class="btn quiet sm" title="Fill with hooks from the library">
+            <svg viewBox="0 0 24 24" style="width:14px;height:14px;stroke:currentColor;fill:none;stroke-width:1.6;stroke-linejoin:round"><path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z"/></svg>
+            Suggest 10
+          </button>
+          <select id="batchCount" title="Slides per deck"></select>
+          <button id="batchImgToggle" class="btn quiet sm" data-on="1">Images on</button>
+          <div class="spacer"></div>
+          <span id="batchStatus" class="tiny muted"></span>
+          <button id="batchStop" class="btn sm hide">Stop</button>
+          <button id="runBatch" class="btn primary">Generate batch</button>
+        </div>
+      </div>
+      <div class="hintline">Every deck uses the current style · a leading number sets that deck's length</div>
+    </div>
+  </section>
+
+
+  <section id="batchSection" class="hide">
+    <div class="deckHead">
+      <h2><span id="batchTally"></span></h2>
+      <span id="batchProgress" class="tiny" style="color:var(--faint)"></span>
+      <div class="spacer"></div>
+      <button id="batchDownloadAll" class="btn sm">Download all</button>
+      <button id="batchClear" class="btn sm quiet">Clear</button>
+    </div>
+    <div id="batchList" class="styleList"></div>
   </section>
 
   <section id="deckSection" class="hide">
@@ -719,6 +760,8 @@ const S = {
   slides: [],
   caption: '',
   examples: [],        // {dataUrl, b64}
+  batch: [],           // [{id, hook, n, slides, caption, status, error}]
+  openBatch: -1,       // which batch deck is loaded in the editor
   candidates: [],
   lastRaw: '',
   lastDeckReq: null,
@@ -775,15 +818,18 @@ function idb(){
 async function idbPut(k,v){ const db = await idb(); return new Promise((res,rej)=>{ const t=db.transaction('kv','readwrite'); t.objectStore('kv').put(v,k); t.oncomplete=res; t.onerror=()=>rej(t.error); }); }
 async function idbGet(k){ const db = await idb(); return new Promise((res,rej)=>{ const t=db.transaction('kv','readonly'); const q=t.objectStore('kv').get(k); q.onsuccess=()=>res(q.result); q.onerror=()=>rej(q.error); }); }
 
+const slimSlide = (s, withImages) => ({id:s.id, kind:s.kind, title:s.title, body:s.body, scene:s.scene,
+  status:s.status, img: withImages ? (s.img||'') : ''});
 function projectJSON(withImages){
   return {
-    v:1, profile:S.profile, styleKey:S.styleKey, caption:S.caption,
-    slides:S.slides.map(s=>({id:s.id,kind:s.kind,title:s.title,body:s.body,scene:s.scene,status:s.status,
-      img: withImages ? (s.img||'') : ''}))
+    v:2, profile:S.profile, styleKey:S.styleKey, caption:S.caption, openBatch:S.openBatch,
+    slides:S.slides.map(s=>slimSlide(s, withImages)),
+    batch: withImages ? S.batch.map(d=>({...d, slides:d.slides.map(s=>slimSlide(s,true))})) : []
   };
 }
 const autosave = debounce(async ()=>{
   try{
+    stashEditorDeck();          // keep the open batch deck's caption in sync
     localStorage.setItem(LS.project, JSON.stringify(projectJSON(false)));
     await idbPut('project', projectJSON(true));
     $('saveState').textContent = 'saved ' + new Date().toLocaleTimeString();
@@ -797,6 +843,9 @@ async function restoreProject(){
   if(!p) return false;
   S.profile = p.profile || S.profile; S.styleKey = p.styleKey || S.styleKey;
   S.caption = p.caption||''; S.slides = (p.slides||[]).map(s=>({...s, status:s.img?'done':(s.status||'')}));
+  S.batch = (p.batch||[]).map(d=>({...d, slides:(d.slides||[]).map(s=>({...s}))}));
+  S.openBatch = typeof p.openBatch === 'number' ? p.openBatch : -1;
+  S.batch.forEach(d=>d.slides.forEach(s=>{ if(s.img) cacheImage(s); }));   // so thumbnails and ZIP work after a reload
   $('capInput').value = S.caption;
   return true;
 }
@@ -1104,11 +1153,14 @@ function displayTitle(slide, p){
 }
 function blockHeight(size, n, treat){ return n * (treat === 'label-boxes' ? size*1.42 : size*1.20); }
 
-function renderSlide(slide, canvas, p){
+function renderSlide(slide, canvas, p, scale){
   p = p || S.profile;
+  scale = scale || 1;
   const [W,H] = ASPECTS[p.aspect_ratio] || ASPECTS['9:16'];
-  if(canvas.width !== W || canvas.height !== H){ canvas.width = W; canvas.height = H; }
+  const cw = Math.round(W*scale), ch = Math.round(H*scale);
+  if(canvas.width !== cw || canvas.height !== ch){ canvas.width = cw; canvas.height = ch; }
   const ctx = canvas.getContext('2d');
+  ctx.setTransform(scale,0,0,scale,0,0);      // draw in full-size units, paint small
   ctx.clearRect(0,0,W,H);
 
   const img = IMG_CACHE[slide.id];
@@ -1150,10 +1202,19 @@ function renderSlide(slide, canvas, p){
 function setImage(slide, dataUrl, cb){
   slide.img = dataUrl;
   const im = new Image();
-  im.onload = () => { IMG_CACHE[slide.id] = im; drawOne(slide.id); cb && cb(); };
+  im.onload = () => { IMG_CACHE[slide.id] = im; drawOne(slide.id); renderBatchRow(slide._deck); cb && cb(); };
   im.onerror = () => log('image decode failed for slide '+slide.id,'e');
   im.src = dataUrl;
   IMG_CACHE[slide.id] = im;
+}
+/* decode a stored image back into the cache without touching the DOM */
+function cacheImage(slide){
+  return new Promise(res=>{
+    const im = new Image();
+    im.onload = im.onerror = () => { IMG_CACHE[slide.id] = im; res(); };
+    im.src = slide.img;
+    IMG_CACHE[slide.id] = im;
+  });
 }
 function drawOne(id){
   const s = S.slides.find(x=>x.id===id); if(!s) return;
@@ -1415,7 +1476,7 @@ function applyHook(text){
   $('suggestFrom').title = S.lastPick ? S.lastPick.t : '';
 }
 /* Accepts a JSON array, an object wrapping one, or plain/numbered lines — models drift. */
-function parseHookList(text){
+function parseHookList(text, max){
   let out = [];
   try{
     let j = extractJSON(text, true);
@@ -1432,7 +1493,7 @@ function parseHookList(text){
   }
   return out.map(s=>String(s).replace(/^["']|["']$/g,'').trim())
             .filter(s => s.length > 8 && !/\(insert/i.test(s))
-            .slice(0,3);
+            .slice(0, max || 3);
 }
 async function fetchHooks(){
   const cats = enabledCats();
@@ -1545,7 +1606,8 @@ async function genImage(slide, single, attempt){
     setImage(slide, r.images[0], autosave);
     setStatus(slide,'done');
   }catch(e){
-    const q = quotaInfo(e), n = S.slides.indexOf(slide)+1;
+    const q = quotaInfo(e);
+    const n = S.slides.indexOf(slide) >= 0 ? S.slides.indexOf(slide)+1 : (slide._label || '?');
     if(q.is429 && !q.zero && attempt < 2){          // transient rate limit: hold everything, then retry
       holdOff(q.wait*1000 + 400);
       setStatus(slide,'queued', 'rate limited · retrying in '+q.wait+'s');
@@ -1583,6 +1645,196 @@ async function regenAllImages(){
   await runQueue(S.slides.slice(), 3, genImage);
   $('imageryNotice').classList.add('hide');
   autosave();
+}
+
+/* ============================ Mode C — batch ============================
+   One hook per line, one deck per hook, all in the current style. Decks are written
+   two at a time; images then run through the same gate and concurrency cap as a single
+   deck, so a batch is not a way to hammer the API harder than the app already does. */
+let BATCH_STOP = false;
+const slug = s => String(s||'deck').toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'').slice(0,42) || 'deck';
+const deckLen = hook => {
+  const m = String(hook).trim().match(/^(\d{1,2})\b/);
+  const n = m ? +m[1] + 1 : 0;
+  return (n >= 3 && n <= 13) ? n : +$('batchCount').value;
+};
+
+async function suggestBatchHooks(){
+  const n = 10, cats = enabledCats();
+  const pool = HOOK_DATA.filter(h=>cats.includes(h.c));
+  const niche = $('niche').value.trim();
+  if(!niche){ $('modeTabs').querySelector('[data-mode=A]').click(); $('suggestPanel').classList.remove('hide'); $('niche').focus(); return; }
+  const picks = [];
+  while(picks.length < n && pool.length){
+    const p = pool[Math.floor(Math.random()*pool.length)];
+    if(!picks.includes(p)) picks.push(p);
+  }
+  const btn = $('batchSuggest'), was = btn.innerHTML;
+  btn.disabled = true; btn.textContent = 'Thinking…';
+  try{
+    const sys =
+'You turn viral hook templates into cover-slide headlines for static image carousels.\n' +
+'NICHE: '+niche+'\nSTYLE VOICE: '+(S.profile.voice||'direct, plainspoken')+'\n\n' +
+'Adapt each template below into one headline. Rules for every line:\n' +
+'- Fill every (insert ...) placeholder with something concrete to the niche. No placeholder survives.\n' +
+'- Mutate the template: change wording, rhythm and framing so it reads native to the niche.\n' +
+'- These were written for talking-head video. Rewrite anything spoken or direct-to-camera into something that works as a static cover slide seen for half a second. If a template cannot survive that, write a different hook in the same spirit.\n' +
+'- Never invent a statistic, a study or a number you are not confident is real.\n' +
+'- Each must be a different angle from the others. Max ~14 words, no emoji, no hashtags.\n\n' +
+'TEMPLATES:\n' + picks.map((p,i)=>(i+1)+'. ['+p.c+'] '+p.t).join('\n') + '\n\n' +
+'Return ONLY a JSON array of exactly '+picks.length+' strings, in the same order.';
+    const r = await callModel({model: cfg().textModel, parts:[{type:'text', text:sys}]});
+    S.lastRaw = r.text;
+    const list = parseHookList(r.text, n);
+    if(!list.length) throw new Error('could not read hooks out of the reply — see Console in Settings');
+    $('batchHooks').value = list.join('\n');
+    $('batchHooks').dispatchEvent(new Event('input'));
+    log(list.length + ' hooks ready — edit them, then generate','o');
+  }catch(e){ log('batch suggest failed: '+apiError(e),'e'); }
+  btn.disabled = false; btn.innerHTML = was;
+}
+
+async function runBatch(){
+  const hooks = $('batchHooks').value.split('\n').map(s=>s.trim()).filter(Boolean).slice(0,20);
+  if(!hooks.length) return log('add at least one hook, one per line','w');
+  BATCH_STOP = false;
+  $('batchStop').classList.remove('hide');
+  $('runBatch').disabled = true;
+  S.batch = hooks.map(h=>({id:uid(), hook:h, n:deckLen(h), slides:[], caption:'', status:'queued', error:''}));
+  S.openBatch = -1;
+  renderBatch();
+
+  await runQueue(S.batch, 2, async deck => {
+    if(BATCH_STOP) return;
+    deck.status = 'writing'; renderBatchRow(deck);
+    try{
+      const r = await callModel({model: cfg().textModel, parts:[{type:'text', text: deckPrompt(deck.hook, deck.n)}]});
+      const j = extractJSON(r.text, false);
+      deck.slides = (Array.isArray(j.slides) ? j.slides : []).map((s,i)=>({
+        id: uid(), kind: (i === 0 || s.kind === 'hook') ? 'hook' : 'slide',
+        title: String(s.title||''), body: String(s.body||''), scene: String(s.scene||''),
+        img:'', status:'', _deck: deck, _label: deck.hook.slice(0,28)
+      }));
+      if(!deck.slides.length) throw new Error('no slides in the reply');
+      deck.caption = String(j.caption||'');
+      deck.status = 'written';
+    }catch(e){
+      deck.status = 'failed'; deck.error = apiError(e);
+      log('batch deck failed ("'+deck.hook.slice(0,40)+'"): '+apiError(e),'e');
+    }
+    renderBatchRow(deck); batchProgress(); autosave();
+  });
+
+  if($('batchImgToggle').dataset.on === '1' && !BATCH_STOP){
+    const jobs = S.batch.filter(d=>d.status === 'written').flatMap(d=>d.slides);
+    jobs.forEach(s=>{ s.status = 'queued'; });
+    await runQueue(jobs, 3, async s => {
+      if(BATCH_STOP) return;
+      await genImage(s);
+      batchProgress();
+    });
+  }
+  S.batch.forEach(d=>{
+    if(d.status === 'written') d.status = d.slides.every(s=>s.img) ? 'done' : 'partial';
+  });
+  renderBatch(); batchProgress(); autosave();
+  $('batchStop').classList.add('hide');
+  $('runBatch').disabled = false;
+  if(!BATCH_STOP) log('batch finished: ' + S.batch.filter(d=>d.status==='done').length + ' of ' + S.batch.length + ' complete','o');
+}
+
+function batchProgress(){
+  const imgs = S.batch.flatMap(d=>d.slides);
+  const done = imgs.filter(s=>s.img).length;
+  const written = S.batch.filter(d=>d.slides.length).length;
+  $('batchProgress').textContent = S.batch.length
+    ? written + '/' + S.batch.length + ' written' + (imgs.length ? ' · ' + done + '/' + imgs.length + ' images' : '')
+    : '';
+  const running = !$('batchStop').classList.contains('hide');
+  $('batchStatus').textContent = running ? $('batchProgress').textContent : '';   // header already carries it
+}
+function renderBatch(){
+  const box = $('batchList'); box.innerHTML = '';
+  $('batchSection').classList.toggle('hide', !S.batch.length);
+  $('batchTally').textContent = S.batch.length ? S.batch.length + ' decks' : '';
+  S.batch.forEach((d,i)=>{
+    const row = document.createElement('div');
+    row.className = 'styleCard batchRow' + (i === S.openBatch ? ' on' : '');
+    row.dataset.deck = d.id;
+    box.appendChild(row);
+    renderBatchRow(d);
+  });
+}
+function renderBatchRow(deck){
+  if(!deck) return;
+  const i = S.batch.indexOf(deck);
+  const row = document.querySelector('[data-deck="'+deck.id+'"]');
+  if(!row || i < 0) return;
+  const imgs = deck.slides.filter(s=>s.img).length;
+  const state = deck.status === 'failed' ? deck.error || 'failed'
+    : deck.status === 'writing' ? 'writing…'
+    : deck.slides.length ? deck.slides.length + ' slides · ' + imgs + '/' + deck.slides.length + ' images'
+    : 'queued';
+  row.innerHTML =
+    '<canvas></canvas>'+
+    '<div style="min-width:0"><div class="nm" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+
+      String(i+1).padStart(2,'0')+' · '+deck.hook+'</div><div class="ar">'+state+'</div></div>'+
+    '<div class="acts" style="opacity:1">'+
+      '<button data-a="open" title="Open in the editor">Open</button>'+
+      '<button data-a="zip" title="Download this deck">'+svg(ICON.dl)+'ZIP</button>'+
+    '</div>';
+  const cv = row.querySelector('canvas');
+  if(deck.slides.length) renderSlide(deck.slides[0], cv, S.profile, 0.07);   // thumbnail-sized render
+  else { cv.width = 54; cv.height = 96; }
+  row.querySelector('[data-a=open]').onclick = e => { e.stopPropagation(); openBatchDeck(i); };
+  row.querySelector('[data-a=zip]').onclick = e => { e.stopPropagation(); downloadDecks([deck]); };
+  row.onclick = () => openBatchDeck(i);
+}
+/* the editor only ever holds one deck: park the current one, load the chosen one */
+function stashEditorDeck(){
+  if(S.openBatch < 0 || !S.batch[S.openBatch]) return;
+  const d = S.batch[S.openBatch];
+  d.slides = S.slides; d.caption = S.caption;
+}
+async function openBatchDeck(i){
+  const d = S.batch[i]; if(!d || !d.slides.length) return;
+  stashEditorDeck();
+  S.openBatch = i;
+  S.slides = d.slides; S.caption = d.caption;
+  $('capInput').value = S.caption;
+  S.slides.forEach(s=>{ if(s.img && !IMG_CACHE[s.id]) cacheImage(s); });
+  buildGrid(); renderBatch(); autosave();
+  $('deckSection').scrollIntoView({behavior:'smooth', block:'start'});
+}
+async function downloadDecks(decks){
+  const list = decks.filter(d=>d.slides.length);
+  if(!list.length) return log('nothing to download yet','w');
+  stashEditorDeck();
+  try{
+    if(!window.JSZip) await loadScript('https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js');
+    const zip = new JSZip();
+    list.forEach((d,i)=>{
+      const n = S.batch.indexOf(d) + 1 || i + 1;
+      const folder = zip.folder(String(n).padStart(2,'0') + '_' + slug(d.hook));
+      d.slides.forEach((s,k)=>{
+        const c = document.createElement('canvas');
+        renderSlide(s, c, S.profile);
+        folder.file(String(k+1).padStart(2,'0')+'.jpg', c.toDataURL('image/jpeg',0.92).split(',')[1], {base64:true});
+      });
+      if(d.caption) folder.file('caption.txt', d.caption);
+    });
+    zip.file('captions.txt', list.map((d,i)=>(i+1)+'. '+d.hook+'\n'+(d.caption||'')+'\n').join('\n'));
+    const blob = await zip.generateAsync({type:'blob'});
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = list.length === 1 ? slug(list[0].hook)+'.zip' : 'carousels-'+list.length+'-decks.zip';
+    a.click();
+    setTimeout(()=>URL.revokeObjectURL(a.href), 8000);
+    log('zipped '+list.length+' deck'+(list.length>1?'s':''),'o');
+  }catch(e){
+    log('ZIP failed: '+e.message+' — the zip library loads from a CDN, so this one needs a connection. '+
+        'Open a deck and use the per-slide JPEG buttons in the meantime.','e');
+  }
 }
 
 /* ============================ Mode B — clone ============================ */
@@ -1773,7 +2025,12 @@ function setConn(state){          // 'on' | 'err' | ''
 /* ============================ wiring ============================ */
 function init(){
   loadSettings();
-  for(let i=2;i<=13;i++){ const o = document.createElement('option'); o.value = i; o.textContent = i + ' slides'; if(i===7) o.selected = true; $('slideCount').appendChild(o); }
+  for(let i=2;i<=13;i++){
+    const o = document.createElement('option'); o.value = i; o.textContent = i + ' slides'; if(i===7) o.selected = true;
+    $('slideCount').appendChild(o);
+    $('batchCount').appendChild(o.cloneNode(true));
+  }
+  $('batchCount').value = 7;
   $('hookCount').textContent = '· ' + HOOK_DATA.length + ' templates';
   buildCats();
 
@@ -1821,6 +2078,7 @@ function init(){
       b.classList.add('on');
       $('modeA').classList.toggle('hide', b.dataset.mode !== 'A');
       $('modeB').classList.toggle('hide', b.dataset.mode !== 'B');
+      $('modeC').classList.toggle('hide', b.dataset.mode !== 'C');
       if(b.dataset.mode === 'B' && !$('profileForm').children.length) buildProfileForm();
     };
   });
@@ -1838,6 +2096,25 @@ function init(){
   $('dismissNotice').onclick = () => $('imageryNotice').classList.add('hide');
   $('showRaw').onclick = () => { log('raw model output:\n' + (S.lastRaw||'(none)'), 'w'); };
   $('retryDeck').onclick = generateDeck;
+
+  $('batchHooks').addEventListener('input', e => {
+    e.target.style.height = 'auto';
+    e.target.style.height = Math.min(340, Math.max(120, e.target.scrollHeight)) + 'px';
+  });
+  $('batchSuggest').onclick = suggestBatchHooks;
+  $('runBatch').onclick = runBatch;
+  $('batchStop').onclick = () => { BATCH_STOP = true; log('stopping after the requests already in flight','w'); };
+  $('batchImgToggle').onclick = () => {
+    const b = $('batchImgToggle');
+    b.dataset.on = b.dataset.on === '1' ? '0' : '1';
+    b.textContent = b.dataset.on === '1' ? 'Images on' : 'Images off';
+    b.classList.toggle('quiet', b.dataset.on === '1');
+  };
+  $('batchDownloadAll').onclick = () => downloadDecks(S.batch);
+  $('batchClear').onclick = () => {
+    if(!confirm('Clear all '+S.batch.length+' decks?')) return;
+    S.batch = []; S.openBatch = -1; renderBatch(); batchProgress(); autosave();
+  };
 
   $('fileInput').onchange = e => addExamples(e.target.files);
   const dz = $('drop');
@@ -1900,6 +2177,7 @@ function init(){
     syncControls(); buildStyles();
     await fontReady(S.profile);
     buildGrid();
+    renderBatch(); batchProgress();
     if(ok){
       S.slides.forEach(s=>{ if(s.img) setImage(s, s.img); });
       $('saveState').textContent = 'restored';

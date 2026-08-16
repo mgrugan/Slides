@@ -27,12 +27,15 @@ const stub = () => {
     }
     if(/documentary fact carousel about/.test(txt)){
       window.__n.decks++;
+      window.__tones = window.__tones || [];
+      window.__tones.push(/IN COLOUR/.test(txt) ? 'colour' : 'mono');
       const subj = (txt.match(/carousel about: (.+)/)||[])[1].split('\n')[0];
       const n = +(txt.match(/Write a (\d+)-slide/)||[])[1];
       const slides = Array.from({length:n},(_,i)=> i===0
         ? {kind:'hook', title:'He fought WWII with a longbow and a broadsword', scene:'archival beach landing'}
         : i===1 ? {kind:'slide', title:'No one knew.', body:'Lt Col John Churchill refused to fight like a normal soldier. He carried a broadsword, a longbow and bagpipes into every battle.', scene:'portrait'}
-        : {kind:'slide', title:'Beat number '+i, body:'A documented thing happened at this point in the story. It was verified afterwards by records.', scene:'archival scene '+i});
+        : {kind:'slide', title:'Beat number '+i, body:'A documented thing happened at this point in the story. It was verified afterwards by records.', scene:'archival scene '+i,
+           tone: (/IN COLOUR/.test(txt) ? 'colour' : (i===n-1 ? 'colour' : 'mono'))});
       return J({output:[{content:[{type:'output_text', text: JSON.stringify({subject: subj, slides,
         caption:'Para one about the fact and the hook.\n\nPara two with the detail and the context around it.\n\nPara three with the aftermath and a question for you.\n\n#madjackchurchill #wwiihistory #militaryhistory #history #facts'})}]}]});
     }
@@ -60,8 +63,10 @@ const logo = await p.evaluate(async ()=>{
 await p.click('#modeTabs button[data-mode=D]');
 await p.waitForTimeout(300);
 const cats = await p.$$eval('#factCat option', o=>o.map(x=>x.value));
-await p.selectOption('#factCount','3');
+await p.selectOption('#factCount','5');
 await p.selectOption('#factSlides','5');
+await p.evaluate(()=>{ $('rColourDecks').value=50; $('rColourDecks').dispatchEvent(new Event('input'));
+                       $('rColourSlides').value=40; $('rColourSlides').dispatchEvent(new Event('input')); });
 await p.click('#runFacts');
 await p.waitForTimeout(9000);
 
@@ -73,7 +78,12 @@ const r1 = await p.evaluate(()=>({
   style: S.profile.name, treat: S.profile.caption_treatment,
   capParas: (S.batch[0].caption.split('\n\n')||[]).length,
   capTags: (S.batch[0].caption.match(/#\w+/g)||[]).length,
-  calls: window.__n
+  calls: window.__n,
+  deckTones: S.batch.map(d=>d.tone),
+  promptTones: window.__tones,
+  slideTones: S.batch.map(d=>d.slides.map(s=>s.tone).join(',')),
+  monoDeckHasColour: S.batch.filter(d=>d.tone==='mono').map(d=>d.slides.filter(s=>s.tone==='colour').length),
+  colourPromptSent: S.batch[0].slides.map(s=>/Kodachrome/.test(imagePrompt(s)) ? 'C' : 'M').join('')
 }));
 await p.screenshot({path:'facts-ui.png', fullPage:true});
 
@@ -85,6 +95,21 @@ const r2 = await p.evaluate(()=>({
   excludedSeen: window.__excluded.length,
   allSubjects: LEDGER.map(e=>e.subject),
   duplicates: LEDGER.map(e=>e.subject.toLowerCase()).filter((v,i,a)=>a.indexOf(v)!==i)
+}));
+
+// library must be split by collection, and tone-matched
+const libInfo = await p.evaluate(()=>({
+  collections: [...new Set(LIB.map(x=>x.collection||'General'))],
+  perColl: LIB.reduce((a,x)=>{ const c=x.collection||'General'; a[c]=(a[c]||0)+1; return a; },{}),
+  tones: LIB.reduce((a,x)=>{ a[x.tone||'?']=(a[x.tone||'?']||0)+1; return a; },{}),
+  current: currentCollection(),
+  // a golf-style profile must not see any Facts image
+  leakCheck: (()=>{ const before=S.profile; S.profile=PRESETS[0];
+      const pick = libPick(new Set(), S.profile, {kind:'slide',scene:'archival scene 2'});
+      S.profile=before; return pick ? (pick.collection||'General') : 'none'; })(),
+  // and a mono slide must not be handed a colour frame
+  toneMatch: (()=>{ const mono = libPick(new Set(), S.profile, {kind:'slide', tone:'mono', scene:'archival scene 2'});
+      return mono ? mono.tone : 'none'; })()
 }));
 
 // add a real archival portrait to the cover inset, then re-render
@@ -107,5 +132,5 @@ const out = await p.evaluate(()=>{
   return [0,1].map(i=>{ const c=document.createElement('canvas'); renderSlide(d.slides[i], c, S.profile, 0.6); return c.toDataURL('image/jpeg',0.9); });
 });
 out.forEach((d,i)=>fs.writeFileSync(`facts-${i}.jpg`, Buffer.from(d.split(',')[1],'base64')));
-console.log(JSON.stringify({cats, r1, r2, insetOk, errs}, null, 1));
+console.log(JSON.stringify({cats, r1, r2, libInfo, insetOk, errs}, null, 1));
 await b.close();

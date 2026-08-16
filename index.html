@@ -436,6 +436,13 @@ details summary:hover{color:var(--fg)}
         </div>
       </div>
       <div class="hintline">Uses the Documentary facts style · subjects already covered are never repeated</div>
+      <div class="panel" style="margin-top:10px">
+        <div class="slider"><label for="rColourDecks">Carousels shot in colour <span class="muted" id="vColourDecks"></span></label><span class="val"></span>
+          <input type="range" id="rColourDecks" min="0" max="100" step="10"></div>
+        <div class="slider" style="margin-top:8px"><label for="rColourSlides">Colour slides inside a black-and-white carousel <span class="muted" id="vColourSlides"></span></label><span class="val"></span>
+          <input type="range" id="rColourSlides" min="0" max="60" step="5"></div>
+        <div class="tiny" style="color:var(--faint);margin-top:8px">The writer picks which moments earn colour — present-day, aftermath, the one reveal — and these set how much it reaches for. A slide's own tone always wins.</div>
+      </div>
 
       <div id="factPromptPanel" class="panel hide">
         <div class="field">
@@ -588,6 +595,7 @@ details summary:hover{color:var(--fg)}
       <button id="libClear" class="btn sm quiet">Clear</button>
       <input type="file" id="libFile" accept="application/json" class="hide">
     </div>
+    <div class="cats" id="libColls"></div>
     <input id="libSearch" placeholder="Search by subject — gym, fairway, bunker…">
     <div class="cats" id="libTags"></div>
     <div class="tiny" id="libPickNote" style="color:var(--warn)"></div>
@@ -805,6 +813,7 @@ const ICON = {
   dl:'<path d="M12 4v12"/><path d="M7 11l5 5 5-5"/><path d="M4 19h16"/>',
   left:'<path d="M14 6l-6 6 6 6"/>', right:'<path d="M10 6l6 6-6 6"/>',
   del:'<path d="M5 7h14"/><path d="M9 7V5h6v2"/><path d="M7 7l1 12h8l1-12"/>',
+  tone:'<circle cx="12" cy="12" r="8"/><path d="M12 4a8 8 0 0 0 0 16z" fill="currentColor" stroke="none"/>',
   inset:'<circle cx="12" cy="12" r="8"/><circle cx="12" cy="10" r="2.6"/><path d="M7.5 17a5 5 0 0 1 9 0"/>',
   lib:'<rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 15l4.5-4 4 3.5L15 11l6 5"/><circle cx="9" cy="9" r="1.2"/>'
 };
@@ -885,10 +894,13 @@ const PRESETS = [
   {
     name:'Documentary facts', builtin:true,
     aspect_ratio:'4:5',
-    imagery:'archival-bw-photograph',
-    image_prompt_suffix:'authentic black and white archival photograph, heavy film grain, high contrast with deep blacks '+
-      'and slightly blown highlights, period-accurate clothing equipment and setting, documentary photojournalism, '+
-      'candid unposed moment, slight motion blur, aged emulsion, monochrome only, absolutely no colour',
+    imagery:'archival-documentary-photograph',
+    image_prompt_suffix:'authentic archival documentary photograph, heavy film grain, high contrast with deep blacks '+
+      'and slightly blown highlights, period-accurate clothing equipment and setting, photojournalism, '+
+      'candid unposed moment, slight motion blur, aged emulsion.',
+    mono_suffix:'Black and white only — monochrome film, absolutely no colour anywhere in the frame.',
+    colour_suffix:'Shot on colour film of the period — Kodachrome-like muted colour, slightly faded dyes, '+
+      'warm cast, restrained saturation, not vivid or digital.',
     caption_treatment:'documentary',
     font_family:'Anton', font_weight:400, body_font_family:'Space Mono', body_weight:400, italic:false,
     uppercase:true, letter_spacing_em:-0.005,
@@ -903,6 +915,7 @@ const PRESETS = [
     text_block_top_pct:0.70, hook_top_pct:0.70,
     auto_number:false,
     text_align:'center',
+    library_collection:'Facts',
     structure:'cover states the astonishing claim, then the story unfolds one beat per slide and closes on the aftermath or a quote',
     voice:'flat documentary narration, short declarative sentences, no hype words, the facts do the work'
   }
@@ -990,6 +1003,11 @@ async function idbGet(k){ const db = await idb(); return new Promise((res,rej)=>
    paying for it again. Lives in IndexedDB, which holds hundreds of megabytes
    comfortably — no cloud storage needed for one person's library. */
 let LIB = [];                     // in-memory mirror, newest first
+/* Backgrounds are kept in separate collections — a fact carousel must never reach
+   into the golf pictures. A style names its own; anything older is "General". */
+const currentCollection = () => S.profile.library_collection || 'General';
+const collectionOf = item => item.collection || 'General';
+const libCollections = () => [...new Set(LIB.map(collectionOf))].sort();
 async function libLoad(){
   const db = await idb();
   LIB = await new Promise((res,rej)=>{ const q = db.transaction('lib','readonly').objectStore('lib').getAll(); q.onsuccess=()=>res(q.result||[]); q.onerror=()=>rej(q.error); });
@@ -1123,12 +1141,14 @@ function libScore(item, slide, p, idf){
       s += (wantsDark ? (1 - band.m) : band.m) * 10;
     }
   }
+  if(item.tone && slide && toneOf(slide) !== item.tone) s -= 60;  // a monochrome frame cannot stand in for a colour one
   s -= Math.min(18, (item.used||0) * 6);                          // spread usage around
   if(item.lastUsed && Date.now() - item.lastUsed < 864e5) s -= 8; // used today, rest it
   return s;
 }
 function libPick(exclude, p, slide){
-  const free = LIB.filter(x=>!exclude.has(x.id));
+  const coll = currentCollection();
+  const free = LIB.filter(x=>!exclude.has(x.id) && collectionOf(x) === coll);
   if(!free.length) return null;
   const idf = libIDF();
   return free.reduce((best,x)=> libScore(x,slide,p,idf) > libScore(best,slide,p,idf) ? x : best, free[0]);
@@ -1142,7 +1162,7 @@ async function useFromLibrary(slide, item){
   libSave(item);
 }
 
-const slimSlide = (s, withImages) => ({id:s.id, kind:s.kind, title:s.title, body:s.body, scene:s.scene,
+const slimSlide = (s, withImages) => ({id:s.id, kind:s.kind, title:s.title, body:s.body, scene:s.scene, tone:s.tone,
   status:s.status, img: withImages ? (s.img||'') : '', inset: withImages ? (s.inset||'') : ''});
 function projectJSON(withImages){
   return {
@@ -1649,8 +1669,10 @@ function buildGrid(){
     d.innerHTML =
       '<div class="cw">'+
         '<canvas data-id="'+s.id+'"></canvas>'+
-        '<span class="badge">'+String(i+1).padStart(2,'0')+(s.kind==='hook'?' · cover':'')+'</span>'+
+        '<span class="badge">'+String(i+1).padStart(2,'0')+(s.kind==='hook'?' · cover':'')+
+          (s.tone === 'colour' ? ' · colour' : '')+'</span>'+
         '<div class="tools">'+tool('regen','Regenerate image')+tool('lib','Pick from the library')+tool('up','Use my own image')+
+          (S.profile.mono_suffix || S.profile.colour_suffix ? tool('tone','Switch this slide between colour and black and white') : '')+
           (s.kind === 'hook' && (S.profile.caption_treatment === 'documentary') ? tool('inset','Add a real archival portrait') : '')+
           tool('dl','Download JPEG')+tool('left','Move left')+tool('right','Move right')+tool('del','Delete')+'</div>'+
         '<div class="state '+(s.status||'')+'" data-st="'+s.id+'"></div>'+
@@ -1681,6 +1703,12 @@ function buildGrid(){
     };
     d.querySelector('[data-a=regen]').onclick = () => genImage(s, true);
     d.querySelector('[data-a=lib]').onclick = () => pickBackgroundFor(s);
+    const toneBtn = d.querySelector('[data-a=tone]');
+    if(toneBtn) toneBtn.onclick = () => {
+      s.tone = toneOf(s) === 'colour' ? 'mono' : 'colour';
+      buildGrid(); autosave();
+      log('slide set to '+s.tone+' — regenerate its image to see it','w');
+    };
     const insetBtn = d.querySelector('[data-a=inset]');
     if(insetBtn){
       insetBtn.onclick = () => d.querySelector('[data-a=insetFile]').click();
@@ -2023,12 +2051,22 @@ function loadDeck(j){
 }
 
 /* ============================ images ============================ */
+/* A style can carry two looks — one monochrome, one colour — and each slide says
+   which it wants. Everything else about the style stays identical. */
+function toneOf(slide){
+  const deck = slide._deck;
+  return slide.tone || (deck && deck.tone) || 'mono';
+}
+function toneSuffix(p, slide){
+  if(!p.mono_suffix && !p.colour_suffix) return '';
+  return ' ' + (toneOf(slide) === 'colour' ? (p.colour_suffix||'') : (p.mono_suffix||''));
+}
 function imagePrompt(slide){
   const p = S.profile;
   const top = slide.kind === 'hook' ? (p.hook_top_pct ?? 0.34) : (p.text_block_top_pct ?? 0.6);
   const region = top < 0.36 ? 'upper third' : top < 0.58 ? 'middle band' : 'lower third';
   return (slide.scene || slide.title) + '. ' +
-    (p.image_prompt_suffix || '') + ' ' +
+    (p.image_prompt_suffix || '') + toneSuffix(p, slide) + ' ' +
     'Aspect ratio ' + (p.aspect_ratio||'9:16') + ', full-bleed composition. ' +
     'Keep the ' + region + ' of the frame visually calm, uncluttered and even in tone so a caption can be placed over it. ' +
     NO_TEXT_CLAUSE;
@@ -2039,6 +2077,7 @@ async function keepInLibrary(slide, dataUrl){
   const item = {id: uid(), data: dataUrl, scene,
     tags: tagsFrom(scene + ' ' + (slide.title||'')),
     imagery: S.profile.imagery || '', aspect: S.profile.aspect_ratio || '9:16',
+    collection: currentCollection(), tone: toneOf(slide),
     created: Date.now(), used: 0};
   try{
     await libAdd(item);
@@ -2124,9 +2163,10 @@ async function regenAllImages(){
 /* ============================ library UI ============================ */
 let LIB_PICK_FOR = null;         // slide awaiting a background from the library
 let LIB_FILTER = '';
-function libTopTags(){
+let LIB_COLL = null;        // null = the collection the current style uses
+function libTopTags(coll){
   const count = {};
-  LIB.forEach(x=>(x.tags||[]).forEach(t=>{ count[t] = (count[t]||0)+1; }));
+  LIB.filter(x=>!coll || collectionOf(x) === coll).forEach(x=>(x.tags||[]).forEach(t=>{ count[t] = (count[t]||0)+1; }));
   return Object.entries(count).filter(([,n])=>n > 1).sort((a,b)=>b[1]-a[1]).slice(0,14);
 }
 function renderLibrary(){
@@ -2136,9 +2176,21 @@ function renderLibrary(){
   $('libStats').textContent = LIB.length + (LIB.length === 1 ? ' background · ' : ' backgrounds · ') + size;
   $('libPickNote').textContent = LIB_PICK_FOR ? 'Best matches for that slide are first' : '';
 
+  const active = LIB_COLL || currentCollection();
+  const cBox = $('libColls');
+  cBox.innerHTML = '';
+  const colls = [...new Set(libCollections().concat([currentCollection()]))];
+  colls.forEach(c=>{
+    const n = LIB.filter(x=>collectionOf(x) === c).length;
+    const b = document.createElement('button');
+    b.textContent = c; b.title = n + ' backgrounds';
+    b.className = c === active ? 'on' : '';
+    b.onclick = () => { LIB_COLL = c; renderLibrary(); };
+    cBox.appendChild(b);
+  });
   const tagBox = $('libTags');
   tagBox.innerHTML = '';
-  libTopTags().forEach(([t,n])=>{
+  libTopTags(active).forEach(([t,n])=>{
     const b = document.createElement('button');
     b.textContent = t; b.title = n + ' backgrounds';
     b.className = LIB_FILTER === t ? 'on' : '';
@@ -2152,9 +2204,10 @@ function renderLibrary(){
     return;
   }
   const q = (LIB_FILTER || '').toLowerCase().trim();
+  const inColl = LIB.filter(x=>collectionOf(x) === active);
   let items = q
-    ? LIB.filter(x=>(x.tags||[]).some(t=>t.includes(q)) || (x.scene||'').toLowerCase().includes(q))
-    : LIB.slice();
+    ? inColl.filter(x=>(x.tags||[]).some(t=>t.includes(q)) || (x.scene||'').toLowerCase().includes(q))
+    : inColl.slice();
   // when choosing for a slide, order by fit instead of by date
   if(LIB_PICK_FOR){
     const idf = libIDF();
@@ -2168,7 +2221,8 @@ function renderLibrary(){
   items.forEach((item,i)=>{
     const d = document.createElement('div');
     d.className = 'libItem';
-    const label = LIB_PICK_FOR && i < 3 ? 'best match' : (item.tags||[]).slice(0,2).join(' · ') || (item.aspect||'');
+    const label = LIB_PICK_FOR && i < 3 ? 'best match'
+      : ((item.tone === 'colour' ? 'colour · ' : '') + ((item.tags||[]).slice(0,2).join(' · ') || (item.aspect||'')));
     d.innerHTML = '<img src="'+item.data+'" loading="lazy" alt="">'+
       '<button class="x" title="Delete">×</button>'+
       '<div class="use">'+label+(item.used ? ' · '+item.used+'×' : '')+'</div>';
@@ -2633,8 +2687,9 @@ async function pickSubjects(cat, seed, n){
   return arr.filter(o=>!ledgerHas(o.subject)).slice(0, n);
 }
 
-function factDeckPrompt(cat, subj, n){
+function factDeckPrompt(cat, subj, n, deckTone){
   const p = S.profile;
+  deckTone = deckTone || 'mono';
   return (
 'Write a '+n+'-slide documentary fact carousel about: '+subj.subject+'\n' +
 (subj.claim ? 'The hook is: '+subj.claim+'\n' : '') +
@@ -2649,6 +2704,10 @@ function factDeckPrompt(cat, subj, n){
 '- The middle slides each carry one beat of the story in order, each with a short title (2-6 words) and a body.\n' +
 '- The last slide closes it: the aftermath, the fate, or a real quotation.\n' +
 '- Bodies are 2-3 short declarative sentences, max ~40 words. Flat documentary narration. No hype words, no "you won\'t believe", no second person, no emoji.\n\n' +
+'TONE — this carousel is '+(deckTone === 'colour' ? 'IN COLOUR' : 'IN BLACK AND WHITE')+'. Give every slide a "tone" of "'+deckTone+'", '+
+(deckTone === 'colour'
+  ? 'except any moment that is genuinely archival or long past, which may be "mono".'
+  : 'except the moments that earn colour — a present-day photograph, the aftermath as it looks now, a modern location, or the single most striking reveal. Mark those "colour". Use it sparingly and deliberately, never at random.')+'\n\n' +
 'IMAGES — "scene" describes a photograph only: subject, setting, light, period detail. It never asks for words, numbers, logos or UI.\n' +
 '- Do NOT describe a portrait or recognisable likeness of the real named person. These images are generated, and a generated face presented as an archival photograph of a real individual is a fabricated historical document. Describe the setting, the equipment, the landscape, the aftermath, or figures seen at a distance, from behind, or in silhouette.\n' +
 'Style is '+(p.imagery||'archival black and white photograph')+', so describe something a camera of that era could plausibly have captured.\n\n' +
@@ -2656,10 +2715,28 @@ function factDeckPrompt(cat, subj, n){
 '- Exactly three paragraphs separated by blank lines. First paragraph opens with the hook and the core fact. Second gives the detail and context. Third closes with the aftermath or significance, then invites a reply in one short sentence.\n' +
 '- After the paragraphs, one final line of 3 to 5 hashtags ordered from the most niche to the broadest. No hashtags inside the paragraphs.\n\n' +
 'Return ONLY JSON:\n' +
-'{"subject":"canonical subject name","slides":[{"kind":"hook","title":"...","scene":"..."},{"kind":"slide","title":"...","body":"...","scene":"..."}],"caption":"para1\\n\\npara2\\n\\npara3\\n\\n#niche #mid #broad"}'
+'{"subject":"canonical subject name","slides":[{"kind":"hook","title":"...","scene":"...","tone":"mono|colour"},{"kind":"slide","title":"...","body":"...","scene":"...","tone":"mono|colour"}],"caption":"para1\\n\\npara2\\n\\npara3\\n\\n#niche #mid #broad"}'
   );
 }
 
+/* The writer chooses which moments earn colour. If it played it safe in a mono deck,
+   top up to the share you asked for — never the cover, so the opening look stays consistent. */
+function applySlideTones(deck){
+  if(deck.tone === 'colour'){
+    deck.slides.forEach(s=>{ if(s.tone !== 'mono') s.tone = 'colour'; });
+    return;
+  }
+  const want = Math.round(deck.slides.length * ((+($('rColourSlides').value) || 0) / 100));
+  const body = deck.slides.filter(s=>s.kind !== 'hook');
+  let have = body.filter(s=>s.tone === 'colour').length;
+  const candidates = body.filter(s=>s.tone !== 'colour');
+  // prefer the later slides — aftermath and present-day sit at the end of the story
+  candidates.reverse();
+  for(const s of candidates){
+    if(have >= want) break;
+    s.tone = 'colour'; have++;
+  }
+}
 async function runFacts(){
   const cat = $('factCat').value;
   const n = +$('factCount').value, slides = +$('factSlides').value;
@@ -2680,8 +2757,12 @@ async function runFacts(){
     if(subjects.length < n) log('only '+subjects.length+' fresh subjects available for this category','w');
 
     const awaiting = S.batch.filter(d=>d.slides.some(s=>s._job && JOBS.some(j=>j.name === s._job && !j.done)));
-    const newDecks = subjects.map(s=>({id:uid(), hook:s.claim || s.subject, subject:s.subject, cat,
-                                       n:slides, slides:[], caption:'', status:'queued', error:''}));
+    const colourShare = (+($('rColourDecks').value) || 0) / 100;
+    const nColour = Math.round(subjects.length * colourShare);
+    const tones = subjects.map((_,i)=> i < nColour ? 'colour' : 'mono');
+    for(let i=tones.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [tones[i],tones[j]]=[tones[j],tones[i]]; }
+    const newDecks = subjects.map((s,i)=>({id:uid(), hook:s.claim || s.subject, subject:s.subject, cat,
+                                       tone:tones[i], n:slides, slides:[], caption:'', status:'queued', error:''}));
     S.batch = awaiting.concat(newDecks);
     S.openBatch = -1;
     renderBatch();
@@ -2691,13 +2772,15 @@ async function runFacts(){
       deck.status = 'writing'; renderBatchRow(deck);
       try{
         const r = await callModel({model: cfg().textModel,
-          parts:[{type:'text', text: factDeckPrompt(cat, {subject:deck.subject, claim:deck.hook}, deck.n)}]});
+          parts:[{type:'text', text: factDeckPrompt(cat, {subject:deck.subject, claim:deck.hook}, deck.n, deck.tone)}]});
         const j = extractJSON(r.text, false);
         deck.slides = (Array.isArray(j.slides) ? j.slides : []).map((s,i)=>({
           id: uid(), kind: (i === 0 || s.kind === 'hook') ? 'hook' : 'slide',
           title: String(s.title||''), body: String(s.body||''), scene: String(s.scene||''),
+          tone: s.tone ? (/colour|color/i.test(s.tone) ? 'colour' : 'mono') : (deck.tone || 'mono'),
           img:'', status:'', _deck: deck, _label: deck.subject.slice(0,28)
         }));
+        applySlideTones(deck);
         if(!deck.slides.length) throw new Error('no slides in the reply');
         deck.caption = String(j.caption||'');
         deck.hook = deck.slides[0].title || deck.hook;
@@ -3096,6 +3179,15 @@ function init(){
     b.textContent = b.dataset.on === '1' ? 'Images on' : 'Images off';
     b.classList.toggle('quiet', b.dataset.on === '1');
   };
+  const bindSlider = (id, key, def, fmt) => {
+    const el = $(id), out = $(id.replace('r','v'));
+    el.value = localStorage.getItem(key) ?? def;
+    const show = () => { if(out) out.textContent = fmt(el.value); };
+    show();
+    el.addEventListener('input', ()=>{ localStorage.setItem(key, el.value); show(); });
+  };
+  bindSlider('rColourDecks','cb.colourDecks',50, v=>v+'%');
+  bindSlider('rColourSlides','cb.colourSlides',20, v=>v+'%');
   $('runFacts').onclick = runFacts;
   $('factStop').onclick = () => { FACT_STOP = true; BATCH_STOP = true; log('stopping after the requests in flight','w'); };
   $('ledgerExport').onclick = () => {

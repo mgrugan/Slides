@@ -896,18 +896,21 @@ const PRESETS = [
     name:'Documentary facts', builtin:true,
     aspect_ratio:'4:5',
     imagery:'archival-documentary-photograph',
+    v: 2,                                      // bump when the image brief below changes
+    // "equipment" was quietly responsible for every slide becoming a bench of apparatus
     image_prompt_suffix:'authentic archival documentary photograph, heavy film grain, high contrast with deep blacks '+
-      'and slightly blown highlights, period-accurate clothing equipment and setting, photojournalism, '+
+      'and slightly blown highlights, period-accurate clothing and setting, photojournalism, '+
       'candid unposed moment, slight motion blur, aged emulsion.',
     // the same scene shot on colour stock — no "archival", no "deep blacks", no "aged emulsion",
     // all of which quietly brief the model for black and white
     image_prompt_suffix_colour:'authentic period colour photograph on 35mm colour film, visible grain, '+
-      'period-accurate clothing equipment and setting, photojournalism, candid unposed moment, '+
+      'period-accurate clothing and setting, photojournalism, candid unposed moment, '+
       'slight motion blur, natural light.',
     mono_suffix:'Black and white only — monochrome film, absolutely no colour anywhere in the frame.',
     colour_suffix:'Shot on colour film of the period — Kodachrome and Ektachrome palette, warm cast, '+
       'clearly readable colour in the clothing, skin, sky and surroundings. Film colour, not digital colour.',
     caption_treatment:'documentary',
+    shot_ladder:true,                          // vary the camera slide to slide, so a deck isn't one shot six times
     font_family:'Anton', font_weight:400, body_font_family:'Space Mono', body_weight:400, italic:false,
     uppercase:true, letter_spacing_em:-0.005,
     text_color:'#FFFFFF', stroke_color:'#000000', stroke_width:0, text_shadow:0.35, shadow_color:'#000000',
@@ -1219,13 +1222,31 @@ const autosave = debounce(async ()=>{
    preset has gained since is filled in; anything already set is left alone, so
    edits survive. Without this, new style features are silently dead on any
    existing project. */
+/* The fields that brief the image model, as opposed to the ones that draw the
+   canvas. Only these are refreshed when a preset's version goes up: the layout and
+   typography are what the live controls edit, and overwriting those would throw
+   away work you can see. */
+const BRIEF_KEYS = ['imagery','image_prompt_suffix','image_prompt_suffix_colour',
+                    'mono_suffix','colour_suffix','shot_ladder','library_collection'];
 function refreshBuiltinProfile(){
   const m = /^preset:(\d+)$/.exec(S.styleKey || '');
   const preset = m && PRESETS[+m[1]];
   if(!preset) return [];
+  const was = S.profile.v || 1;        // read before the fill loop, which would supply it
   const added = [];
   for(const k in preset){
     if(S.profile[k] === undefined){ S.profile[k] = clone(preset[k]); added.push(k); }
+  }
+  // a newer image brief replaces the stored one outright — otherwise a fix to how
+  // pictures are asked for never reaches a project that already exists
+  if((preset.v||1) > was){
+    BRIEF_KEYS.forEach(k=>{
+      if(preset[k] !== undefined && JSON.stringify(S.profile[k]) !== JSON.stringify(preset[k])){
+        S.profile[k] = clone(preset[k]);
+        if(!added.includes(k)) added.push(k);
+      }
+    });
+    S.profile.v = preset.v;
   }
   return added;
 }
@@ -2185,6 +2206,33 @@ function toneLead(p, slide, insist){
         : 'A FULL COLOUR PHOTOGRAPH with rich, clearly visible colour throughout the frame. ')
     : 'A BLACK AND WHITE PHOTOGRAPH. ';
 }
+/* A carousel of six frames all shot the same way is boring however good the scenes
+   are, and a writer left to itself will put everything at eye level in the middle
+   distance. So the camera is decided here rather than asked for: each slide gets a
+   different lens, distance and vantage, cycling from a per-deck starting point so
+   two decks about similar subjects don't open identically. */
+const SHOT_LADDER = [
+  'Shot on a 28mm wide lens: a wide establishing frame, the whole place in view, any figures small within it.',
+  'Shot on an 85mm lens, close: one object, one surface or a pair of hands filling the frame, shallow focus, everything behind it falling away.',
+  'Shot from a high vantage looking down at a steep angle, the scene laid out below.',
+  'Shot on a 50mm at eye level from behind a figure, over the shoulder, the light coming from beyond them.',
+  'Shot on a long lens across a distance, foreground out of focus, caught mid-movement.',
+  'Shot from ground level on a low angle looking up, sky or ceiling filling the top of the frame.',
+  'Shot flat-on and symmetrical, the subject centred, plain wall or open ground behind it.'
+];
+const COVER_SHOT = 'The single most arresting frame in the whole story: strong depth, one clear focal point, '+
+  'dramatic directional light.';
+const hashStr = s => { let h = 0; for(let i=0;i<s.length;i++) h = (h*31 + s.charCodeAt(i))|0; return Math.abs(h); };
+function shotSuffix(p, slide){
+  if(!p.shot_ladder) return '';
+  if(slide.kind === 'hook') return ' ' + COVER_SHOT;
+  const deck = slide._deck;
+  const list = (deck && deck.slides) || S.slides;
+  const body = list.filter(s=>s.kind !== 'hook');
+  const i = Math.max(0, body.indexOf(slide));
+  const seed = hashStr(String((deck && (deck.subject || deck.id)) || slide.id));
+  return ' ' + SHOT_LADDER[(i + seed) % SHOT_LADDER.length];
+}
 /* The archival look is itself a black-and-white brief — grain, deep blacks, aged
    emulsion. A colour slide needs a different style sentence, not the same one with
    "in colour" bolted on the end. */
@@ -2223,7 +2271,7 @@ function imagePrompt(slide, insist){
   const top = slide.kind === 'hook' ? (p.hook_top_pct ?? 0.34) : (p.text_block_top_pct ?? 0.6);
   const region = top < 0.36 ? 'upper third' : top < 0.58 ? 'middle band' : 'lower third';
   return toneLead(p, slide, insist) + (slide.scene || slide.title) + '. ' +
-    styleSuffix(p, slide) + toneSuffix(p, slide) + ' ' +
+    styleSuffix(p, slide) + toneSuffix(p, slide) + shotSuffix(p, slide) + ' ' +
     'Aspect ratio ' + (p.aspect_ratio||'9:16') + ', full-bleed composition. ' +
     'Keep the ' + region + ' of the frame visually calm, uncluttered and even in tone so a caption can be placed over it. ' +
     NO_TEXT_CLAUSE + ' ' + FULL_BLEED_CLAUSE;
@@ -2912,6 +2960,11 @@ function factDeckPrompt(cat, subj, n, deckTone){
   : 'except the moments that earn colour — a present-day photograph, the aftermath as it looks now, a modern location, or the single most striking reveal. Mark those "colour". Use it sparingly and deliberately, never at random.')+'\n\n' +
 'IMAGES — "scene" describes a photograph only: subject, setting, light, period detail. It never asks for words, numbers, logos or UI.\n' +
 '- Do NOT describe a portrait or recognisable likeness of the real named person. These images are generated, and a generated face presented as an archival photograph of a real individual is a fabricated historical document. Describe the setting, the equipment, the landscape, the aftermath, or figures seen at a distance, from behind, or in silhouette.\n' +
+'- The set has to read as a STORY, not one room photographed five times. No two slides may share a setting, a subject or a framing. If one slide is indoors at a workbench, the next is not.\n' +
+'- Anchor each scene to its own beat. It is the moment that body text describes, not a generic illustration of the topic. A scene should be unusable on any other slide.\n' +
+'- Across the deck include at least: one wide exterior or landscape; one close detail of a single object, surface or pair of hands; one human figure at a distance, from behind or in silhouette; and one image of the aftermath, the wreckage, or the place as it is now.\n' +
+'- Name concrete specifics — the weather, the hour, the material, the one object that matters. "A cracked enamel dish on a windowsill at dusk" beats "scientific equipment".\n' +
+'- Avoid the default laboratory-bench shot unless that beat genuinely happens in a laboratory. Most of any story happens somewhere else: a street, a field, a corridor, a coastline, a kitchen, a night sky, a doorway, a crowd.\n' +
 'Style is '+(p.imagery||'archival black and white photograph')+', so describe something a camera of that era could plausibly have captured.\n\n' +
 'CAPTION for Instagram:\n' +
 '- Exactly three paragraphs separated by blank lines. First paragraph opens with the hook and the core fact. Second gives the detail and context. Third closes with the aftermath or significance, then invites a reply in one short sentence.\n' +

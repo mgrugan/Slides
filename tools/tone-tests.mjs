@@ -125,7 +125,45 @@ const plan = await p.evaluate(()=>{
   return {fresh: fresh.map(s=>s.id), reused: reused.map(([s])=>s.id)};
 });
 
+/* 4 — the case that actually bit: a project saved before the style gained its tone
+   and collection fields. Every tone path used to be gated behind those fields, so
+   slides badged "colour" sent prompts that never said colour, and fact backgrounds
+   were filed into the general pile. */
+const stale = await p.evaluate(async ()=>{
+  const di = PRESETS.findIndex(x=>x.caption_treatment === 'documentary');
+  const old = JSON.parse(JSON.stringify(PRESETS[di]));
+  ['mono_suffix','colour_suffix','image_prompt_suffix_colour','library_collection'].forEach(k=>delete old[k]);
+  S.profile = old; S.styleKey = 'preset:'+di;
+  const col = {kind:'slide', title:'t', scene:'a harbour', tone:'colour'};
+
+  const beforeFix = {saysColour: /FULL COLOUR/.test(imagePrompt(col)), verified: toned(col)};
+  const added = refreshBuiltinProfile();
+  const after = imagePrompt(col);
+
+  // an archival background saved while the profile was stale
+  LIB.length = 0;
+  LIB.push({id:'stray', data:'', scene:'a laboratory', tags:['laboratory'], imagery:'archival-documentary-photograph',
+            aspect:'4:5', collection:'General', tone:'mono', toneChecked:true, stats:{}, created:1, used:0},
+           {id:'cartoon', data:'', scene:'a gym', tags:['gym'], imagery:'flat-vector-cartoon',
+            aspect:'4:5', collection:'General', tone:'mono', toneChecked:true, stats:{}, created:1, used:0});
+  const strays = LIB.filter(strayCollection).map(x=>x.id);
+  LIB.filter(strayCollection).forEach(x=>{ x.collection = COLL_BY_IMAGERY[x.imagery]; });
+  return {beforeFix, added,
+    saysColour: /FULL COLOUR/.test(after),
+    usesColourStyle: /colour film/i.test(after) && !/archival/i.test(after),
+    monoKeepsArchival: /archival/i.test(imagePrompt({kind:'slide', scene:'a harbour', tone:'mono'})),
+    collectionRestored: S.profile.library_collection === 'Facts',
+    strays, homes: LIB.map(x=>x.id+':'+x.collection)};
+});
+
 const fail = [];
+if(stale.beforeFix.saysColour !== true) fail.push('tone is still gated on the profile, not the slide');
+if(!stale.saysColour) fail.push('stale profile: colour never reaches the prompt');
+if(!stale.usesColourStyle) fail.push('colour slide still gets the archival black-and-white style sentence');
+if(!stale.monoKeepsArchival) fail.push('mono slide lost the archival look');
+if(!stale.collectionRestored) fail.push('library_collection was not restored on reload');
+if(stale.strays.join() !== 'stray') fail.push('collection migration picked the wrong items: '+stale.strays.join());
+if(stale.homes.join() !== 'stray:Facts,cartoon:General') fail.push('backgrounds filed wrongly: '+stale.homes.join());
 if(retry.imageCalls < 3) fail.push('colour slide was not asked again (calls '+retry.imageCalls+')');
 if(retry.insisted !== 1) fail.push('expected exactly one insisted prompt, got '+retry.insisted);
 if(retry.monoNeverInsisted) fail.push('a mono slide was pushed towards colour');
@@ -139,7 +177,7 @@ for(const [k,v] of Object.entries(picks)) if(!v) fail.push('picker: '+k);
 if(plan.fresh.join() !== 'a') fail.push('planImages sent the wrong slides to the API: '+plan.fresh.join());
 if(plan.reused.join() !== 'b') fail.push('planImages reused the wrong slides: '+plan.reused.join());
 
-console.log(JSON.stringify({retry, stored, picks, plan, errs}, null, 1));
+console.log(JSON.stringify({retry, stored, picks, plan, stale, errs}, null, 1));
 console.log(fail.length ? 'FAIL\n' + fail.map(f=>' - '+f).join('\n') : 'PASS  tone is measured, not assumed');
 await b.close();
 process.exit(fail.length ? 1 : 0);

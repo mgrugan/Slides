@@ -429,6 +429,7 @@ details summary:hover{color:var(--fg)}
           <select id="factSlides" title="Slides per carousel"></select>
           <select id="factCount" title="How many carousels"></select>
           <button id="factImgToggle" class="btn quiet sm" data-on="1">Images on</button>
+          <button id="factLibToggle" class="btn sm" data-on="1" title="Body slides reuse saved Facts backgrounds; the cover is always generated fresh">Library on</button>
           <div class="spacer"></div>
           <span id="factStatus" class="tiny muted"></span>
           <button id="factStop" class="btn sm hide">Stop</button>
@@ -2398,11 +2399,13 @@ async function keepInLibrary(slide, dataUrl){
 }
 /* Library-first: the cover always gets a fresh image, body slides come from the
    library until it runs dry, and only then does anything hit the API. */
-function planImages(slides){
+function planImages(slides, useLib){
   const fresh = [], reused = [];
-  const useLib = localStorage.getItem('cb.useLib') === '1';
+  if(useLib === undefined) useLib = localStorage.getItem('cb.useLib') === '1';
   const taken = new Set();
   for(const s of slides){
+    // the cover is never reused: it is the frame that has to stop the scroll, and it
+    // is the one image in the deck a repeat would be noticed on
     if(!useLib || s.kind === 'hook'){ fresh.push(s); continue; }
     const item = libPick(taken, S.profile, s);
     if(item){ taken.add(item.id); reused.push([s, item]); }
@@ -3200,8 +3203,11 @@ async function runFacts(){
     if($('factImgToggle').dataset.on === '1' && !FACT_STOP){
       const all = newDecks.filter(d=>d.status === 'written').flatMap(d=>d.slides);
       all.forEach(s=>{ s.status = 'queued'; });
-      const {fresh: needGen, reused} = planImages(all);
+      const useLib = $('factLibToggle').dataset.on === '1';
+      const {fresh: needGen, reused} = planImages(all, useLib);
       for(const [s, item] of reused) await useFromLibrary(s, item);
+      if(reused.length) log(reused.length+' background'+(reused.length>1?'s':'')+' reused from the '+
+        currentCollection()+' library — free. Every cover was generated fresh.','o');
       if(needGen.length){
         if($('batchApiToggle') && $('batchApiToggle').dataset.on === '1'){
           try{ await submitBatchJob(needGen); }
@@ -3495,23 +3501,29 @@ function init(){
     e.target.style.height = 'auto';
     e.target.style.height = Math.min(340, Math.max(120, e.target.scrollHeight)) + 'px';
   });
-  // paired toggles: the two Library buttons and the two Half-price buttons stay in sync
-  const bindToggle = (id, key, onLabel, offLabel, mirror) => {
+  // paired toggles: buttons sharing a setting stay in sync wherever they appear
+  const bindToggle = (id, key, onLabel, offLabel, mirror, defaultOn) => {
     const b = $(id);
+    if(!b) return;
     const set = on => {
       b.dataset.on = on ? '1' : '0';
       b.textContent = on ? onLabel : offLabel;
       b.classList.toggle('quiet', !on);
-      if(mirror && $(mirror) && $(mirror).dataset.on !== b.dataset.on){
-        const m = $(mirror);
+      String(mirror||'').split(',').filter(Boolean).forEach(mid=>{
+        const m = $(mid);
+        if(!m || m.dataset.on === b.dataset.on) return;
         m.dataset.on = b.dataset.on; m.textContent = b.textContent; m.classList.toggle('quiet', !on);
-      }
+      });
     };
-    set(localStorage.getItem(key) === '1');
+    const stored = localStorage.getItem(key);
+    set(stored === null ? !!defaultOn : stored === '1');
     b.onclick = () => { const on = b.dataset.on !== '1'; localStorage.setItem(key, on ? '1':'0'); set(on); };
   };
   bindToggle('libToggle','cb.useLib','Library on','Library off','batchLibToggle');
   bindToggle('batchLibToggle','cb.useLib','Library on','Library off','libToggle');
+  // Facts keep their own switch, on by default: their library is a separate collection,
+  // so reusing from it never pulls a golf course into a documentary carousel.
+  bindToggle('factLibToggle','cb.useLibFacts','Library on','Library off','', true);
   bindToggle('batchApiToggle','cb.batchApi','Half price on','Half price off');
 
   // ---- logo ----

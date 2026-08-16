@@ -1,10 +1,14 @@
 import { chromium } from 'playwright-core';
 import fs from 'fs';
 const stub = () => {
-  const mk = () => { const c=document.createElement('canvas'); c.width=200;c.height=250;
+  // an obedient model: grey when asked for black and white, saturated when asked for colour
+  const mk = (colour) => { const c=document.createElement('canvas'); c.width=200;c.height=250;
     const x=c.getContext('2d'); const g=x.createLinearGradient(0,0,0,250);
-    g.addColorStop(0,'#c9c9c9'); g.addColorStop(1,'#3a3a3a'); x.fillStyle=g; x.fillRect(0,0,200,250);
-    x.fillStyle='#8a8a8a'; for(let i=0;i<60;i++) x.fillRect(Math.random()*200, Math.random()*250, 6, 3);
+    if(colour){ g.addColorStop(0,'#e0a23c'); g.addColorStop(1,'#1c4f8a'); }
+    else { g.addColorStop(0,'#c9c9c9'); g.addColorStop(1,'#3a3a3a'); }
+    x.fillStyle=g; x.fillRect(0,0,200,250);
+    x.fillStyle = colour ? '#c23b22' : '#8a8a8a';
+    for(let i=0;i<60;i++) x.fillRect(Math.random()*200, Math.random()*250, 6, 3);
     return c.toDataURL('image/jpeg',0.8).split(',')[1]; };
   const J = o => new Response(JSON.stringify(o), {status:200, headers:{'content-type':'application/json'}});
   window.__n = {subjects:0, decks:0, img:0}; window.__excluded = [];
@@ -12,7 +16,9 @@ const stub = () => {
     const body = JSON.parse(opts.body);
     const txt = (body.input||[]).map(p=>p.text||'').join(' ');
     if(/no text anywhere in the image/i.test(txt)){ window.__n.img++;
-      return J({output:[{content:[{type:'text', text: mk()}]}]}); }
+      const colour = /FULL COLOUR PHOTOGRAPH/.test(txt);
+      (window.__imgTones = window.__imgTones || []).push(colour ? 'colour' : 'mono');
+      return J({output:[{content:[{type:'text', text: mk(colour)}]}]}); }
     if(/Pick \d+ subjects/.test(txt)){
       window.__n.subjects++;
       window.__lastSubjectPrompt = txt;
@@ -107,9 +113,13 @@ const libInfo = await p.evaluate(()=>({
   leakCheck: (()=>{ const before=S.profile; S.profile=PRESETS[0];
       const pick = libPick(new Set(), S.profile, {kind:'slide',scene:'archival scene 2'});
       S.profile=before; return pick ? (pick.collection||'General') : 'none'; })(),
-  // and a mono slide must not be handed a colour frame
+  // and a mono slide must not be handed a colour frame — nor a colour slide a grey one
   toneMatch: (()=>{ const mono = libPick(new Set(), S.profile, {kind:'slide', tone:'mono', scene:'archival scene 2'});
-      return mono ? mono.tone : 'none'; })()
+      return mono ? mono.tone : 'none'; })(),
+  colourMatch: (()=>{ const col = libPick(new Set(), S.profile, {kind:'slide', tone:'colour', scene:'archival scene 2'});
+      return col ? col.tone : 'none'; })(),
+  // every stored tone must have been read off the pixels
+  unchecked: LIB.filter(x=>!x.toneChecked).length
 }));
 
 // add a real archival portrait to the cover inset, then re-render
@@ -126,10 +136,13 @@ await p.evaluate(async ()=>{
 await p.waitForTimeout(600);
 const insetOk = await p.evaluate(()=>!!IMG_CACHE['inset:'+S.batch[0].slides[0].id]);
 
-// full-res renders of a cover and a body slide
+// full-res renders of a cover, a body slide, and one slide of each tone
 const out = await p.evaluate(()=>{
   const d = S.batch[0];
-  return [0,1].map(i=>{ const c=document.createElement('canvas'); renderSlide(d.slides[i], c, S.profile, 0.6); return c.toDataURL('image/jpeg',0.9); });
+  const all = S.batch.flatMap(x=>x.slides);
+  const pick = [d.slides[0], d.slides[1],
+                all.find(s=>s.tone === 'colour' && s.img), all.find(s=>s.tone === 'mono' && s.img)].filter(Boolean);
+  return pick.map(s=>{ const c=document.createElement('canvas'); renderSlide(s, c, S.profile, 0.6); return c.toDataURL('image/jpeg',0.9); });
 });
 out.forEach((d,i)=>fs.writeFileSync(`facts-${i}.jpg`, Buffer.from(d.split(',')[1],'base64')));
 console.log(JSON.stringify({cats, r1, r2, libInfo, insetOk, errs}, null, 1));

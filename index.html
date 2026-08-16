@@ -900,8 +900,8 @@ const PRESETS = [
       'and slightly blown highlights, period-accurate clothing equipment and setting, photojournalism, '+
       'candid unposed moment, slight motion blur, aged emulsion.',
     mono_suffix:'Black and white only — monochrome film, absolutely no colour anywhere in the frame.',
-    colour_suffix:'Shot on colour film of the period — Kodachrome-like muted colour, slightly faded dyes, '+
-      'warm cast, restrained saturation, not vivid or digital.',
+    colour_suffix:'Shot on colour film of the period — Kodachrome and Ektachrome palette, warm cast, '+
+      'clearly readable colour in the clothing, skin, sky and surroundings. Film colour, not digital colour.',
     caption_treatment:'documentary',
     font_family:'Anton', font_weight:400, body_font_family:'Space Mono', body_weight:400, italic:false,
     uppercase:true, letter_spacing_em:-0.005,
@@ -1112,10 +1112,16 @@ function analyzeImage(dataUrl){
 }
 /* fill in tags and stats for anything saved before this existed, a few at a time */
 async function libEnrich(){
-  const todo = LIB.filter(x=>!x.tags || !x.stats);
-  for(const item of todo.slice(0, 40)){
+  // toneChecked marks a tone read off the pixels; anything else was only the tone
+  // that was *asked* for, which the image model does not reliably honour.
+  const todo = LIB.filter(x=>!x.tags || !x.stats || !x.toneChecked);
+  for(const item of todo.slice(0, 150)){
     if(!item.tags) item.tags = tagsFrom(item.scene);
     if(!item.stats) item.stats = await analyzeImage(item.data);
+    if(!item.toneChecked){
+      const t = await toneOfDataURL(item.data);
+      if(t){ item.tone = t; item.toneChecked = true; }
+    }
     await libSave(item);
   }
   if(todo.length) renderLibrary();
@@ -1153,7 +1159,14 @@ function libScore(item, slide, p, idf){
 }
 function libPick(exclude, p, slide){
   const coll = currentCollection();
-  const free = LIB.filter(x=>!exclude.has(x.id) && collectionOf(x) === coll);
+  const toned = !!(p.mono_suffix || p.colour_suffix) && !!slide;
+  const want = slide ? toneOf(slide) : '';
+  // Tone is a hard filter, not a preference: a colour slide handed a monochrome
+  // frame is simply wrong, so it goes to the API instead of taking the best of a
+  // bad set. Only a tone read off the pixels counts — a tone that was merely asked
+  // for is what produced grey "colour" slides in the first place.
+  const free = LIB.filter(x=>!exclude.has(x.id) && collectionOf(x) === coll
+    && (!toned || (x.toneChecked && x.tone === want)));
   if(!free.length) return null;
   const idf = libIDF();
   return free.reduce((best,x)=> libScore(x,slide,p,idf) > libScore(best,slide,p,idf) ? x : best, free[0]);
@@ -2109,11 +2122,47 @@ function toneSuffix(p, slide){
   if(!p.mono_suffix && !p.colour_suffix) return '';
   return ' ' + (toneOf(slide) === 'colour' ? (p.colour_suffix||'') : (p.mono_suffix||''));
 }
-function imagePrompt(slide){
+/* "archival photograph" reads as black and white to an image model, so a colour
+   slide has to say so before the style description, not only after it. */
+function toneLead(p, slide, insist){
+  if(!p.mono_suffix && !p.colour_suffix) return '';
+  return toneOf(slide) === 'colour'
+    ? (insist
+        ? 'A FULL COLOUR PHOTOGRAPH — vivid, unmistakably in colour, strong visible hues. NOT black and white, NOT monochrome, NOT desaturated, NOT sepia. '
+        : 'A FULL COLOUR PHOTOGRAPH with rich, clearly visible colour throughout the frame. ')
+    : 'A BLACK AND WHITE PHOTOGRAPH. ';
+}
+/* measure what a picture actually is, rather than trusting what was asked for */
+function imageSaturation(img){
+  try{
+    const W = 48, H = Math.max(8, Math.round(48 * img.naturalHeight / img.naturalWidth));
+    const c = document.createElement('canvas'); c.width = W; c.height = H;
+    const ctx = c.getContext('2d', {willReadFrequently:true});
+    ctx.drawImage(img, 0, 0, W, H);
+    const d = ctx.getImageData(0,0,W,H).data;
+    let sum = 0, n = 0;
+    for(let i=0;i<d.length;i+=4){
+      const mx = Math.max(d[i],d[i+1],d[i+2]), mn = Math.min(d[i],d[i+1],d[i+2]);
+      sum += (mx - mn)/255; n++;
+    }
+    return n ? sum/n : 0;
+  }catch(e){ return 0; }
+}
+const MONO_THRESHOLD = 0.055;
+function measuredTone(img){ return imageSaturation(img) > MONO_THRESHOLD ? 'colour' : 'mono'; }
+function toneOfDataURL(dataUrl){
+  return new Promise(res=>{
+    const im = new Image();
+    im.onload = () => res(measuredTone(im));
+    im.onerror = () => res('');
+    im.src = dataUrl;
+  });
+}
+function imagePrompt(slide, insist){
   const p = S.profile;
   const top = slide.kind === 'hook' ? (p.hook_top_pct ?? 0.34) : (p.text_block_top_pct ?? 0.6);
   const region = top < 0.36 ? 'upper third' : top < 0.58 ? 'middle band' : 'lower third';
-  return (slide.scene || slide.title) + '. ' +
+  return toneLead(p, slide, insist) + (slide.scene || slide.title) + '. ' +
     (p.image_prompt_suffix || '') + toneSuffix(p, slide) + ' ' +
     'Aspect ratio ' + (p.aspect_ratio||'9:16') + ', full-bleed composition. ' +
     'Keep the ' + region + ' of the frame visually calm, uncluttered and even in tone so a caption can be placed over it. ' +
@@ -2125,7 +2174,9 @@ async function keepInLibrary(slide, dataUrl){
   const item = {id: uid(), data: dataUrl, scene,
     tags: tagsFrom(scene + ' ' + (slide.title||'')),
     imagery: S.profile.imagery || '', aspect: S.profile.aspect_ratio || '9:16',
-    collection: currentCollection(), tone: toneOf(slide),
+    collection: currentCollection(),
+    // record what the picture is, not what was asked for — the model does not always comply
+    tone: (await toneOfDataURL(dataUrl)) || toneOf(slide), toneChecked: true,
     created: Date.now(), used: 0};
   try{
     await libAdd(item);
@@ -2148,14 +2199,26 @@ function planImages(slides){
   return {fresh, reused};
 }
 let QUOTA_NOTED = false;
-async function genImage(slide, single, attempt){
-  attempt = attempt || 0;
+const slideLabel = slide => S.slides.indexOf(slide) >= 0 ? S.slides.indexOf(slide)+1 : (slide._label || '?');
+async function genImage(slide, single, attempt, toneTry){
+  attempt = attempt || 0; toneTry = toneTry || 0;
   setStatus(slide,'generating');
   try{
-    const r = await callModel({model: cfg().imageModel, parts:[{type:'text', text: imagePrompt(slide)}], wantImage:true, aspect:S.profile.aspect_ratio});
+    const r = await callModel({model: cfg().imageModel, parts:[{type:'text', text: imagePrompt(slide, toneTry > 0)}], wantImage:true, aspect:S.profile.aspect_ratio});
     if(!r.images.length){
       const said = r.text && !sniffImage(r.text) ? ' — model said: '+r.text.slice(0,140) : '';
       throw new Error('no image in response' + said);
+    }
+    // "archival photograph" pulls the model towards black and white however loudly the
+    // prompt asks for colour, so check the pixels and ask again, harder, once.
+    const n0 = slideLabel(slide);
+    if(toneOf(slide) === 'colour' && (S.profile.mono_suffix || S.profile.colour_suffix)){
+      const got = await toneOfDataURL(r.images[0]);
+      if(got === 'mono' && toneTry < 1){
+        log('slide '+n0+' came back monochrome but is marked colour — asking again','w');
+        return genImage(slide, single, attempt, toneTry + 1);
+      }
+      if(got === 'mono') log('slide '+n0+' is still monochrome after a retry — keeping it','w');
     }
     setImage(slide, r.images[0], autosave);
     setStatus(slide,'done');
@@ -2163,13 +2226,13 @@ async function genImage(slide, single, attempt){
     keepInLibrary(slide, r.images[0]);
   }catch(e){
     const q = quotaInfo(e);
-    const n = S.slides.indexOf(slide) >= 0 ? S.slides.indexOf(slide)+1 : (slide._label || '?');
+    const n = slideLabel(slide);
     if(q.is429 && !q.zero && attempt < 2){          // transient rate limit: hold everything, then retry
       holdOff(q.wait*1000 + 400);
       setStatus(slide,'queued', 'rate limited · retrying in '+q.wait+'s');
       log('slide '+n+' rate limited — pausing '+q.wait+'s','w');
       await GATE;
-      return genImage(slide, single, attempt+1);
+      return genImage(slide, single, attempt+1, toneTry);
     }
     if(q.zero && !QUOTA_NOTED){
       QUOTA_NOTED = true;

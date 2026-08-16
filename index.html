@@ -242,6 +242,10 @@ details summary:hover{color:var(--fg)}
 .libItem .x{position:absolute;top:4px;right:4px;width:22px;height:22px;border-radius:6px;background:#000a;color:#fff;
   display:none;align-items:center;justify-content:center;font-size:13px;line-height:1}
 .libItem:hover .x{display:flex}
+.libItem .dl{position:absolute;top:4px;right:30px;width:22px;height:22px;border-radius:6px;background:#000a;color:#fff;
+  display:none;align-items:center;justify-content:center;line-height:1}
+.libItem .dl svg{width:13px;height:13px}
+.libItem:hover .dl{display:flex}
 .libItem .use{position:absolute;left:0;right:0;bottom:0;padding:3px 6px;font-size:10px;background:#000000b0;color:#ccc}
 .jobRow{display:flex;align-items:center;gap:8px;padding:7px 0;font-size:12.5px;color:var(--muted);border-top:1px solid var(--line)}
 .jobRow:first-child{border-top:none}
@@ -430,6 +434,7 @@ details summary:hover{color:var(--fg)}
           <select id="factCount" title="How many carousels"></select>
           <button id="factImgToggle" class="btn quiet sm" data-on="1">Images on</button>
           <button id="factLibToggle" class="btn sm" data-on="1" title="Body slides reuse saved Facts backgrounds; the cover is always generated fresh">Library on</button>
+          <button id="factPopToggle" class="btn quiet sm" data-on="0" title="Mix in colour-pop carousels: black and white except one element that keeps its colour, the same one on every slide">Colour pop off</button>
           <div class="spacer"></div>
           <span id="factStatus" class="tiny muted"></span>
           <button id="factStop" class="btn sm hide">Stop</button>
@@ -592,8 +597,9 @@ details summary:hover{color:var(--fg)}
     <div class="row">
       <span class="tiny" id="libStats" style="color:var(--faint)"></span>
       <div class="spacer"></div>
-      <button id="libExport" class="btn sm quiet">Export</button>
-      <button id="libImport" class="btn sm quiet">Import</button>
+      <button id="libDownload" class="btn sm" title="Download this collection's images as a ZIP of JPEGs">Download</button>
+      <button id="libExport" class="btn sm quiet" title="JSON backup of this whole library, for restoring later">Backup</button>
+      <button id="libImport" class="btn sm quiet" title="Restore from a JSON backup">Import</button>
       <button id="libClear" class="btn sm quiet">Clear</button>
       <input type="file" id="libFile" accept="application/json" class="hide">
     </div>
@@ -908,6 +914,9 @@ const PRESETS = [
       'period-accurate clothing and setting, photojournalism, candid unposed moment, '+
       'slight motion blur, natural light.',
     mono_suffix:'Black and white only — monochrome film, absolutely no colour anywhere in the frame.',
+    pop_suffix:'Selective colour: the photograph is entirely black and white EXCEPT {pop}, which is rendered '+
+      'in vivid, saturated natural colour. That colour appears nowhere else in the frame — every other '+
+      'surface, garment, sky and skin tone is pure greyscale. The colour is the only thing the eye lands on.',
     colour_suffix:'Shot on colour film of the period — Kodachrome and Ektachrome palette, warm cast, '+
       'clearly readable colour in the clothing, skin, sky and surroundings. Film colour, not digital colour.',
     caption_treatment:'documentary',
@@ -1215,7 +1224,7 @@ async function libEnrich(){
         if(!item.thumb) item.thumb = await makeThumb(data);
         if(!item.bytes) item.bytes = data.length;
         if(!item.toneChecked){
-          const t = await toneOfDataURL(data);
+          const t = await toneOfDataURL(data, item.tone);   // keep a pop tag if the picture really is one
           if(t){ item.tone = t; item.toneChecked = true; }
         }
       }
@@ -1282,7 +1291,7 @@ async function useFromLibrary(slide, item){
 }
 
 const slimSlide = (s, withImages) => ({id:s.id, kind:s.kind, title:s.title, body:s.body, scene:s.scene, tone:s.tone,
-  status:s.status, img: withImages ? (s.img||'') : '', inset: withImages ? (s.inset||'') : ''});
+  pop:s.pop||'', status:s.status, img: withImages ? (s.img||'') : '', inset: withImages ? (s.inset||'') : ''});
 function projectJSON(withImages){
   return {
     v:2, profile:S.profile, styleKey:S.styleKey, caption:S.caption, openBatch:S.openBatch,
@@ -1309,7 +1318,7 @@ const autosave = debounce(async ()=>{
    typography are what the live controls edit, and overwriting those would throw
    away work you can see. */
 const BRIEF_KEYS = ['imagery','image_prompt_suffix','image_prompt_suffix_colour',
-                    'mono_suffix','colour_suffix','shot_ladder','library_collection'];
+                    'mono_suffix','colour_suffix','pop_suffix','shot_ladder','library_collection'];
 function refreshBuiltinProfile(){
   const m = /^preset:(\d+)$/.exec(S.styleKey || '');
   const preset = m && PRESETS[+m[1]];
@@ -1890,9 +1899,9 @@ function buildGrid(){
       '<div class="cw">'+
         '<canvas data-id="'+s.id+'"></canvas>'+
         '<span class="badge">'+String(i+1).padStart(2,'0')+(s.kind==='hook'?' · cover':'')+
-          (s.tone === 'colour' ? ' · colour' : '')+'</span>'+
+          (toneOf(s) === 'colour' ? ' · colour' : toneOf(s) === 'pop' ? ' · pop' : '')+'</span>'+
         '<div class="tools">'+tool('regen','Regenerate image')+tool('lib','Pick from the library')+tool('up','Use my own image')+
-          (S.profile.mono_suffix || S.profile.colour_suffix ? tool('tone','Switch this slide between colour and black and white') : '')+
+          (S.profile.mono_suffix || S.profile.colour_suffix ? tool('tone','Black and white \u2192 colour \u2192 colour pop') : '')+
           (s.kind === 'hook' && (S.profile.caption_treatment === 'documentary') ? tool('inset','Add a real archival portrait') : '')+
           tool('dl','Download JPEG')+tool('left','Move left')+tool('right','Move right')+tool('del','Delete')+'</div>'+
         '<div class="state '+(s.status||'')+'" data-st="'+s.id+'"></div>'+
@@ -1925,9 +1934,21 @@ function buildGrid(){
     d.querySelector('[data-a=lib]').onclick = () => pickBackgroundFor(s);
     const toneBtn = d.querySelector('[data-a=tone]');
     if(toneBtn) toneBtn.onclick = () => {
-      s.tone = toneOf(s) === 'colour' ? 'mono' : 'colour';
+      const next = {mono:'colour', colour:'pop', pop:'mono'}[toneOf(s)];
+      // colour pop is a property of the whole carousel, so switching one slide into or
+      // out of it takes the rest with it — a single popped slide is just an odd one out
+      if(next === 'pop' || toneOf(s) === 'pop'){
+        const deck = s._deck;
+        const all = deck ? deck.slides : S.slides;
+        all.forEach(x=>{ x.tone = next; if(next === 'pop') x.pop = (deck && deck.pop) || x.pop || ''; });
+        if(deck) deck.tone = next;
+        log(next === 'pop' ? 'the whole carousel is now colour pop — regenerate its images to see it'
+                           : 'colour pop switched off for the whole carousel','w');
+      } else {
+        s.tone = next;
+        log('slide set to '+next+' — regenerate its image to see it','w');
+      }
       buildGrid(); autosave();
-      log('slide set to '+s.tone+' — regenerate its image to see it','w');
     };
     const insetBtn = d.querySelector('[data-a=inset]');
     if(insetBtn){
@@ -2281,27 +2302,43 @@ function loadDeck(j){
    said colour, and nothing measured the result. */
 function toneOf(slide){
   const deck = slide._deck;
-  const t = slide.tone || (deck && deck.tone) || 'mono';
+  const t = String(slide.tone || (deck && deck.tone) || 'mono');
+  if(/pop/i.test(t)) return 'pop';
   return /colour|color/i.test(t) ? 'colour' : 'mono';
 }
 function toned(slide){ return !!(slide && (slide.tone || (slide._deck && slide._deck.tone))); }
-/* what to say when the style itself doesn't spell its two looks out */
+/* Colour pop needs to know WHAT keeps its colour, and it has to be the same thing on
+   every slide — a carousel that pops a red coat then an amber light looks accidental
+   rather than deliberate. The writer names it once for the deck. */
+function popOf(slide){
+  const deck = slide._deck;
+  return String(slide.pop || (deck && deck.pop) || 'the single most important object in the frame');
+}
+/* what to say when the style itself doesn't spell its looks out */
 const TONE_FALLBACK = {
   mono:'Black and white only — monochrome film, absolutely no colour anywhere in the frame.',
   colour:'Shot on colour film — Kodachrome and Ektachrome palette, warm cast, clearly readable '+
-    'colour in the clothing, skin, sky and surroundings.'
+    'colour in the clothing, skin, sky and surroundings.',
+  pop:'Selective colour: the photograph is entirely black and white EXCEPT {pop}, which is rendered in '+
+    'vivid saturated natural colour. That colour appears nowhere else in the frame.'
 };
 function toneSuffix(p, slide){
   if(!toned(slide) && !p.mono_suffix && !p.colour_suffix) return '';
   const t = toneOf(slide);
-  const own = t === 'colour' ? p.colour_suffix : p.mono_suffix;
-  return ' ' + (own || TONE_FALLBACK[t]);
+  const own = t === 'colour' ? p.colour_suffix : t === 'pop' ? p.pop_suffix : p.mono_suffix;
+  return ' ' + (own || TONE_FALLBACK[t]).replace(/\{pop\}/g, popOf(slide));
 }
 /* "archival photograph" reads as black and white to an image model, so a colour
    slide has to say so before the style description, not only after it. */
 function toneLead(p, slide, insist){
   if(!toned(slide) && !p.mono_suffix && !p.colour_suffix) return '';
-  return toneOf(slide) === 'colour'
+  const t = toneOf(slide);
+  if(t === 'pop') return insist
+    ? 'A BLACK AND WHITE PHOTOGRAPH WITH ONE SINGLE COLOUR POP: ' + popOf(slide) + ' is in vivid colour and '+
+      'ABSOLUTELY EVERYTHING ELSE is pure greyscale. NOT a colour photograph, NOT partially tinted, NOT sepia. '
+    : 'A BLACK AND WHITE PHOTOGRAPH WITH A SINGLE COLOUR POP: everything is monochrome except ' +
+      popOf(slide) + ', which stays in full colour. ';
+  return t === 'colour'
     ? (insist
         ? 'A FULL COLOUR PHOTOGRAPH — vivid, unmistakably in colour, strong visible hues. NOT black and white, NOT monochrome, NOT desaturated, NOT sepia. '
         : 'A FULL COLOUR PHOTOGRAPH with rich, clearly visible colour throughout the frame. ')
@@ -2341,31 +2378,83 @@ function styleSuffix(p, slide){
   return (toneOf(slide) === 'colour' && toned(slide) && p.image_prompt_suffix_colour)
     || p.image_prompt_suffix || '';
 }
-/* measure what a picture actually is, rather than trusting what was asked for */
-function imageSaturation(img){
+/* Measure what a picture actually is, rather than trusting what was asked for.
+   Mean saturation alone cannot see a colour pop: a mostly-grey frame with one red
+   coat in it averages out as monochrome. So take two readings — the average, and
+   the share of pixels that are strongly coloured. A pop frame is low on the first
+   and non-zero on the second. */
+function imageStats(img){
   try{
     const W = 48, H = Math.max(8, Math.round(48 * img.naturalHeight / img.naturalWidth));
     const c = document.createElement('canvas'); c.width = W; c.height = H;
     const ctx = c.getContext('2d', {willReadFrequently:true});
     ctx.drawImage(img, 0, 0, W, H);
     const d = ctx.getImageData(0,0,W,H).data;
-    let sum = 0, n = 0;
+    const BUCKETS = 12;                       // 30 degrees of hue each
+    const hist = new Array(BUCKETS).fill(0);
+    let sum = 0, hot = 0, n = 0;
     for(let i=0;i<d.length;i+=4){
-      const mx = Math.max(d[i],d[i+1],d[i+2]), mn = Math.min(d[i],d[i+1],d[i+2]);
-      sum += (mx - mn)/255; n++;
+      const r = d[i], g = d[i+1], bl = d[i+2];
+      const mx = Math.max(r,g,bl), mn = Math.min(r,g,bl);
+      const sat = (mx - mn)/255;
+      sum += sat; n++;
+      if(sat > 0.28){
+        hot++;
+        let h;                                 // hue in degrees, only needed for saturated pixels
+        if(mx === mn) h = 0;
+        else if(mx === r) h = 60*(((g-bl)/(mx-mn)) % 6);
+        else if(mx === g) h = 60*(((bl-r)/(mx-mn)) + 2);
+        else h = 60*(((r-g)/(mx-mn)) + 4);
+        if(h < 0) h += 360;
+        hist[Math.min(BUCKETS-1, Math.floor(h/(360/BUCKETS)))]++;
+      }
     }
-    return n ? sum/n : 0;
-  }catch(e){ return 0; }
+    // How concentrated the colour is on ONE hue. A colour pop is a red coat and
+    // nothing else; a colour photograph has sky, skin and ground all at once. This is
+    // what separates them — average saturation alone cannot.
+    let focus = 0;
+    if(hot){
+      for(let k=0;k<BUCKETS;k++){
+        const near = hist[k] + hist[(k+1)%BUCKETS] + hist[(k+BUCKETS-1)%BUCKETS];
+        if(near > focus) focus = near;
+      }
+      focus /= hot;
+    }
+    return n ? {mean: sum/n, hot: hot/n, focus} : {mean:0, hot:0, focus:0};
+  }catch(e){ return {mean:0, hot:0, focus:0}; }
 }
+const imageSaturation = img => imageStats(img).mean;
 const MONO_THRESHOLD = 0.055;
-function measuredTone(img){ return imageSaturation(img) > MONO_THRESHOLD ? 'colour' : 'mono'; }
-function toneOfDataURL(dataUrl){
+/* Free classification, only ever mono or colour — "pop" is not guessed at, because a
+   moody colour photograph and a pop frame can read alike. Pop is only ever confirmed
+   against a request for it, below. */
+function measuredTone(img){ return imageStats(img).mean > MONO_THRESHOLD ? 'colour' : 'mono'; }
+function toneOK(want, st){
+  if(want === 'mono')   return st.mean <= MONO_THRESHOLD;
+  if(want === 'colour') return st.mean > MONO_THRESHOLD;
+  // measured: a pop of any size reads focus 1.00, a two-hue colour frame 0.59, and a
+  // real photograph lower still. Saturation says how much colour; focus says whether
+  // it is all one colour, which is the whole idea.
+  if(want === 'pop')    return st.hot >= 0.004 && st.hot <= 0.45 && st.focus >= 0.75;
+  return true;
+}
+/* What to record for a picture that was asked for `want`: the request if it was
+   honoured, otherwise an honest reading of what actually arrived. */
+function classifyTone(want, st){
+  if(want && toneOK(want, st)) return want;
+  return st.mean > MONO_THRESHOLD ? 'colour' : 'mono';
+}
+function statsOfDataURL(dataUrl){
   return new Promise(res=>{
     const im = new Image();
-    im.onload = () => res(measuredTone(im));
-    im.onerror = () => res('');
+    im.onload = () => res(imageStats(im));
+    im.onerror = () => res(null);
     im.src = dataUrl;
   });
+}
+async function toneOfDataURL(dataUrl, want){
+  const st = await statsOfDataURL(dataUrl);
+  return st ? classifyTone(want, st) : '';
 }
 function imagePrompt(slide, insist){
   const p = S.profile;
@@ -2385,7 +2474,8 @@ async function keepInLibrary(slide, dataUrl){
     imagery: S.profile.imagery || '', aspect: S.profile.aspect_ratio || '9:16',
     collection: currentCollection(),
     // record what the picture is, not what was asked for — the model does not always comply
-    tone: (await toneOfDataURL(dataUrl)) || toneOf(slide), toneChecked: true,
+    tone: (await toneOfDataURL(dataUrl, toneOf(slide))) || toneOf(slide), toneChecked: true,
+    pop: toneOf(slide) === 'pop' ? popOf(slide) : '',
     bytes: dataUrl.length,
     created: Date.now(), used: 0};
   try{
@@ -2427,13 +2517,16 @@ async function genImage(slide, single, attempt, toneTry){
     // "archival photograph" pulls the model towards black and white however loudly the
     // prompt asks for colour, so check the pixels and ask again, harder, once.
     const n0 = slideLabel(slide);
-    if(toned(slide) && toneOf(slide) === 'colour'){
-      const got = await toneOfDataURL(r.images[0]);
-      if(got === 'mono' && toneTry < 1){
-        log('slide '+n0+' came back monochrome but is marked colour — asking again','w');
-        return genImage(slide, single, attempt, toneTry + 1);
+    const want = toned(slide) ? toneOf(slide) : '';
+    if(want && want !== 'mono'){
+      const st = await statsOfDataURL(r.images[0]);
+      if(st && !toneOK(want, st)){
+        if(toneTry < 1){
+          log('slide '+n0+' did not come back as '+want+' — asking again','w');
+          return genImage(slide, single, attempt, toneTry + 1);
+        }
+        log('slide '+n0+' is still not '+want+' after a retry — keeping it','w');
       }
-      if(got === 'mono') log('slide '+n0+' is still monochrome after a retry — keeping it','w');
     }
     setImage(slide, r.images[0], autosave);
     setStatus(slide,'done');
@@ -2580,6 +2673,7 @@ function renderLibrary(){
       : ((item.tone === 'colour' ? 'colour · ' : '') + ((item.tags||[]).slice(0,2).join(' · ') || (item.aspect||'')));
     d.innerHTML = '<img'+(item.thumb ? ' src="'+item.thumb+'"' : '')+' loading="lazy" alt="">'+
       '<button class="x" title="Delete">×</button>'+
+      '<button class="dl" title="Download this image">'+svg(ICON.dl)+'</button>'+
       '<div class="use">'+label+(item.used ? ' · '+item.used+'×' : '')+'</div>';
     // items saved before thumbnails existed: fetch the full image only once it scrolls
     // into view, and only until libEnrich has given it a thumbnail of its own
@@ -2590,6 +2684,15 @@ function renderLibrary(){
     }
     d.title = (item.scene || '') + ((item.tags||[]).length ? '\n\ntags: '+item.tags.join(', ') : '');
     d.querySelector('.x').onclick = e => { e.stopPropagation(); libDelete(item.id); };
+    d.querySelector('.dl').onclick = async e => {
+      e.stopPropagation();
+      const data = await libData(item.id);
+      if(!data) return log('that background has no stored image','w');
+      const a = document.createElement('a');
+      a.href = data;
+      a.download = (slug(item.scene||'background') || 'background') + '.' + extOf(data);
+      a.click();
+    };
     d.onclick = () => {
       if(!LIB_PICK_FOR) return;
       useFromLibrary(LIB_PICK_FOR, item);
@@ -2603,6 +2706,49 @@ function pickBackgroundFor(slide){
   LIB_PICK_FOR = slide;
   openDrawer('drawerLibrary');
   renderLibrary();
+}
+/* "Export" only ever wrote a JSON backup — useful for restoring the library, useless
+   if what you want is the pictures. This gets the actual JPEGs out, one collection at
+   a time, read from storage one at a time so a big library doesn't have to fit in
+   memory to be downloaded. */
+const extOf = dataUrl => ((/^data:image\/([a-z]+)/i.exec(dataUrl||'')||[])[1] || 'jpg').replace('jpeg','jpg');
+async function downloadLibraryImages(){
+  const coll = LIB_COLL || currentCollection();
+  const items = LIB.filter(x=>collectionOf(x) === coll);
+  if(!items.length) return log('nothing in the '+coll+' collection to download','w');
+  const stat = $('libStats'), was = stat.textContent;
+  try{
+    if(!window.JSZip) await loadScript('https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js');
+    const zip = new JSZip();
+    const lines = [];
+    let n = 0, missing = 0;
+    for(let i=0;i<items.length;i++){
+      const it = items[i];
+      const data = await libData(it.id);
+      if(!data){ missing++; continue; }
+      const name = String(i+1).padStart(3,'0') + (it.scene ? '_'+slug(it.scene).slice(0,48) : '') + '.' + extOf(data);
+      zip.file(name, data.split(',')[1], {base64:true});
+      lines.push(name + '  —  ' + (it.scene||'') + (it.tone ? '  ['+it.tone+']' : ''));
+      n++;
+      stat.textContent = 'zipping ' + n + ' of ' + items.length + '…';
+    }
+    if(!n) return log('none of those backgrounds have image data stored','e');
+    zip.file('index.txt', lines.join('\n'));
+    const blob = await zip.generateAsync({type:'blob'});
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = slug(coll) + '-backgrounds-' + n + '.zip';
+    a.click();
+    setTimeout(()=>URL.revokeObjectURL(a.href), 8000);
+    log('downloaded ' + n + ' image' + (n>1?'s':'') + ' from ' + coll +
+        (missing ? ' — ' + missing + ' had no stored image' : ''), missing ? 'w' : 'o');
+  }catch(e){
+    log(/could not load/.test(e.message)
+      ? 'could not load the ZIP library from the CDN — check your connection. Single images still download from the icon on each background.'
+      : 'download failed: ' + e.message, 'e');
+  }finally{
+    stat.textContent = was; renderLibrary();
+  }
 }
 async function exportLibrary(){
   const items = [];
@@ -2669,29 +2815,35 @@ function findSlide(id){
 /* Say plainly how many colour slides actually came back in colour. Guessing from
    thumbnails is how this went unnoticed in the first place. */
 async function reportTone(slides){
-  const want = slides.filter(s=>s.img && toned(s) && toneOf(s) === 'colour');
-  if(!want.length) return;
-  let ok = 0;
-  for(const s of want) if(await toneOfDataURL(s.img) === 'colour') ok++;
-  log('colour slides: '+ok+' of '+want.length+' came back in colour',
-      ok === want.length ? 'o' : 'w');
+  for(const t of ['colour','pop']){
+    const want = slides.filter(s=>s.img && toned(s) && toneOf(s) === t);
+    if(!want.length) continue;
+    let ok = 0;
+    for(const s of want){ const st = await statsOfDataURL(s.img); if(st && toneOK(t, st)) ok++; }
+    log((t === 'pop' ? 'colour-pop' : 'colour')+' slides: '+ok+' of '+want.length+' came back right',
+        ok === want.length ? 'o' : 'w');
+  }
 }
-/* A batch job has no retry of its own, so colour slides it returned in black and
-   white are re-requested here, at full price, insisting. It is a handful of images
-   out of a hundred — the point of the batch is the other ninety-odd. */
-async function redoMonoColourSlides(slides){
+/* A batch job has no retry of its own, so slides whose tone it ignored are
+   re-requested here, at full price, insisting. It is a handful of images out of a
+   hundred — the point of the batch is the other ninety-odd. */
+async function redoWrongToneSlides(slides){
   const wrong = [];
   for(const s of slides){
     if(!s.img) continue;
-    if(await toneOfDataURL(s.img) === 'mono') wrong.push(s);
+    const st = await statsOfDataURL(s.img);
+    if(st && !toneOK(toneOf(s), st)) wrong.push(s);
   }
   if(!wrong.length) return;
-  log(wrong.length+' colour slide'+(wrong.length>1?'s':'')+' came back black and white — asking again','w');
+  log(wrong.length+' slide'+(wrong.length>1?'s':'')+' came back in the wrong tone — asking again','w');
   await runQueue(wrong, 3, s => genImage(s, false, 0, 1));
   const still = [];
-  for(const s of wrong) if(s.img && await toneOfDataURL(s.img) === 'mono') still.push(s);
-  log(still.length ? still.length+' still black and white — try a different image model in Settings'
-                   : 'all of them are in colour now', still.length ? 'w' : 'o');
+  for(const s of wrong){
+    const st = s.img && await statsOfDataURL(s.img);
+    if(st && !toneOK(toneOf(s), st)) still.push(s);
+  }
+  log(still.length ? still.length+' still wrong after a retry — try a different image model in Settings'
+                   : 'all of them match their tone now', still.length ? 'w' : 'o');
   autosave();
 }
 async function pollJob(job){
@@ -2705,7 +2857,7 @@ async function pollJob(job){
     const dest = (j.dest && j.dest.inlinedResponses) || (j.response && j.response.inlinedResponses);
     if(dest){
       let got = 0, failed = 0, skipped = 0;
-      const colourWanted = [];
+      const tonedSlides = [];
       dest.forEach((item, i)=>{
         const key = (item.metadata && item.metadata.key) || item.key || job.slideIds[i];
         const slide = findSlide(key);
@@ -2723,7 +2875,7 @@ async function pollJob(job){
         setStatus(slide,'done');
         slide._job = null;
         keepInLibrary(slide, out.images[0]);
-        if(toned(slide) && toneOf(slide) === 'colour') colourWanted.push(slide);
+        if(toned(slide) && toneOf(slide) !== 'mono') tonedSlides.push(slide);
         got++;
       });
       job.done = true;
@@ -2736,7 +2888,7 @@ async function pollJob(job){
       log('batch job finished: '+got+' images in'+(failed?', '+failed+' failed':'')+
           (skipped?', '+skipped+' kept as-is and sent to the library':''), failed ? 'w' : 'o');
       autosave();
-      if(colourWanted.length) redoMonoColourSlides(colourWanted);
+      if(tonedSlides.length) redoWrongToneSlides(tonedSlides);
     } else if(/FAILED|CANCELLED|EXPIRED/.test(job.state || '')){
       job.done = true;
       job.slideIds.forEach(id=>{ const s = findSlide(id); if(s) setStatus(s,'failed', job.state.replace('JOB_STATE_','').toLowerCase()); });
@@ -3105,10 +3257,15 @@ function factDeckPrompt(cat, subj, n, deckTone){
 '- The middle slides each carry one beat of the story in order, each with a short title (2-6 words) and a body.\n' +
 '- The last slide closes it: the aftermath, the fate, or a real quotation.\n' +
 '- Bodies are 2-3 short declarative sentences, max ~40 words. Flat documentary narration. No hype words, no "you won\'t believe", no second person, no emoji.\n\n' +
-'TONE — this carousel is '+(deckTone === 'colour' ? 'IN COLOUR' : 'IN BLACK AND WHITE')+'. Give every slide a "tone" of "'+deckTone+'", '+
-(deckTone === 'colour'
-  ? 'except any moment that is genuinely archival or long past, which may be "mono".'
-  : 'except the moments that earn colour — a present-day photograph, the aftermath as it looks now, a modern location, or the single most striking reveal. Mark those "colour". Use it sparingly and deliberately, never at random.')+'\n\n' +
+(deckTone === 'pop'
+ ? 'TONE — this carousel is BLACK AND WHITE WITH A SINGLE COLOUR POP. Give every slide a "tone" of "pop" — all of them, with no exceptions.\n' +
+   '- Also return a top-level "pop": the one element that keeps its colour on every slide. Name a thing and its colour in a few words, e.g. "a red coat", "the amber warning light", "a single yellow flower".\n' +
+   '- It must be tied to this story specifically, and it must be something that can plausibly appear in EVERY scene you write — a recurring object, a colour of clothing, a light source, a liquid, a flag. Write the scenes so it is present in each one.\n' +
+   '- Pick one colour and stay with it. Do not name two colours.\n'
+ : 'TONE — this carousel is '+(deckTone === 'colour' ? 'IN COLOUR' : 'IN BLACK AND WHITE')+'. Give every slide a "tone" of "'+deckTone+'", '+
+   (deckTone === 'colour'
+     ? 'except any moment that is genuinely archival or long past, which may be "mono".'
+     : 'except the moments that earn colour — a present-day photograph, the aftermath as it looks now, a modern location, or the single most striking reveal. Mark those "colour". Use it sparingly and deliberately, never at random.'))+'\n\n' +
 'IMAGES — "scene" describes a photograph only: subject, setting, light, period detail. It never asks for words, numbers, logos or UI.\n' +
 '- Do NOT describe a portrait or recognisable likeness of the real named person. These images are generated, and a generated face presented as an archival photograph of a real individual is a fabricated historical document. Describe the setting, the equipment, the landscape, the aftermath, or figures seen at a distance, from behind, or in silhouette.\n' +
 '- The set has to read as a STORY, not one room photographed five times. No two slides may share a setting, a subject or a framing. If one slide is indoors at a workbench, the next is not.\n' +
@@ -3121,13 +3278,23 @@ function factDeckPrompt(cat, subj, n, deckTone){
 '- Exactly three paragraphs separated by blank lines. First paragraph opens with the hook and the core fact. Second gives the detail and context. Third closes with the aftermath or significance, then invites a reply in one short sentence.\n' +
 '- After the paragraphs, one final line of 3 to 5 hashtags ordered from the most niche to the broadest. No hashtags inside the paragraphs.\n\n' +
 'Return ONLY JSON:\n' +
-'{"subject":"canonical subject name","slides":[{"kind":"hook","title":"...","scene":"...","tone":"mono|colour"},{"kind":"slide","title":"...","body":"...","scene":"...","tone":"mono|colour"}],"caption":"para1\\n\\npara2\\n\\npara3\\n\\n#niche #mid #broad"}'
+'{"subject":"canonical subject name",'+(deckTone === 'pop' ? '"pop":"a red coat",' : '')+
+'"slides":[{"kind":"hook","title":"...","scene":"...","tone":"'+(deckTone === 'pop' ? 'pop' : 'mono|colour')+'"},'+
+'{"kind":"slide","title":"...","body":"...","scene":"...","tone":"'+(deckTone === 'pop' ? 'pop' : 'mono|colour')+'"}],'+
+'"caption":"para1\\n\\npara2\\n\\npara3\\n\\n#niche #mid #broad"}'
   );
 }
 
 /* The writer chooses which moments earn colour. If it played it safe in a mono deck,
    top up to the share you asked for — never the cover, so the opening look stays consistent. */
 function applySlideTones(deck){
+  // Colour pop is all-or-nothing across a carousel: a popped cover followed by a
+  // plain monochrome slide reads as a mistake, not a choice. So the deck decides,
+  // every slide follows, and the popped element is the same one throughout.
+  if(deck.tone === 'pop'){
+    deck.slides.forEach(s=>{ s.tone = 'pop'; s.pop = deck.pop || ''; });
+    return;
+  }
   if(deck.tone === 'colour'){
     deck.slides.forEach(s=>{ if(s.tone !== 'mono') s.tone = 'colour'; });
     return;
@@ -3165,7 +3332,12 @@ async function runFacts(){
     const awaiting = S.batch.filter(d=>d.slides.some(s=>s._job && JOBS.some(j=>j.name === s._job && !j.done)));
     const colourShare = (+($('rColourDecks').value) || 0) / 100;
     const nColour = Math.round(subjects.length * colourShare);
-    const tones = subjects.map((_,i)=> i < nColour ? 'colour' : 'mono');
+    // Colour pop is drawn from the monochrome half — it IS a black and white photograph,
+    // just one with a single element left in colour — so switching it on doesn't quietly
+    // reduce how many full-colour carousels the slider asked for.
+    const popOn = $('factPopToggle') && $('factPopToggle').dataset.on === '1';
+    const nPop = popOn ? Math.max(1, Math.round((subjects.length - nColour) / 2)) : 0;
+    const tones = subjects.map((_,i)=> i < nColour ? 'colour' : i < nColour + nPop ? 'pop' : 'mono');
     for(let i=tones.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [tones[i],tones[j]]=[tones[j],tones[i]]; }
     const newDecks = subjects.map((s,i)=>({id:uid(), hook:s.claim || s.subject, subject:s.subject, cat,
                                        tone:tones[i], n:slides, slides:[], caption:'', status:'queued', error:''}));
@@ -3180,10 +3352,12 @@ async function runFacts(){
         const r = await callModel({model: cfg().textModel,
           parts:[{type:'text', text: factDeckPrompt(cat, {subject:deck.subject, claim:deck.hook}, deck.n, deck.tone)}]});
         const j = extractJSON(r.text, false);
+        // the popped element, if the writer named one — trimmed, since it goes into every prompt
+        if(deck.tone === 'pop') deck.pop = String(j.pop || '').trim().slice(0, 60) || 'a single red object';
         deck.slides = (Array.isArray(j.slides) ? j.slides : []).map((s,i)=>({
           id: uid(), kind: (i === 0 || s.kind === 'hook') ? 'hook' : 'slide',
           title: String(s.title||''), body: String(s.body||''), scene: String(s.scene||''),
-          tone: s.tone ? (/colour|color/i.test(s.tone) ? 'colour' : 'mono') : (deck.tone || 'mono'),
+          tone: s.tone ? (/pop/i.test(s.tone) ? 'pop' : /colour|color/i.test(s.tone) ? 'colour' : 'mono') : (deck.tone || 'mono'),
           img:'', status:'', _deck: deck, _label: deck.subject.slice(0,28)
         }));
         applySlideTones(deck);
@@ -3524,6 +3698,7 @@ function init(){
   // Facts keep their own switch, on by default: their library is a separate collection,
   // so reusing from it never pulls a golf course into a documentary carousel.
   bindToggle('factLibToggle','cb.useLibFacts','Library on','Library off','', true);
+  bindToggle('factPopToggle','cb.pop','Colour pop on','Colour pop off');
   bindToggle('batchApiToggle','cb.batchApi','Half price on','Half price off');
 
   // ---- logo ----
@@ -3551,6 +3726,7 @@ function init(){
 
   $('btnLibrary').onclick = () => { LIB_PICK_FOR = null; openDrawer('drawerLibrary'); renderLibrary(); };
   $('libSearch').addEventListener('input', e => { LIB_FILTER = e.target.value; renderLibrary(); });
+  $('libDownload').onclick = downloadLibraryImages;
   $('libExport').onclick = exportLibrary;
   $('libImport').onclick = () => $('libFile').click();
   $('libFile').onchange = e => { if(e.target.files[0]) importLibrary(e.target.files[0]); };

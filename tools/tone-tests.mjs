@@ -70,7 +70,7 @@ const retry = await p.evaluate(async ()=>{
     monoNeverInsisted: window.__prompts.filter(t=>/BLACK AND WHITE PHOTOGRAPH\./.test(t) && /NOT black and white/.test(t)).length,
     colourSlideTone: await tone(S.slides[0].img),
     monoSlideTone:   await tone(S.slides[1].img),
-    logSaysRetry: [...document.querySelectorAll('#log div')].filter(d=>/came back monochrome/.test(d.textContent)).length
+    logSaysRetry: [...document.querySelectorAll('#log div')].filter(d=>/did not come back as colour/.test(d.textContent)).length
   };
 });
 
@@ -90,7 +90,7 @@ const stored = await p.evaluate(async ()=>{
   await new Promise(r=>setTimeout(r, 900));
   const item = LIB.find(x=>x.scene === 'a quiet street');
   return {asked:'colour', storedTone: item && item.tone, checked: !!(item && item.toneChecked),
-          warned: [...document.querySelectorAll('#log div')].filter(d=>/still monochrome after a retry/.test(d.textContent)).length};
+          warned: [...document.querySelectorAll('#log div')].filter(d=>/still not colour after a retry/.test(d.textContent)).length};
 });
 
 // 3 — the picker refuses to substitute. Library holds mono frames only.

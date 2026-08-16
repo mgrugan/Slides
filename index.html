@@ -315,6 +315,7 @@ details summary:hover{color:var(--fg)}
       <button data-mode="A" class="on">Write from a hook</button>
       <button data-mode="B">Match a style</button>
       <button data-mode="C">Batch</button>
+      <button data-mode="D">Facts</button>
     </div>
 
     <div id="modeA">
@@ -405,12 +406,63 @@ details summary:hover{color:var(--fg)}
         </div>
       </div>
       <div class="hintline">Every deck uses the current style · a leading number sets that deck's length</div>
+    <div id="jobsHost">
       <div id="jobsWrap" class="panel hide">
         <div class="row" style="margin-bottom:8px"><strong style="font-size:13px">Batch jobs</strong>
           <div class="spacer"></div><button id="jobCheck" class="btn sm quiet">Check now</button></div>
         <div id="jobList"></div>
         <div class="tiny" id="jobsNote" style="color:var(--faint);margin-top:8px"></div>
       </div>
+    </div>
+    </div>
+
+    <div id="modeD" class="hide">
+      <div class="sheet">
+        <div class="row" style="padding:10px 12px 0">
+          <select id="factCat" style="width:auto;min-width:150px"></select>
+          <button id="factEditPrompt" class="btn sm quiet">Edit prompt</button>
+          <div class="spacer"></div>
+          <span id="factLedgerCount" class="tiny muted"></span>
+        </div>
+        <textarea id="factSeed" rows="2" placeholder="Optional: a subject, era or angle — leave blank and it picks for you."></textarea>
+        <div class="composerBar">
+          <select id="factSlides" title="Slides per carousel"></select>
+          <select id="factCount" title="How many carousels"></select>
+          <button id="factImgToggle" class="btn quiet sm" data-on="1">Images on</button>
+          <div class="spacer"></div>
+          <span id="factStatus" class="tiny muted"></span>
+          <button id="factStop" class="btn sm hide">Stop</button>
+          <button id="runFacts" class="btn primary">Generate</button>
+        </div>
+      </div>
+      <div class="hintline">Uses the Documentary facts style · subjects already covered are never repeated</div>
+
+      <div id="factPromptPanel" class="panel hide">
+        <div class="field">
+          <label for="factPromptText">Prompt for <span id="factCatName"></span></label>
+          <textarea id="factPromptText" rows="5"></textarea>
+        </div>
+        <div class="row" style="margin-top:10px">
+          <button id="factPromptSave" class="btn sm primary">Save</button>
+          <button id="factPromptReset" class="btn sm quiet">Reset to default</button>
+          <div class="spacer"></div>
+          <input id="factNewCat" placeholder="New category name" style="max-width:170px">
+          <button id="factAddCat" class="btn sm quiet">Add</button>
+          <button id="factDelCat" class="btn sm quiet danger">Delete</button>
+        </div>
+      </div>
+
+      <div id="factLedgerPanel" class="panel hide">
+        <div class="row"><strong style="font-size:13px">Covered subjects</strong>
+          <div class="spacer"></div>
+          <button id="ledgerExport" class="btn sm quiet">Export</button>
+          <button id="ledgerImport" class="btn sm quiet">Import</button>
+          <button id="ledgerClear" class="btn sm quiet danger">Clear</button>
+          <input type="file" id="ledgerFile" accept="application/json" class="hide">
+        </div>
+        <div id="ledgerList" class="cands" style="max-height:260px;overflow:auto"></div>
+      </div>
+      <div id="jobsWrapD"></div>
     </div>
   </section>
 
@@ -479,7 +531,7 @@ details summary:hover{color:var(--fg)}
       <h3>Format</h3>
       <div class="pair">
         <div class="field"><label for="cAspect">Aspect</label><select id="cAspect"><option>9:16</option><option>4:5</option><option>1:1</option></select></div>
-        <div class="field"><label for="cTreat">Caption</label><select id="cTreat"><option value="outlined">Outlined</option><option value="label-boxes">Label boxes</option><option value="plain">Plain</option></select></div>
+        <div class="field"><label for="cTreat">Caption</label><select id="cTreat"><option value="outlined">Outlined</option><option value="label-boxes">Label boxes</option><option value="plain">Plain</option><option value="documentary">Documentary</option></select></div>
       </div>
     </div>
     <div class="group">
@@ -498,6 +550,18 @@ details summary:hover{color:var(--fg)}
       <div class="slider"><label for="rBody">Body</label><span class="val" id="vBody"></span><input type="range" id="rBody" min="0.015" max="0.075" step="0.001"></div>
       <div class="slider"><label for="rTop">Text top</label><span class="val" id="vTop"></span><input type="range" id="rTop" min="0.02" max="0.85" step="0.005"></div>
       <div class="slider"><label for="rHookTop">Cover top</label><span class="val" id="vHookTop"></span><input type="range" id="rHookTop" min="0.02" max="0.8" step="0.005"></div>
+    </div>
+    <div class="group">
+      <h3>Brand</h3>
+      <div class="row">
+        <img id="logoPreview" class="hide" style="height:34px;background:#222;border-radius:6px;padding:3px">
+        <button id="logoPick" class="btn sm">Upload logo</button>
+        <button id="logoClear" class="btn sm quiet">Remove</button>
+        <input type="file" id="logoFile" accept="image/*" class="hide">
+      </div>
+      <div class="slider"><label for="rLogo">Logo size</label><span class="val" id="vLogo"></span><input type="range" id="rLogo" min="0.03" max="0.2" step="0.005"></div>
+      <div class="switch"><span>Show on every slide</span><input type="checkbox" id="cLogoAll"></div>
+      <div class="tiny" style="color:var(--faint)">A transparent PNG works best. On the Documentary style it sits in the cover's rule.</div>
     </div>
     <div class="group">
       <h3>Contrast</h3>
@@ -741,6 +805,7 @@ const ICON = {
   dl:'<path d="M12 4v12"/><path d="M7 11l5 5 5-5"/><path d="M4 19h16"/>',
   left:'<path d="M14 6l-6 6 6 6"/>', right:'<path d="M10 6l6 6-6 6"/>',
   del:'<path d="M5 7h14"/><path d="M9 7V5h6v2"/><path d="M7 7l1 12h8l1-12"/>',
+  inset:'<circle cx="12" cy="12" r="8"/><circle cx="12" cy="10" r="2.6"/><path d="M7.5 17a5 5 0 0 1 9 0"/>',
   lib:'<rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 15l4.5-4 4 3.5L15 11l6 5"/><circle cx="9" cy="9" r="1.2"/>'
 };
 const svg = d => '<svg viewBox="0 0 24 24">'+d+'</svg>';
@@ -816,6 +881,30 @@ const PRESETS = [
     text_align:'center',
     structure:'cover states the promise, then one idea per slide, each landing on a single image',
     voice:'measured and vivid, closer to editorial than to a coach shouting'
+  },
+  {
+    name:'Documentary facts', builtin:true,
+    aspect_ratio:'4:5',
+    imagery:'archival-bw-photograph',
+    image_prompt_suffix:'authentic black and white archival photograph, heavy film grain, high contrast with deep blacks '+
+      'and slightly blown highlights, period-accurate clothing equipment and setting, documentary photojournalism, '+
+      'candid unposed moment, slight motion blur, aged emulsion, monochrome only, absolutely no colour',
+    caption_treatment:'documentary',
+    font_family:'Anton', font_weight:400, body_font_family:'Space Mono', body_weight:400, italic:false,
+    uppercase:true, letter_spacing_em:-0.005,
+    text_color:'#FFFFFF', stroke_color:'#000000', stroke_width:0, text_shadow:0.35, shadow_color:'#000000',
+    label_bg:'#FFFFFF',
+    scrim_pct:0.52, scrim_alpha:0.94,          // black gradient rising from the bottom
+    bottom_pad_pct:0.055,                       // text block sits this far off the bottom edge
+    title_size_pct:0.072, body_size_pct:0.0225, title_gap_em:1.0, title_line_em:0.92,
+    max_width_pct:0.90, body_width_pct:0.86,
+    divider:true, portrait_inset:true,          // cover: rule + logo mark, and a round portrait
+    logo_scale_pct:0.075, logo_on_all:false,
+    text_block_top_pct:0.70, hook_top_pct:0.70,
+    auto_number:false,
+    text_align:'center',
+    structure:'cover states the astonishing claim, then the story unfolds one beat per slide and closes on the aftermath or a quote',
+    voice:'flat documentary narration, short declarative sentences, no hype words, the facts do the work'
   }
 ];
 
@@ -1054,7 +1143,7 @@ async function useFromLibrary(slide, item){
 }
 
 const slimSlide = (s, withImages) => ({id:s.id, kind:s.kind, title:s.title, body:s.body, scene:s.scene,
-  status:s.status, img: withImages ? (s.img||'') : ''});
+  status:s.status, img: withImages ? (s.img||'') : '', inset: withImages ? (s.inset||'') : ''});
 function projectJSON(withImages){
   return {
     v:2, profile:S.profile, styleKey:S.styleKey, caption:S.caption, openBatch:S.openBatch,
@@ -1080,7 +1169,7 @@ async function restoreProject(){
   S.caption = p.caption||''; S.slides = (p.slides||[]).map(s=>({...s, status:s.img?'done':(s.status||'')}));
   S.batch = (p.batch||[]).map(d=>({...d, slides:(d.slides||[]).map(s=>({...s}))}));
   S.openBatch = typeof p.openBatch === 'number' ? p.openBatch : -1;
-  S.batch.forEach(d=>d.slides.forEach(s=>{ if(s.img) cacheImage(s); }));   // so thumbnails and ZIP work after a reload
+  S.batch.forEach(d=>d.slides.forEach(s=>{ if(s.img) cacheImage(s); if(s.inset) cacheInset(s); }));   // so thumbnails and ZIP work after a reload
   $('capInput').value = S.caption;
   return true;
 }
@@ -1294,16 +1383,18 @@ function ensureFont(fam){
 }
 async function fontReady(p){
   ensureFont(p.font_family);
+  if(p.body_font_family) ensureFont(p.body_font_family);
   try{
-    for(const w of new Set([p.font_weight||800, p.body_weight||p.font_weight||800]))
-      await document.fonts.load(((p.italic?'italic ':'') + w + ' 80px "' + p.font_family + '"'));
+    for(const fam of new Set([p.font_family, p.body_font_family].filter(Boolean)))
+      for(const w of new Set([p.font_weight||800, p.body_weight||p.font_weight||800]))
+        await document.fonts.load(((p.italic?'italic ':'') + w + ' 80px "' + fam + '"'));
     await document.fonts.ready;
   }catch(e){ log('font load issue: '+e.message,'w'); }
 }
 
 /* ============================ canvas rendering ============================ */
-function fontStr(p, size, weight){
-  return (p.italic ? 'italic ' : '') + (weight || p.font_weight || 800) + ' ' + Math.round(size) + 'px "' + (p.font_family||'Inter') + '", Inter, sans-serif';
+function fontStr(p, size, weight, fam){
+  return (p.italic ? 'italic ' : '') + (weight || p.font_weight || 800) + ' ' + Math.round(size) + 'px "' + (fam || p.font_family || 'Inter') + '", Inter, sans-serif';
 }
 function wrap(ctx, text, maxW){
   const out = [];
@@ -1336,12 +1427,13 @@ function anchorX(p,W){
   const m = W*0.07;
   return p.text_align === 'left' ? m : p.text_align === 'right' ? W-m : W/2;
 }
-function drawLines(ctx, lines, p, size, x, y, W, H, weight){
+function drawLines(ctx, lines, p, size, x, y, W, H, weight, fam, lineEm){
   const treat = p.caption_treatment || 'outlined';
-  ctx.font = fontStr(p, size, weight);
+  ctx.font = fontStr(p, size, weight, fam);
+  if('letterSpacing' in ctx) ctx.letterSpacing = ((p.letter_spacing_em||0) * size).toFixed(2) + 'px';
   ctx.textBaseline = 'middle';
   ctx.textAlign = p.text_align === 'left' ? 'left' : p.text_align === 'right' ? 'right' : 'center';
-  const lh = treat === 'label-boxes' ? size*1.42 : size*1.20;
+  const lh = size * (lineEm || (treat === 'label-boxes' ? 1.42 : 1.20));
   const sh = +p.text_shadow || 0;
   /* the glow can be light as well as dark — ink type on a mid-tone wash needs a
      paper-coloured halo, not a drop shadow */
@@ -1394,7 +1486,60 @@ function displayTitle(slide, p){
   const n = S.slides.filter(s=>s.kind !== 'hook').indexOf(slide) + 1;
   return n > 0 ? n + '. ' + t : t;
 }
-function blockHeight(size, n, treat){ return n * (treat === 'label-boxes' ? size*1.42 : size*1.20); }
+function blockHeight(size, n, treat, lineEm){
+  return n * size * (lineEm || (treat === 'label-boxes' ? 1.42 : 1.20));
+}
+const titleLineEm = p => p.title_line_em ?? (p.caption_treatment === 'documentary' ? 0.94 : 1.20);
+const bodyLineEm  = p => p.body_line_em  ?? (p.caption_treatment === 'documentary' ? 1.42 : 1.20);
+/* black gradient rising from the bottom, so white type reads over any photograph */
+function drawScrim(ctx, W, H, p){
+  const hgt = (p.scrim_pct || 0) * H;
+  if(hgt <= 0) return;
+  const g = ctx.createLinearGradient(0, H - hgt, 0, H);
+  const a = p.scrim_alpha ?? 0.9;
+  g.addColorStop(0, 'rgba(0,0,0,0)');
+  g.addColorStop(0.45, 'rgba(0,0,0,'+(a*0.55).toFixed(3)+')');
+  g.addColorStop(1, 'rgba(0,0,0,'+a.toFixed(3)+')');
+  ctx.fillStyle = g;
+  ctx.fillRect(0, H - hgt, W, hgt);
+}
+/* the cover's rule with the brand mark sitting in the gap */
+function drawDivider(ctx, W, H, p, y){
+  const mark = LOGO_IMG && LOGO_IMG.complete && LOGO_IMG.naturalWidth ? LOGO_IMG : null;
+  const d = (p.logo_scale_pct || 0.075) * W;
+  const gap = mark ? d*0.9 : 0;
+  const half = W*0.40;
+  ctx.save();
+  ctx.strokeStyle = p.text_color || '#fff';
+  ctx.globalAlpha = 0.85;
+  ctx.lineWidth = Math.max(1.5, H*0.0016);
+  ctx.beginPath();
+  ctx.moveTo(W/2 - half, y); ctx.lineTo(W/2 - gap, y);
+  ctx.moveTo(W/2 + gap, y); ctx.lineTo(W/2 + half, y);
+  ctx.stroke();
+  ctx.restore();
+  if(mark) ctx.drawImage(mark, W/2 - d/2, y - d/2, d, d);
+}
+let LOGO_IMG = null;
+function drawCornerLogo(ctx, W, H, p){
+  if(!LOGO_IMG || !LOGO_IMG.complete || !LOGO_IMG.naturalWidth) return;
+  const d = (p.logo_scale_pct || 0.075) * W;
+  ctx.save(); ctx.globalAlpha = 0.92;
+  ctx.drawImage(LOGO_IMG, W/2 - d/2, H*0.035, d, d);
+  ctx.restore();
+}
+/* circular portrait inset, top-right, as on the reference cover */
+function drawInset(ctx, img, W, H, p){
+  if(!img || !img.complete || !img.naturalWidth) return;
+  const d = W*0.40, cx = W - d/2 - W*0.06, cy = d/2 + H*0.045;
+  ctx.save();
+  ctx.beginPath(); ctx.arc(cx, cy, d/2, 0, Math.PI*2); ctx.closePath();
+  ctx.strokeStyle = p.text_color || '#fff'; ctx.lineWidth = Math.max(3, W*0.008); ctx.stroke();
+  ctx.clip();
+  const s = Math.max(d/img.naturalWidth, d/img.naturalHeight);
+  ctx.drawImage(img, cx - img.naturalWidth*s/2, cy - img.naturalHeight*s/2, img.naturalWidth*s, img.naturalHeight*s);
+  ctx.restore();
+}
 
 function renderSlide(slide, canvas, p, scale){
   p = p || S.profile;
@@ -1417,28 +1562,49 @@ function renderSlide(slide, canvas, p, scale){
     ctx.fillStyle = g; ctx.fillRect(0,0,W,H);
   }
 
+  const treat = p.caption_treatment || 'outlined';
+  const doc = treat === 'documentary';
   const isHook = slide.kind === 'hook';
-  const tSize = (p.title_size_pct||0.05) * H * (isHook ? 1.4 : 1);
+
+  if(doc){
+    drawScrim(ctx, W, H, p);
+    if(isHook && p.portrait_inset) drawInset(ctx, IMG_CACHE['inset:'+slide.id], W, H, p);
+  }
+
+  const tSize = (p.title_size_pct||0.05) * H * (isHook && !doc ? 1.4 : 1);
   const bSize = (p.body_size_pct||0.033) * H;
-  const box = p.caption_treatment === 'label-boxes' ? tSize*0.7 : 0;
+  const box = treat === 'label-boxes' ? tSize*0.7 : 0;
   const maxW = W*(p.max_width_pct ?? 0.86) - box;
   const bMaxW = W*(p.body_width_pct ?? p.max_width_pct ?? 0.86) - box;
   const x = anchorX(p,W);
 
   const bWeight = p.body_weight || p.font_weight;
-  ctx.font = fontStr(p, tSize);
-  const tLines = wrap(ctx, displayTitle(slide, p), maxW);
-  ctx.font = fontStr(p, bSize, bWeight);
-  const bLines = isHook ? [] : wrap(ctx, slide.body, bMaxW);
+  const bFam = p.body_font_family || p.font_family;
+  const cased = t => p.uppercase ? String(t||'').toUpperCase() : t;
 
-  const treat = p.caption_treatment || 'outlined';
+  ctx.font = fontStr(p, tSize);
+  if('letterSpacing' in ctx) ctx.letterSpacing = ((p.letter_spacing_em||0)*tSize).toFixed(2)+'px';
+  const tLines = wrap(ctx, cased(displayTitle(slide, p)), maxW);
+  ctx.font = fontStr(p, bSize, bWeight, bFam);
+  if('letterSpacing' in ctx) ctx.letterSpacing = '0px';
+  const bLines = isHook ? [] : wrap(ctx, cased(slide.body), bMaxW);
+
+  const tLine = titleLineEm(p), bLine = bodyLineEm(p);
   const gap = bLines.length ? bSize*(p.title_gap_em ?? 0.7) : 0;
-  const totalH = blockHeight(tSize, tLines.length, treat) + gap + blockHeight(bSize, bLines.length, treat);
-  let top = (isHook ? (p.hook_top_pct != null ? p.hook_top_pct : 0.34) : (p.text_block_top_pct != null ? p.text_block_top_pct : 0.6)) * H;
+  const totalH = blockHeight(tSize, tLines.length, treat, tLine) + gap + blockHeight(bSize, bLines.length, treat, bLine);
+
+  let top;
+  if(doc){
+    top = H - H*(p.bottom_pad_pct ?? 0.055) - totalH;      // bottom-anchored, like the reference
+    if(isHook && p.divider) drawDivider(ctx, W, H, p, top - tSize*0.62);
+  } else {
+    top = (isHook ? (p.hook_top_pct ?? 0.34) : (p.text_block_top_pct ?? 0.6)) * H;
+  }
   top = clamp(top, H*0.01, H - totalH - H*0.02);
 
-  const used = drawLines(ctx, tLines, p, tSize, x, top, W, H);
-  if(bLines.length) drawLines(ctx, bLines, p, bSize, x, top + used + gap, W, H, bWeight);
+  const used = drawLines(ctx, tLines, p, tSize, x, top, W, H, null, null, tLine);
+  if(bLines.length) drawLines(ctx, bLines, p, bSize, x, top + used + gap, W, H, bWeight, bFam, bLine);
+  if(doc && p.logo_on_all && !(isHook && p.divider)) drawCornerLogo(ctx, W, H, p);
 }
 
 /* ============================ slide grid ============================ */
@@ -1449,6 +1615,15 @@ function setImage(slide, dataUrl, cb){
   im.onerror = () => log('image decode failed for slide '+slide.id,'e');
   im.src = dataUrl;
   IMG_CACHE[slide.id] = im;
+}
+/* the round portrait on a documentary cover — supplied by hand, never generated */
+function cacheInset(slide){
+  return new Promise(res=>{
+    if(!slide.inset) return res();
+    const im = new Image();
+    im.onload = im.onerror = () => { IMG_CACHE['inset:'+slide.id] = im; res(); };
+    im.src = slide.inset;
+  });
 }
 /* decode a stored image back into the cache without touching the DOM */
 function cacheImage(slide){
@@ -1476,9 +1651,11 @@ function buildGrid(){
         '<canvas data-id="'+s.id+'"></canvas>'+
         '<span class="badge">'+String(i+1).padStart(2,'0')+(s.kind==='hook'?' · cover':'')+'</span>'+
         '<div class="tools">'+tool('regen','Regenerate image')+tool('lib','Pick from the library')+tool('up','Use my own image')+
+          (s.kind === 'hook' && (S.profile.caption_treatment === 'documentary') ? tool('inset','Add a real archival portrait') : '')+
           tool('dl','Download JPEG')+tool('left','Move left')+tool('right','Move right')+tool('del','Delete')+'</div>'+
         '<div class="state '+(s.status||'')+'" data-st="'+s.id+'"></div>'+
         '<input type="file" accept="image/*" class="hide" data-a="file">'+
+        '<input type="file" accept="image/*" class="hide" data-a="insetFile">'+
       '</div>'+
       '<div class="edit'+(OPEN.has(s.id) ? '' : ' hide')+'">'+
         '<div class="lbl">Title</div><textarea data-f="title" rows="2"></textarea>'+
@@ -1504,6 +1681,16 @@ function buildGrid(){
     };
     d.querySelector('[data-a=regen]').onclick = () => genImage(s, true);
     d.querySelector('[data-a=lib]').onclick = () => pickBackgroundFor(s);
+    const insetBtn = d.querySelector('[data-a=inset]');
+    if(insetBtn){
+      insetBtn.onclick = () => d.querySelector('[data-a=insetFile]').click();
+      d.querySelector('[data-a=insetFile]').onchange = e => {
+        const f = e.target.files[0]; if(!f) return;
+        const rd = new FileReader();
+        rd.onload = () => { s.inset = rd.result; cacheInset(s).then(()=>{ drawOne(s.id); autosave(); }); };
+        rd.readAsDataURL(f);
+      };
+    }
     d.querySelector('[data-a=up]').onclick = () => d.querySelector('[data-a=file]').click();
     d.querySelector('[data-a=file]').onchange = e => {
       const f = e.target.files[0]; if(!f) return;
@@ -1613,6 +1800,9 @@ function syncControls(){
   $('cStroke').value = p.stroke_color || '#000000';
   $('cLabelBg').value = p.label_bg || '#FFFFFF';
   $('cShadowCol').value = p.shadow_color || '#000000';
+  $('rLogo').value = p.logo_scale_pct ?? 0.075;
+  $('cLogoAll').checked = !!p.logo_on_all;
+  $('vLogo').textContent = (+$('rLogo').value).toFixed(3);
   $('rTitle').value = p.title_size_pct ?? 0.05;
   $('rBody').value = p.body_size_pct ?? 0.033;
   $('rStroke').value = p.stroke_width ?? 8;
@@ -1638,6 +1828,8 @@ function bindControls(){
   live('cStroke',()=> S.profile.stroke_color = $('cStroke').value);
   live('cLabelBg',()=> S.profile.label_bg = $('cLabelBg').value);
   live('cShadowCol',()=> S.profile.shadow_color = $('cShadowCol').value);
+  live('rLogo',()=> S.profile.logo_scale_pct = +$('rLogo').value);
+  live('cLogoAll',()=> S.profile.logo_on_all = $('cLogoAll').checked);
   live('rTitle', ()=> S.profile.title_size_pct = +$('rTitle').value);
   live('rBody',  ()=> S.profile.body_size_pct = +$('rBody').value);
   live('rStroke',()=> S.profile.stroke_width = +$('rStroke').value);
@@ -2359,6 +2551,195 @@ async function downloadDecks(decks){
   }
 }
 
+/* ============================ Mode D — fact carousels ============================
+   A story told across slides: the claim, the reveal, the beats, the aftermath.
+   Subjects already used are held in a ledger and excluded, so a channel never
+   repeats itself. Category prompts are editable, because the angle is the product. */
+const FACT_DEFAULTS = {
+  'History': 'Little-known true episodes from history: overlooked people, strange campaigns, forgotten inventions, '+
+    'documented events that sound invented but are not. Favour specific named people and dated events over general trends.',
+  'Conspiracy': 'Documented conspiracies, cover-ups and secret programmes that turned out to be REAL and are now a matter '+
+    'of public record — declassified operations, admitted government experiments, proven corporate cover-ups. '+
+    'Never present an unproven theory as fact; the hook is that this one was actually true.',
+  'Terrifying': 'Genuinely unsettling true facts: disasters, close calls, biology, deep sea, space, historical cruelty, '+
+    'things that were nearly catastrophic. Unnerving because they are documented, not because they are gory.',
+  'Science': 'Counter-intuitive true findings and the people behind them: experiments that broke assumptions, '+
+    'accidental discoveries, scale and time facts that reframe how something works.'
+};
+let FACT_CATS = {};
+let LEDGER = [];
+let FACT_STOP = false;
+
+function loadFactCats(){
+  try{ FACT_CATS = Object.assign({}, FACT_DEFAULTS, JSON.parse(localStorage.getItem('cb.factCats')||'{}')); }
+  catch(e){ FACT_CATS = Object.assign({}, FACT_DEFAULTS); }
+}
+function saveFactCats(){ localStorage.setItem('cb.factCats', JSON.stringify(FACT_CATS)); }
+async function loadLedger(){
+  try{ LEDGER = (await idbGet('ledger')) || []; }catch(e){ LEDGER = []; }
+  try{ if(!LEDGER.length) LEDGER = JSON.parse(localStorage.getItem('cb.ledger')||'[]'); }catch(e){}
+  renderLedger();
+}
+async function saveLedger(){
+  try{ await idbPut('ledger', LEDGER); }catch(e){}
+  try{ localStorage.setItem('cb.ledger', JSON.stringify(LEDGER.slice(-400))); }catch(e){}
+  renderLedger();
+}
+const ledgerKey = s => String(s||'').toLowerCase().replace(/[^a-z0-9]+/g,' ').trim();
+function ledgerHas(subject){
+  const k = ledgerKey(subject);
+  return !!k && LEDGER.some(e => ledgerKey(e.subject) === k);
+}
+async function ledgerAdd(subject, title, cat){
+  if(!subject || ledgerHas(subject)) return;
+  LEDGER.push({subject, title: title||'', cat: cat||'', date: Date.now()});
+  await saveLedger();
+}
+function renderLedger(){
+  const n = LEDGER.length;
+  const el = $('factLedgerCount');
+  if(el) el.textContent = n ? n + ' covered' : 'nothing covered yet';
+  const list = $('ledgerList'); if(!list) return;
+  list.innerHTML = '';
+  LEDGER.slice().reverse().slice(0,120).forEach(e=>{
+    const d = document.createElement('div');
+    d.className = 'tiny'; d.style.cssText = 'padding:5px 0;border-bottom:1px solid var(--line);color:var(--muted)';
+    d.textContent = e.subject + (e.cat ? '  ·  '+e.cat : '');
+    list.appendChild(d);
+  });
+}
+
+/* one call picks the subjects, so a batch of ten is ten different stories */
+async function pickSubjects(cat, seed, n){
+  const recent = LEDGER.slice(-160).map(e=>e.subject);
+  const sys =
+'Pick '+n+' subjects for short documentary-style fact carousels.\n\n' +
+'CATEGORY — '+cat+':\n' + (FACT_CATS[cat]||'') + '\n' +
+(seed ? '\nFOCUS: '+seed+'\n' : '') +
+'\nRules:\n' +
+'- Every subject must be a real, well-documented person, event, programme or phenomenon that a reader can verify.\n' +
+'- Each must carry one astonishing but TRUE headline claim. If the striking version of the story is a myth, pick something else.\n' +
+'- Vary era, country and type. No two from the same event or the same person.\n' +
+(recent.length ? '- ALREADY COVERED, do not choose these or close variants:\n' + recent.map(s=>'  · '+s).join('\n') + '\n' : '') +
+'\nReturn ONLY a JSON array of exactly '+n+' objects: [{"subject":"canonical name","claim":"the astonishing true claim in under 14 words"}]';
+  const r = await callModel({model: cfg().textModel, parts:[{type:'text', text:sys}]});
+  S.lastRaw = r.text;
+  let arr = [];
+  try{
+    let j = extractJSON(r.text, true);
+    if(!Array.isArray(j) && j && typeof j === 'object') j = Object.values(j).find(v=>Array.isArray(v)) || [];
+    arr = (j||[]).map(o => typeof o === 'string' ? {subject:o, claim:''} : o).filter(o=>o && o.subject);
+  }catch(e){ throw new Error('could not read subjects from the reply — see Console in Settings'); }
+  return arr.filter(o=>!ledgerHas(o.subject)).slice(0, n);
+}
+
+function factDeckPrompt(cat, subj, n){
+  const p = S.profile;
+  return (
+'Write a '+n+'-slide documentary fact carousel about: '+subj.subject+'\n' +
+(subj.claim ? 'The hook is: '+subj.claim+'\n' : '') +
+'CATEGORY — '+cat+': '+(FACT_CATS[cat]||'')+'\n\n' +
+'TRUTH RULES — this is a facts account, so accuracy is the product:\n' +
+'- Every claim must be genuinely documented. Nothing invented, exaggerated or "commonly said".\n' +
+'- Never invent a statistic, date, name or number. If you are not confident, write the sentence without it.\n' +
+'- If a famous version of this story is disputed, say what is actually established instead.\n\n' +
+'STRUCTURE — it must read as one story across the slides, not a list:\n' +
+'- Slide 1 is the cover: the astonishing claim as a headline of 6-12 words. No body text.\n' +
+'- Slide 2 opens the story: a very short punchy title (2-4 words, e.g. "NO ONE KNEW.") and a body that introduces who or what this is.\n' +
+'- The middle slides each carry one beat of the story in order, each with a short title (2-6 words) and a body.\n' +
+'- The last slide closes it: the aftermath, the fate, or a real quotation.\n' +
+'- Bodies are 2-3 short declarative sentences, max ~40 words. Flat documentary narration. No hype words, no "you won\'t believe", no second person, no emoji.\n\n' +
+'IMAGES — "scene" describes a photograph only: subject, setting, light, period detail. It never asks for words, numbers, logos or UI.\n' +
+'- Do NOT describe a portrait or recognisable likeness of the real named person. These images are generated, and a generated face presented as an archival photograph of a real individual is a fabricated historical document. Describe the setting, the equipment, the landscape, the aftermath, or figures seen at a distance, from behind, or in silhouette.\n' +
+'Style is '+(p.imagery||'archival black and white photograph')+', so describe something a camera of that era could plausibly have captured.\n\n' +
+'CAPTION for Instagram:\n' +
+'- Exactly three paragraphs separated by blank lines. First paragraph opens with the hook and the core fact. Second gives the detail and context. Third closes with the aftermath or significance, then invites a reply in one short sentence.\n' +
+'- After the paragraphs, one final line of 3 to 5 hashtags ordered from the most niche to the broadest. No hashtags inside the paragraphs.\n\n' +
+'Return ONLY JSON:\n' +
+'{"subject":"canonical subject name","slides":[{"kind":"hook","title":"...","scene":"..."},{"kind":"slide","title":"...","body":"...","scene":"..."}],"caption":"para1\\n\\npara2\\n\\npara3\\n\\n#niche #mid #broad"}'
+  );
+}
+
+async function runFacts(){
+  const cat = $('factCat').value;
+  const n = +$('factCount').value, slides = +$('factSlides').value;
+  const seed = $('factSeed').value.trim();
+  FACT_STOP = false;
+  $('factStop').classList.remove('hide'); $('runFacts').disabled = true;
+  $('factStatus').textContent = 'picking subjects…';
+
+  // the look is part of the format — make sure a documentary style is active
+  if((S.profile.caption_treatment||'') !== 'documentary'){
+    const i = PRESETS.findIndex(x=>x.caption_treatment === 'documentary');
+    if(i >= 0){ applyStyle('preset:'+i, PRESETS[i]); await fontReady(S.profile); }
+  }
+
+  try{
+    const subjects = await pickSubjects(cat, seed, n);
+    if(!subjects.length) throw new Error('no fresh subjects came back — try a different category or clear the ledger');
+    if(subjects.length < n) log('only '+subjects.length+' fresh subjects available for this category','w');
+
+    const awaiting = S.batch.filter(d=>d.slides.some(s=>s._job && JOBS.some(j=>j.name === s._job && !j.done)));
+    const newDecks = subjects.map(s=>({id:uid(), hook:s.claim || s.subject, subject:s.subject, cat,
+                                       n:slides, slides:[], caption:'', status:'queued', error:''}));
+    S.batch = awaiting.concat(newDecks);
+    S.openBatch = -1;
+    renderBatch();
+
+    await runQueue(newDecks, 2, async deck => {
+      if(FACT_STOP) return;
+      deck.status = 'writing'; renderBatchRow(deck);
+      try{
+        const r = await callModel({model: cfg().textModel,
+          parts:[{type:'text', text: factDeckPrompt(cat, {subject:deck.subject, claim:deck.hook}, deck.n)}]});
+        const j = extractJSON(r.text, false);
+        deck.slides = (Array.isArray(j.slides) ? j.slides : []).map((s,i)=>({
+          id: uid(), kind: (i === 0 || s.kind === 'hook') ? 'hook' : 'slide',
+          title: String(s.title||''), body: String(s.body||''), scene: String(s.scene||''),
+          img:'', status:'', _deck: deck, _label: deck.subject.slice(0,28)
+        }));
+        if(!deck.slides.length) throw new Error('no slides in the reply');
+        deck.caption = String(j.caption||'');
+        deck.hook = deck.slides[0].title || deck.hook;
+        deck.subject = String(j.subject || deck.subject);
+        deck.status = 'written';
+        await ledgerAdd(deck.subject, deck.slides[0].title, cat);
+      }catch(e){
+        deck.status = 'failed'; deck.error = apiError(e);
+        log('fact deck failed ('+deck.subject.slice(0,40)+'): '+apiError(e),'e');
+      }
+      renderBatchRow(deck); batchProgress(); autosave();
+    });
+
+    if($('factImgToggle').dataset.on === '1' && !FACT_STOP){
+      const all = newDecks.filter(d=>d.status === 'written').flatMap(d=>d.slides);
+      all.forEach(s=>{ s.status = 'queued'; });
+      const {fresh: needGen, reused} = planImages(all);
+      for(const [s, item] of reused) await useFromLibrary(s, item);
+      if(needGen.length){
+        if($('batchApiToggle') && $('batchApiToggle').dataset.on === '1'){
+          try{ await submitBatchJob(needGen); }
+          catch(e){ log('batch job failed to submit: '+apiError(e)+' — using normal requests','w');
+                    await runQueue(needGen, 3, async s => { if(!FACT_STOP){ await genImage(s); batchProgress(); } }); }
+        } else {
+          await runQueue(needGen, 3, async s => { if(!FACT_STOP){ await genImage(s); batchProgress(); } });
+        }
+      }
+    }
+    newDecks.forEach(d=>{
+      if(d.status === 'written') d.status = d.slides.every(s=>s.img) ? 'done'
+        : d.slides.some(s=>s.status === 'queued') ? 'written' : 'partial';
+    });
+    renderBatch(); batchProgress(); autosave();
+    $('factStatus').textContent = '';
+    if(!FACT_STOP) log(newDecks.filter(d=>d.status!=='failed').length+' fact carousels ready','o');
+  }catch(e){
+    $('factStatus').textContent = 'failed';
+    log('facts failed: '+apiError(e),'e');
+  }
+  $('factStop').classList.add('hide'); $('runFacts').disabled = false;
+}
+
 /* ============================ Mode B — clone ============================ */
 function downscale(file, max){
   return new Promise((res,rej)=>{
@@ -2393,7 +2774,9 @@ async function addExamples(files){
 }
 const PROFILE_FIELDS = [
   ['name','text'],['aspect_ratio','select:9:16,4:5,1:1'],['imagery','text'],['image_prompt_suffix','text'],
-  ['caption_treatment','select:outlined,label-boxes,plain'],['font_family','text'],['font_weight','number'],
+  ['caption_treatment','select:outlined,label-boxes,plain,documentary'],['font_family','text'],['font_weight','number'],
+  ['body_font_family','text'],['uppercase','check'],['scrim_pct','number'],['scrim_alpha','number'],
+  ['bottom_pad_pct','number'],['title_line_em','number'],['body_line_em','number'],['divider','check'],['logo_scale_pct','number'],
   ['body_weight','number'],['italic','check'],['text_color','color'],['stroke_color','color'],['stroke_width','number'],
   ['text_shadow','number'],['shadow_color','color'],['label_bg','color'],
   ['title_size_pct','number'],['body_size_pct','number'],['title_gap_em','number'],
@@ -2601,7 +2984,9 @@ function init(){
       $('modeA').classList.toggle('hide', b.dataset.mode !== 'A');
       $('modeB').classList.toggle('hide', b.dataset.mode !== 'B');
       $('modeC').classList.toggle('hide', b.dataset.mode !== 'C');
+      $('modeD').classList.toggle('hide', b.dataset.mode !== 'D');
       if(b.dataset.mode === 'B' && !$('profileForm').children.length) buildProfileForm();
+      if(b.dataset.mode === 'D'){ $('factLedgerPanel').classList.remove('hide'); renderLedger(); }
     };
   });
 
@@ -2642,6 +3027,22 @@ function init(){
   bindToggle('batchLibToggle','cb.useLib','Library on','Library off','libToggle');
   bindToggle('batchApiToggle','cb.batchApi','Half price on','Half price off');
 
+  // ---- logo ----
+  const showLogo = url => {
+    const im = $('logoPreview');
+    if(url){ im.src = url; im.classList.remove('hide'); LOGO_IMG = new Image(); LOGO_IMG.onload = drawAll; LOGO_IMG.src = url; }
+    else { im.classList.add('hide'); LOGO_IMG = null; drawAll(); }
+  };
+  idbGet('logo').then(u=>{ if(u) showLogo(u); }).catch(()=>{});
+  $('logoPick').onclick = () => $('logoFile').click();
+  $('logoFile').onchange = e => {
+    const f = e.target.files[0]; if(!f) return;
+    const rd = new FileReader();
+    rd.onload = async () => { await idbPut('logo', rd.result); showLogo(rd.result); log('logo saved','o'); };
+    rd.readAsDataURL(f);
+  };
+  $('logoClear').onclick = async () => { await idbPut('logo',''); showLogo(''); };
+
   $('btnLibrary').onclick = () => { LIB_PICK_FOR = null; openDrawer('drawerLibrary'); renderLibrary(); };
   $('libSearch').addEventListener('input', e => { LIB_FILTER = e.target.value; renderLibrary(); });
   $('libExport').onclick = exportLibrary;
@@ -2649,6 +3050,73 @@ function init(){
   $('libFile').onchange = e => { if(e.target.files[0]) importLibrary(e.target.files[0]); };
   $('libClear').onclick = () => { if(confirm('Delete all '+LIB.length+' saved backgrounds?')) libClear(); };
   $('jobCheck').onclick = () => JOBS.filter(j=>!j.done).forEach(pollJob);
+
+  // ---- facts ----
+  loadFactCats();
+  const fillCats = () => {
+    const sel = $('factCat'), keep = sel.value;
+    sel.innerHTML = '';
+    Object.keys(FACT_CATS).forEach(c=>{ const o = document.createElement('option'); o.value = o.textContent = c; sel.appendChild(o); });
+    sel.value = keep && FACT_CATS[keep] ? keep : (localStorage.getItem('cb.factCat') || Object.keys(FACT_CATS)[0]);
+  };
+  fillCats();
+  for(let i=3;i<=10;i++){ const o=document.createElement('option'); o.value=i; o.textContent=i+' slides'; if(i===6) o.selected=true; $('factSlides').appendChild(o); }
+  [1,3,5,10,15,20].forEach(i=>{ const o=document.createElement('option'); o.value=i; o.textContent=i+(i===1?' carousel':' carousels'); if(i===10) o.selected=true; $('factCount').appendChild(o); });
+  $('factCat').onchange = () => { localStorage.setItem('cb.factCat', $('factCat').value); $('factPromptPanel').classList.add('hide'); };
+  $('factEditPrompt').onclick = () => {
+    const c = $('factCat').value;
+    $('factCatName').textContent = c;
+    $('factPromptText').value = FACT_CATS[c] || '';
+    $('factPromptPanel').classList.toggle('hide');
+  };
+  $('factPromptSave').onclick = () => {
+    FACT_CATS[$('factCat').value] = $('factPromptText').value.trim();
+    saveFactCats(); $('factPromptPanel').classList.add('hide'); log('prompt saved','o');
+  };
+  $('factPromptReset').onclick = () => {
+    const c = $('factCat').value;
+    if(FACT_DEFAULTS[c]){ FACT_CATS[c] = FACT_DEFAULTS[c]; $('factPromptText').value = FACT_CATS[c]; saveFactCats(); }
+    else log('no built-in default for "'+c+'"','w');
+  };
+  $('factAddCat').onclick = () => {
+    const n = $('factNewCat').value.trim(); if(!n) return;
+    FACT_CATS[n] = FACT_CATS[n] || 'Describe the kind of fact you want here.';
+    saveFactCats(); fillCats(); $('factCat').value = n; $('factNewCat').value = '';
+    $('factCatName').textContent = n; $('factPromptText').value = FACT_CATS[n];
+  };
+  $('factDelCat').onclick = () => {
+    const c = $('factCat').value;
+    if(Object.keys(FACT_CATS).length < 2) return log('keep at least one category','w');
+    if(!confirm('Delete category "'+c+'"?')) return;
+    delete FACT_CATS[c]; saveFactCats(); fillCats(); $('factPromptPanel').classList.add('hide');
+  };
+  $('factImgToggle').onclick = () => {
+    const b = $('factImgToggle');
+    b.dataset.on = b.dataset.on === '1' ? '0' : '1';
+    b.textContent = b.dataset.on === '1' ? 'Images on' : 'Images off';
+    b.classList.toggle('quiet', b.dataset.on === '1');
+  };
+  $('runFacts').onclick = runFacts;
+  $('factStop').onclick = () => { FACT_STOP = true; BATCH_STOP = true; log('stopping after the requests in flight','w'); };
+  $('ledgerExport').onclick = () => {
+    const blob = new Blob([JSON.stringify(LEDGER,null,1)], {type:'application/json'});
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'covered-subjects.json'; a.click();
+    setTimeout(()=>URL.revokeObjectURL(a.href),6000);
+  };
+  $('ledgerImport').onclick = () => $('ledgerFile').click();
+  $('ledgerFile').onchange = async e => {
+    const f = e.target.files[0]; if(!f) return;
+    try{
+      const add = JSON.parse(await f.text());
+      (Array.isArray(add)?add:[]).forEach(x=>{ if(x && x.subject && !ledgerHas(x.subject)) LEDGER.push(x); });
+      await saveLedger(); log('ledger imported — '+LEDGER.length+' subjects','o');
+    }catch(err){ log('ledger import failed: '+err.message,'e'); }
+  };
+  $('ledgerClear').onclick = async () => {
+    if(!confirm('Forget all '+LEDGER.length+' covered subjects? They could then repeat.')) return;
+    LEDGER = []; await saveLedger();
+  };
+  loadLedger();
 
   $('batchSuggest').onclick = suggestBatchHooks;
   $('runBatch').onclick = runBatch;

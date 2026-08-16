@@ -956,6 +956,36 @@ const IMG_CACHE = {};   // slide.id -> HTMLImageElement
 function pruneImageCache(){
   const live = new Set(S.slides.map(s=>s.id).concat(S.batch.flatMap(d=>d.slides.map(s=>s.id))));
   for(const k in IMG_CACHE) if(!live.has(k)) delete IMG_CACHE[k];
+  IMG_LRU.length = 0; IMG_LRU.push(...Object.keys(IMG_CACHE));
+}
+/* A decoded 1080x1350 frame is 5.8MB of bitmap, held outside the JS heap where no
+   error is ever thrown — the tab simply dies. Ten decks of six used to decode all
+   sixty at once, 334MB, purely so a 44px row thumbnail could be drawn. Only what is
+   on screen stays decoded; anything evicted is re-read from slide.img on demand. */
+const IMG_LRU = [];              // slide ids, least recent first
+const IMG_LIMIT = 28;
+function touchCache(id){
+  const i = IMG_LRU.indexOf(id);
+  if(i >= 0) IMG_LRU.splice(i, 1);
+  IMG_LRU.push(id);
+}
+function trimImageCache(){
+  const keep = new Set(S.slides.map(s=>s.id));          // the open deck is never evicted
+  while(IMG_LRU.length > IMG_LIMIT){
+    const id = IMG_LRU.find(x=>!keep.has(x));
+    if(!id) break;
+    IMG_LRU.splice(IMG_LRU.indexOf(id), 1);
+    delete IMG_CACHE[id];
+  }
+}
+const DECODING = new Set();
+function demandImage(slide){
+  if(!slide.img || DECODING.has(slide.id)) return;
+  DECODING.add(slide.id);
+  cacheImage(slide).then(()=>{
+    DECODING.delete(slide.id);
+    drawOne(slide.id); renderBatchRow(slide._deck);
+  });
 }
 
 /* ============================ config / persistence ============================ */
@@ -1021,21 +1051,44 @@ let LIB = [];                     // in-memory mirror, newest first
 const currentCollection = () => S.profile.library_collection || 'General';
 const collectionOf = item => item.collection || 'General';
 const libCollections = () => [...new Set(LIB.map(collectionOf))].sort();
+/* The library is the one thing here that grows without limit. Holding every full
+   image in the in-memory mirror cost about 2 bytes per base64 character — 60MB of
+   JPEGs became ~110MB of live string, before a single one was decoded. The mirror
+   now carries metadata and a small thumbnail only; the full image is read back from
+   IndexedDB at the moment it is actually used. */
+const libSlim = rec => { const {data, ...rest} = rec; return {...rest, bytes: rest.bytes || (data||'').length}; };
+async function libData(id){
+  const db = await idb();
+  const rec = await new Promise((res,rej)=>{ const q = db.transaction('lib','readonly').objectStore('lib').get(id); q.onsuccess=()=>res(q.result); q.onerror=()=>rej(q.error); });
+  return (rec && rec.data) || '';
+}
 async function libLoad(){
   const db = await idb();
-  LIB = await new Promise((res,rej)=>{ const q = db.transaction('lib','readonly').objectStore('lib').getAll(); q.onsuccess=()=>res(q.result||[]); q.onerror=()=>rej(q.error); });
+  const all = await new Promise((res,rej)=>{ const q = db.transaction('lib','readonly').objectStore('lib').getAll(); q.onsuccess=()=>res(q.result||[]); q.onerror=()=>rej(q.error); });
+  LIB = all.map(libSlim);
   LIB.sort((a,b)=>b.created - a.created);
   return LIB;
 }
 async function libAdd(item){
   const db = await idb();
   await new Promise((res,rej)=>{ const t = db.transaction('lib','readwrite'); t.objectStore('lib').put(item); t.oncomplete=res; t.onerror=()=>rej(t.error); });
-  LIB.unshift(item);
+  LIB.unshift(libSlim(item));        // the mirror never holds the full image
   renderLibrary();
 }
+/* Metadata changes are merged onto the stored record, never written over it — the
+   in-memory copy has no `data`, and blind-putting it would erase the image. */
 async function libSave(item){
   const db = await idb();
-  return new Promise((res,rej)=>{ const t = db.transaction('lib','readwrite'); t.objectStore('lib').put(item); t.oncomplete=res; t.onerror=()=>rej(t.error); });
+  const t = db.transaction('lib','readwrite');
+  const store = t.objectStore('lib');
+  const rec = await new Promise((res,rej)=>{ const q = store.get(item.id); q.onsuccess=()=>res(q.result); q.onerror=()=>rej(q.error); });
+  const merged = {...(rec||{}), ...item};
+  if(!merged.data && rec && rec.data) merged.data = rec.data;
+  store.put(merged);
+  await new Promise((res,rej)=>{ t.oncomplete=res; t.onerror=()=>rej(t.error); });
+  const mine = LIB.find(x=>x.id === item.id);
+  if(mine) Object.assign(mine, libSlim(merged));
+  if(item !== mine) delete item.data;                 // don't let a caller's copy pin the image in memory
 }
 async function libDelete(id){
   const db = await idb();
@@ -1048,7 +1101,26 @@ async function libClear(){
   await new Promise((res,rej)=>{ const t = db.transaction('lib','readwrite'); t.objectStore('lib').clear(); t.oncomplete=res; t.onerror=()=>rej(t.error); });
   LIB = []; renderLibrary();
 }
-const libBytes = () => LIB.reduce((a,x)=>a + (x.data ? x.data.length*0.75 : 0), 0);
+const libBytes = () => LIB.reduce((a,x)=>a + ((x.bytes || (x.data||'').length) * 0.75), 0);
+/* a 320px preview, ~10KB, so the grid never decodes a full frame */
+function makeThumb(dataUrl, edge){
+  edge = edge || 320;
+  return new Promise(res=>{
+    const im = new Image();
+    im.onload = () => {
+      const s = Math.min(1, edge / Math.max(im.naturalWidth, im.naturalHeight));
+      const c = document.createElement('canvas');
+      c.width = Math.max(1, Math.round(im.naturalWidth*s));
+      c.height = Math.max(1, Math.round(im.naturalHeight*s));
+      c.getContext('2d').drawImage(im, 0, 0, c.width, c.height);
+      const out = c.toDataURL('image/jpeg', 0.72);
+      c.width = c.height = 0;
+      res(out);
+    };
+    im.onerror = () => res('');
+    im.src = dataUrl;
+  });
+}
 
 /* ---------------- local tagging: no model, no cost ----------------
    Words that appear in every scene prompt (our own boilerplate and the style
@@ -1129,16 +1201,23 @@ const strayCollection = x => (!x.collection || x.collection === 'General') && CO
 async function libEnrich(){
   // toneChecked marks a tone read off the pixels; anything else was only the tone
   // that was *asked* for, which the image model does not reliably honour.
-  const todo = LIB.filter(x=>!x.tags || !x.stats || !x.toneChecked || strayCollection(x));
+  const todo = LIB.filter(x=>!x.tags || !x.stats || !x.toneChecked || !x.thumb || strayCollection(x));
   let moved = 0;
   for(const item of todo.slice(0, 150)){
     if(!item.tags) item.tags = tagsFrom(item.scene);
-    if(!item.stats) item.stats = await analyzeImage(item.data);
     const home = strayCollection(item);
     if(home){ item.collection = home; moved++; }
-    if(!item.toneChecked){
-      const t = await toneOfDataURL(item.data);
-      if(t){ item.tone = t; item.toneChecked = true; }
+    if(!item.stats || !item.toneChecked || !item.thumb){
+      const data = await libData(item.id);              // read once, use for all three
+      if(data){
+        if(!item.stats) item.stats = await analyzeImage(data);
+        if(!item.thumb) item.thumb = await makeThumb(data);
+        if(!item.bytes) item.bytes = data.length;
+        if(!item.toneChecked){
+          const t = await toneOfDataURL(data);
+          if(t){ item.tone = t; item.toneChecked = true; }
+        }
+      }
     }
     await libSave(item);
   }
@@ -1191,7 +1270,9 @@ function libPick(exclude, p, slide){
   return free.reduce((best,x)=> libScore(x,slide,p,idf) > libScore(best,slide,p,idf) ? x : best, free[0]);
 }
 async function useFromLibrary(slide, item){
-  setImage(slide, item.data, autosave);
+  const data = item.data || await libData(item.id);
+  if(!data){ log('that background is missing from storage','w'); return; }
+  setImage(slide, data, autosave);
   setStatus(slide,'done');
   slide._job = null;
   item.used = (item.used||0) + 1;
@@ -1266,7 +1347,9 @@ async function restoreProject(){
     return deck;                       // _deck is not serialised, so relink it on the way back in
   });
   S.openBatch = typeof p.openBatch === 'number' ? p.openBatch : -1;
-  S.batch.forEach(d=>d.slides.forEach(s=>{ if(s.img) cacheImage(s); if(s.inset) cacheInset(s); }));   // so thumbnails and ZIP work after a reload
+  // Only the covers are decoded on the way back in — that is all a batch row draws.
+  // Everything else waits until its deck is opened, or until a ZIP asks for it.
+  S.batch.forEach(d=>d.slides.slice(0,1).forEach(s=>{ if(s.img) cacheImage(s); if(s.inset) cacheInset(s); }));
   $('capInput').value = S.caption;
   return true;
 }
@@ -1638,6 +1721,17 @@ function drawInset(ctx, img, W, H, p){
   ctx.restore();
 }
 
+/* A card is about 330px wide on screen. Painting it at the full 1080x1350 costs
+   5.8MB of canvas backing store apiece for pixels nobody can see — six open cards
+   was 35MB of them. Screen canvases are sized to the screen; exports still render
+   at scale 1 into their own throwaway canvas, so nothing shipped gets smaller. */
+const CARD_MAX_EDGE = 900;
+function cardScale(canvas, p){
+  const [W] = ASPECTS[(p || S.profile).aspect_ratio] || ASPECTS['9:16'];
+  const css = canvas.clientWidth || (canvas.parentElement && canvas.parentElement.clientWidth) || 340;
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  return Math.min(1, Math.min(css * dpr, CARD_MAX_EDGE) / W);
+}
 function renderSlide(slide, canvas, p, scale){
   p = p || S.profile;
   scale = scale || 1;
@@ -1649,6 +1743,8 @@ function renderSlide(slide, canvas, p, scale){
   ctx.clearRect(0,0,W,H);
 
   const img = IMG_CACHE[slide.id];
+  if(!img && slide.img) demandImage(slide);            // evicted, or never decoded — fetch it back
+  if(img) touchCache(slide.id);
   if(img && img.complete && img.naturalWidth){
     const cr = img._crop || {sx:0, sy:0, sw:img.naturalWidth, sh:img.naturalHeight};
     const s = Math.max(W/cr.sw, H/cr.sh);
@@ -1709,10 +1805,12 @@ function renderSlide(slide, canvas, p, scale){
 function setImage(slide, dataUrl, cb){
   slide.img = dataUrl;
   const im = new Image();
-  im.onload = () => { measureCrop(im); IMG_CACHE[slide.id] = im; drawOne(slide.id); renderBatchRow(slide._deck); cb && cb(); };
+  im.onload = () => { measureCrop(im); IMG_CACHE[slide.id] = im; touchCache(slide.id); trimImageCache();
+                      drawOne(slide.id); renderBatchRow(slide._deck); cb && cb(); };
   im.onerror = () => log('image decode failed for slide '+slide.id,'e');
   im.src = dataUrl;
   IMG_CACHE[slide.id] = im;
+  touchCache(slide.id);
 }
 /* Find a flat border the generator baked in — a white paper margin, a scan edge, a
    black bar — and return the rectangle inside it. Runs once per image on a 96px
@@ -1769,15 +1867,16 @@ function cacheInset(slide){
 function cacheImage(slide){
   return new Promise(res=>{
     const im = new Image();
-    im.onload = im.onerror = () => { measureCrop(im); IMG_CACHE[slide.id] = im; res(); };
+    im.onload = im.onerror = () => { measureCrop(im); IMG_CACHE[slide.id] = im; touchCache(slide.id); trimImageCache(); res(); };
     im.src = slide.img;
     IMG_CACHE[slide.id] = im;
+    touchCache(slide.id);
   });
 }
 function drawOne(id){
   const s = S.slides.find(x=>x.id===id); if(!s) return;
   const c = document.querySelector('canvas[data-id="'+id+'"]'); if(!c) return;
-  renderSlide(s, c);
+  renderSlide(s, c, S.profile, cardScale(c));
 }
 function drawAll(){ for(const s of S.slides) drawOne(s.id); }
 
@@ -1850,7 +1949,8 @@ function buildGrid(){
     d.querySelector('[data-a=del]').onclick = () => { S.slides.splice(i,1); OPEN.delete(s.id); buildGrid(); autosave(); };
     d.querySelector('[data-a=left]').onclick = () => { if(i>0){ const t=S.slides[i-1]; S.slides[i-1]=S.slides[i]; S.slides[i]=t; buildGrid(); autosave(); } };
     d.querySelector('[data-a=right]').onclick = () => { if(i<S.slides.length-1){ const t=S.slides[i+1]; S.slides[i+1]=S.slides[i]; S.slides[i]=t; buildGrid(); autosave(); } };
-    renderSlide(s, d.querySelector('canvas'));
+    const cv = d.querySelector('canvas');
+    renderSlide(s, cv, S.profile, cardScale(cv));
     setStatus(s, s.status || '', s.error);
   });
   refreshDeckChrome();
@@ -2285,11 +2385,15 @@ async function keepInLibrary(slide, dataUrl){
     collection: currentCollection(),
     // record what the picture is, not what was asked for — the model does not always comply
     tone: (await toneOfDataURL(dataUrl)) || toneOf(slide), toneChecked: true,
+    bytes: dataUrl.length,
     created: Date.now(), used: 0};
   try{
+    item.thumb = await makeThumb(dataUrl);
     await libAdd(item);
     item.stats = await analyzeImage(dataUrl);      // brightness / flat-band analysis
-    await libSave(item);
+    await libSave(item);                            // merges, then drops `data` from the mirror
+    delete item.data;
+    renderLibrary();
   }catch(e){ log('library save failed: '+e.message,'w'); }
 }
 /* Library-first: the cover always gets a fresh image, body slides come from the
@@ -2380,6 +2484,34 @@ async function regenAllImages(){
 }
 
 /* ============================ library UI ============================ */
+/* How much of the browser's allowance is actually in use, from the browser itself
+   rather than from adding up what we think we stored. Asks for persistent storage
+   once, so the browser stops treating this data as evictable cache. */
+let QUOTA_ASKED = false;
+async function showQuota(){
+  const el = $('libStats');
+  if(!el || !navigator.storage || !navigator.storage.estimate) return;
+  try{
+    if(!QUOTA_ASKED && navigator.storage.persist){ QUOTA_ASKED = true; navigator.storage.persist(); }
+    const {usage, quota} = await navigator.storage.estimate();
+    if(!quota) return;
+    const pct = Math.round(usage / quota * 100);
+    el.textContent += ' · ' + (usage/1073741824).toFixed(2) + ' of ' +
+      (quota/1073741824).toFixed(1) + ' GB used (' + pct + '%)';
+    if(pct >= 80) log('storage is '+pct+'% full — export the library and clear some backgrounds','w');
+  }catch(e){}
+}
+/* Backfills previews for pre-thumbnail items, but only for the ones actually on
+   screen — a library of a thousand must never decode a thousand frames to draw a grid. */
+const LIB_SEEN = new IntersectionObserver(entries=>{
+  entries.forEach(async e=>{
+    if(!e.isIntersecting) return;
+    const im = e.target;
+    LIB_SEEN.unobserve(im);
+    const data = await libData(im.dataset.libId);
+    if(data) im.src = await makeThumb(data);
+  });
+}, {rootMargin:'200px'});
 let LIB_PICK_FOR = null;         // slide awaiting a background from the library
 let LIB_FILTER = '';
 let LIB_COLL = null;        // null = the collection the current style uses
@@ -2393,6 +2525,7 @@ function renderLibrary(){
   const b = libBytes();
   const size = b > 1048576 ? (b/1048576).toFixed(1)+' MB' : Math.round(b/1024)+' KB';
   $('libStats').textContent = LIB.length + (LIB.length === 1 ? ' background · ' : ' backgrounds · ') + size;
+  showQuota();
   $('libPickNote').textContent = LIB_PICK_FOR ? 'Best matches for that slide are first' : '';
 
   const active = LIB_COLL || currentCollection();
@@ -2442,9 +2575,16 @@ function renderLibrary(){
     d.className = 'libItem';
     const label = LIB_PICK_FOR && i < 3 ? 'best match'
       : ((item.tone === 'colour' ? 'colour · ' : '') + ((item.tags||[]).slice(0,2).join(' · ') || (item.aspect||'')));
-    d.innerHTML = '<img src="'+item.data+'" loading="lazy" alt="">'+
+    d.innerHTML = '<img'+(item.thumb ? ' src="'+item.thumb+'"' : '')+' loading="lazy" alt="">'+
       '<button class="x" title="Delete">×</button>'+
       '<div class="use">'+label+(item.used ? ' · '+item.used+'×' : '')+'</div>';
+    // items saved before thumbnails existed: fetch the full image only once it scrolls
+    // into view, and only until libEnrich has given it a thumbnail of its own
+    if(!item.thumb){
+      const im = d.querySelector('img');
+      im.dataset.libId = item.id;
+      LIB_SEEN.observe(im);
+    }
     d.title = (item.scene || '') + ((item.tags||[]).length ? '\n\ntags: '+item.tags.join(', ') : '');
     d.querySelector('.x').onclick = e => { e.stopPropagation(); libDelete(item.id); };
     d.onclick = () => {
@@ -2462,7 +2602,9 @@ function pickBackgroundFor(slide){
   renderLibrary();
 }
 async function exportLibrary(){
-  const blob = new Blob([JSON.stringify({v:1, items:LIB})], {type:'application/json'});
+  const items = [];
+  for(const x of LIB) items.push({...x, data: await libData(x.id)});   // read back one at a time
+  const blob = new Blob([JSON.stringify({v:1, items})], {type:'application/json'});
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob); a.download = 'background-library.json'; a.click();
   setTimeout(()=>URL.revokeObjectURL(a.href), 8000);
@@ -2831,16 +2973,22 @@ async function downloadDecks(decks){
   try{
     if(!window.JSZip) await loadScript('https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js');
     const zip = new JSZip();
-    list.forEach((d,i)=>{
+    // one slide decoded at a time: a deck no longer has to be resident in memory to
+    // be exported, and 60 full frames are never decoded at once
+    for(let i = 0; i < list.length; i++){
+      const d = list[i];
       const n = S.batch.indexOf(d) + 1 || i + 1;
       const folder = zip.folder(String(n).padStart(2,'0') + '_' + slug(d.hook));
-      d.slides.forEach((s,k)=>{
+      for(let k = 0; k < d.slides.length; k++){
+        const s = d.slides[k];
+        if(s.img && !IMG_CACHE[s.id]) await cacheImage(s);
         const c = document.createElement('canvas');
         renderSlide(s, c, S.profile);
         folder.file(String(k+1).padStart(2,'0')+'.jpg', c.toDataURL('image/jpeg',0.92).split(',')[1], {base64:true});
-      });
+        c.width = c.height = 0;                          // release the backing store now, not at GC's leisure
+      }
       if(d.caption) folder.file('caption.txt', d.caption);
-    });
+    }
     zip.file('captions.txt', list.map((d,i)=>(i+1)+'. '+d.hook+'\n'+(d.caption||'')+'\n').join('\n'));
     const blob = await zip.generateAsync({type:'blob'});
     const a = document.createElement('a');

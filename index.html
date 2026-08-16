@@ -568,6 +568,7 @@ details summary:hover{color:var(--fg)}
       </div>
       <div class="slider"><label for="rLogo">Logo size</label><span class="val" id="vLogo"></span><input type="range" id="rLogo" min="0.03" max="0.2" step="0.005"></div>
       <div class="switch"><span>Show on every slide</span><input type="checkbox" id="cLogoAll"></div>
+      <div class="switch"><span>Trim borders on generated images</span><input type="checkbox" id="cEdgeTrim" checked></div>
       <div class="tiny" style="color:var(--faint)">A transparent PNG works best. On the Documentary style it sits in the cover's rule.</div>
     </div>
     <div class="group">
@@ -923,6 +924,10 @@ const PRESETS = [
 
 const ASPECTS = { '9:16':[1080,1920], '4:5':[1080,1350], '1:1':[1080,1080] };
 const NO_TEXT_CLAUSE = 'Absolutely no text anywhere in the image: no words, no letters, no numbers, no captions, no subtitles, no signage, no labels, no logos, no watermarks, no user interface, no charts or diagrams with writing. Purely a picture.';
+/* models love returning a photo OF a print — white paper margin, scan edge, polaroid frame */
+const FULL_BLEED_CLAUSE = 'The photograph fills the entire frame edge to edge. No border, no white margin, no paper edge, ' +
+  'no scan edge, no film sprocket holes, no polaroid frame, no matting, no rounded corners, no vignette frame. ' +
+  'This is the photograph itself, not a picture of a printed photograph lying on a surface.';
 
 /* ============================ state ============================ */
 const S = {
@@ -1573,9 +1578,10 @@ function renderSlide(slide, canvas, p, scale){
 
   const img = IMG_CACHE[slide.id];
   if(img && img.complete && img.naturalWidth){
-    const s = Math.max(W/img.naturalWidth, H/img.naturalHeight);
-    const dw = img.naturalWidth*s, dh = img.naturalHeight*s;
-    ctx.drawImage(img, (W-dw)/2, (H-dh)/2, dw, dh);
+    const cr = img._crop || {sx:0, sy:0, sw:img.naturalWidth, sh:img.naturalHeight};
+    const s = Math.max(W/cr.sw, H/cr.sh);
+    const dw = cr.sw*s, dh = cr.sh*s;
+    ctx.drawImage(img, cr.sx, cr.sy, cr.sw, cr.sh, (W-dw)/2, (H-dh)/2, dw, dh);
   } else {
     const g = ctx.createLinearGradient(0,0,0,H);
     g.addColorStop(0,'#1b2530'); g.addColorStop(1,'#0d1116');
@@ -1631,10 +1637,52 @@ function renderSlide(slide, canvas, p, scale){
 function setImage(slide, dataUrl, cb){
   slide.img = dataUrl;
   const im = new Image();
-  im.onload = () => { IMG_CACHE[slide.id] = im; drawOne(slide.id); renderBatchRow(slide._deck); cb && cb(); };
+  im.onload = () => { measureCrop(im); IMG_CACHE[slide.id] = im; drawOne(slide.id); renderBatchRow(slide._deck); cb && cb(); };
   im.onerror = () => log('image decode failed for slide '+slide.id,'e');
   im.src = dataUrl;
   IMG_CACHE[slide.id] = im;
+}
+/* Find a flat border the generator baked in — a white paper margin, a scan edge, a
+   black bar — and return the rectangle inside it. Runs once per image on a 96px
+   thumbnail, so it costs nothing at render time. */
+function detectBorder(img){
+  try{
+    const W = 96, H = Math.max(16, Math.round(96 * img.naturalHeight / img.naturalWidth));
+    const c = document.createElement('canvas'); c.width = W; c.height = H;
+    const ctx = c.getContext('2d', {willReadFrequently:true});
+    ctx.drawImage(img, 0, 0, W, H);
+    const d = ctx.getImageData(0,0,W,H).data;
+    const lum = (x,y) => { const i=(y*W+x)*4; return (d[i]*0.299 + d[i+1]*0.587 + d[i+2]*0.114)/255; };
+    const line = (fixed, horizontal) => {
+      const n = horizontal ? W : H, v = [];
+      for(let k=0;k<n;k++) v.push(horizontal ? lum(k,fixed) : lum(fixed,k));
+      const m = v.reduce((a,b)=>a+b,0)/n;
+      const sd = Math.sqrt(v.reduce((a,b)=>a+(b-m)*(b-m),0)/n);
+      return {m, sd};
+    };
+    // the middle of the picture, for comparison
+    let mid = 0, cnt = 0;
+    for(let y=Math.round(H*0.3); y<Math.round(H*0.7); y++)
+      for(let x=Math.round(W*0.3); x<Math.round(W*0.7); x++){ mid += lum(x,y); cnt++; }
+    mid /= Math.max(1,cnt);
+
+    const flat = s => s.sd < 0.055 && Math.abs(s.m - mid) > 0.22;   // uniform AND unlike the picture
+    const cap = k => Math.floor(k * 0.14);                           // never eat more than 14% a side
+    let top=0, bot=0, left=0, right=0;
+    while(top   < cap(H) && flat(line(top, true)))        top++;
+    while(bot   < cap(H) && flat(line(H-1-bot, true)))    bot++;
+    while(left  < cap(W) && flat(line(left, false)))      left++;
+    while(right < cap(W) && flat(line(W-1-right, false))) right++;
+    if(top+bot+left+right < 2) return null;                          // nothing worth cropping
+
+    const fx = img.naturalWidth / W, fy = img.naturalHeight / H;
+    return {sx: Math.round(left*fx), sy: Math.round(top*fy),
+            sw: Math.round((W-left-right)*fx), sh: Math.round((H-top-bot)*fy)};
+  }catch(e){ return null; }
+}
+function measureCrop(im){
+  if(!im || !im.naturalWidth) return;
+  im._crop = (localStorage.getItem('cb.edgeTrim') === '0') ? null : detectBorder(im);
 }
 /* the round portrait on a documentary cover — supplied by hand, never generated */
 function cacheInset(slide){
@@ -1649,7 +1697,7 @@ function cacheInset(slide){
 function cacheImage(slide){
   return new Promise(res=>{
     const im = new Image();
-    im.onload = im.onerror = () => { IMG_CACHE[slide.id] = im; res(); };
+    im.onload = im.onerror = () => { measureCrop(im); IMG_CACHE[slide.id] = im; res(); };
     im.src = slide.img;
     IMG_CACHE[slide.id] = im;
   });
@@ -2069,7 +2117,7 @@ function imagePrompt(slide){
     (p.image_prompt_suffix || '') + toneSuffix(p, slide) + ' ' +
     'Aspect ratio ' + (p.aspect_ratio||'9:16') + ', full-bleed composition. ' +
     'Keep the ' + region + ' of the frame visually calm, uncluttered and even in tone so a caption can be placed over it. ' +
-    NO_TEXT_CLAUSE;
+    NO_TEXT_CLAUSE + ' ' + FULL_BLEED_CLAUSE;
 }
 async function keepInLibrary(slide, dataUrl){
   if(localStorage.getItem('cb.libSave') === '0') return;
@@ -3117,6 +3165,13 @@ function init(){
     else { im.classList.add('hide'); LOGO_IMG = null; drawAll(); }
   };
   idbGet('logo').then(u=>{ if(u) showLogo(u); }).catch(()=>{});
+  $('cEdgeTrim').checked = localStorage.getItem('cb.edgeTrim') !== '0';
+  $('cEdgeTrim').onchange = () => {
+    localStorage.setItem('cb.edgeTrim', $('cEdgeTrim').checked ? '1' : '0');
+    Object.values(IMG_CACHE).forEach(measureCrop);
+    drawAll(); renderBatch();
+    log('edge trim ' + ($('cEdgeTrim').checked ? 'on' : 'off') + ' — existing images re-measured','o');
+  };
   $('logoPick').onclick = () => $('logoFile').click();
   $('logoFile').onchange = e => {
     const f = e.target.files[0]; if(!f) return;

@@ -81,10 +81,13 @@ const deck = await p.evaluate(()=>{
     everySlidePops: d.slides.every(s=>s.tone === 'pop'),
     popCarried: d.slides.every(s=>s.pop === 'a red coat'),
     namesTheThing: prompt.includes('a red coat'),
-    saysMonochrome: /BLACK AND WHITE PHOTOGRAPH WITH A SINGLE COLOUR POP/.test(prompt),
+    // pop is NOT asked of the model any more — it is asked for in colour and popped
+    // locally, because leading with "black and white" got us black and white
+    asksForColour: /A FULL COLOUR PHOTOGRAPH/.test(prompt),
+    neverLeadsMono: !/^A BLACK AND WHITE/.test(prompt),
     noPlaceholderLeft: !/\{pop\}/.test(prompt),
-    insistNegates: /NOT a colour photograph/.test(insisted),
-    keepsArchivalLook: /archival/.test(prompt),          // a pop frame is still a b&w photograph
+    insistNegates: /NOT black and white/.test(insisted),
+    usesColourStock: /colour film/i.test(prompt) && !/archival/.test(prompt),   // generated in colour, drained locally
     monoUnaffected: !/COLOUR POP/.test(imagePrompt(monoDeck.slides[0]))
   };
 });
@@ -115,7 +118,7 @@ const ui = await p.evaluate(()=>{
   const t = $('factPopToggle');
   const alloc = (n, colourPct, popOn) => {
     const nColour = Math.round(n * colourPct/100);
-    const nPop = popOn ? Math.max(1, Math.round((n - nColour)/2)) : 0;
+    const nPop = popOn ? Math.round((n - nColour)/2) : 0;   // mirrors runFacts
     const tones = Array.from({length:n},(_,i)=> i < nColour ? 'colour' : i < nColour+nPop ? 'pop' : 'mono');
     return tones.reduce((a,x)=>(a[x]=(a[x]||0)+1, a), {});
   };

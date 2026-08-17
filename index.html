@@ -446,7 +446,7 @@ details summary:hover{color:var(--fg)}
         <div class="slider"><label for="rColourDecks">Carousels shot in colour <span class="muted" id="vColourDecks"></span></label><span class="val"></span>
           <input type="range" id="rColourDecks" min="0" max="100" step="10"></div>
         <div class="slider" style="margin-top:8px"><label for="rColourSlides">Colour slides inside a black-and-white carousel <span class="muted" id="vColourSlides"></span></label><span class="val"></span>
-          <input type="range" id="rColourSlides" min="0" max="60" step="5"></div>
+          <input type="range" id="rColourSlides" min="0" max="100" step="5"></div>
         <div class="tiny" style="color:var(--faint);margin-top:8px">The writer picks which moments earn colour — present-day, aftermath, the one reveal — and these set how much it reaches for. A slide's own tone always wins.</div>
       </div>
 
@@ -914,9 +914,9 @@ const PRESETS = [
       'period-accurate clothing and setting, photojournalism, candid unposed moment, '+
       'slight motion blur, natural light.',
     mono_suffix:'Black and white only — monochrome film, absolutely no colour anywhere in the frame.',
-    pop_suffix:'Selective colour: the photograph is entirely black and white EXCEPT {pop}, which is rendered '+
-      'in vivid, saturated natural colour. That colour appears nowhere else in the frame — every other '+
-      'surface, garment, sky and skin tone is pure greyscale. The colour is the only thing the eye lands on.',
+    pop_suffix:'{pop} is the single most saturated, most colourful thing in the frame and the eye lands on it '+
+      'first. Everything else is naturally muted — dust, stone, weathered cloth, overcast light — so that one '+
+      'colour separates cleanly from the rest of the scene.',
     colour_suffix:'Shot on colour film of the period — Kodachrome and Ektachrome palette, warm cast, '+
       'clearly readable colour in the clothing, skin, sky and surroundings. Film colour, not digital colour.',
     caption_treatment:'documentary',
@@ -2350,8 +2350,8 @@ const TONE_FALLBACK = {
   mono:'Black and white only — monochrome film, absolutely no colour anywhere in the frame.',
   colour:'Shot on colour film — Kodachrome and Ektachrome palette, warm cast, clearly readable '+
     'colour in the clothing, skin, sky and surroundings.',
-  pop:'Selective colour: the photograph is entirely black and white EXCEPT {pop}, which is rendered in '+
-    'vivid saturated natural colour. That colour appears nowhere else in the frame.'
+  pop:'{pop} is the single most saturated thing in the frame; everything else is naturally muted, '+
+    'so that one colour separates cleanly from the rest of the scene.'
 };
 function toneSuffix(p, slide){
   if(!toned(slide) && !p.mono_suffix && !p.colour_suffix) return '';
@@ -2364,11 +2364,15 @@ function toneSuffix(p, slide){
 function toneLead(p, slide, insist){
   if(!toned(slide) && !p.mono_suffix && !p.colour_suffix) return '';
   const t = toneOf(slide);
-  if(t === 'pop') return insist
-    ? 'A BLACK AND WHITE PHOTOGRAPH WITH ONE SINGLE COLOUR POP: ' + popOf(slide) + ' is in vivid colour and '+
-      'ABSOLUTELY EVERYTHING ELSE is pure greyscale. NOT a colour photograph, NOT partially tinted, NOT sepia. '
-    : 'A BLACK AND WHITE PHOTOGRAPH WITH A SINGLE COLOUR POP: everything is monochrome except ' +
-      popOf(slide) + ', which stays in full colour. ';
+  // Colour pop is NOT asked of the model. Told "a black and white photograph with one
+  // colour pop" it reads the first three words and returns a grey picture — which is
+  // exactly what kept happening. So we ask for a full colour photograph with the
+  // popped element unmistakably present, and desaturate everything else ourselves
+  // afterwards, the same way the effect is done in a photo editor.
+  if(t === 'pop') return 'A FULL COLOUR PHOTOGRAPH' +
+    (insist ? ' — vivid, unmistakably in colour, NOT black and white, NOT monochrome' : '') +
+    '. ' + popOf(slide) + ' is prominent in the frame and strongly, saturatedly coloured. ' +
+    'Everything else in the scene is muted and neutral in colour by comparison. ';
   return t === 'colour'
     ? (insist
         ? 'A FULL COLOUR PHOTOGRAPH — vivid, unmistakably in colour, strong visible hues. NOT black and white, NOT monochrome, NOT desaturated, NOT sepia. '
@@ -2406,7 +2410,11 @@ function shotSuffix(p, slide){
    emulsion. A colour slide needs a different style sentence, not the same one with
    "in colour" bolted on the end. */
 function styleSuffix(p, slide){
-  return (toneOf(slide) === 'colour' && toned(slide) && p.image_prompt_suffix_colour)
+  // A pop is generated as a colour photograph and drained locally, so it takes the
+  // colour style sentence too. Handing it the archival black-and-white one while
+  // asking for colour is the same contradiction that made colour slides come out grey.
+  const t = toneOf(slide);
+  return ((t === 'colour' || t === 'pop') && toned(slide) && p.image_prompt_suffix_colour)
     || p.image_prompt_suffix || '';
 }
 /* Measure what a picture actually is, rather than trusting what was asked for.
@@ -2474,6 +2482,81 @@ function toneOK(want, st){
 function classifyTone(want, st){
   if(want && toneOK(want, st)) return want;
   return st.mean > MONO_THRESHOLD ? 'colour' : 'mono';
+}
+/* ---- colour pop, done locally ----------------------------------------------
+   Hue-range selective desaturation: keep the pixels near one hue, drain the colour
+   out of everything else. That is precisely how the effect is done in Lightroom,
+   it is deterministic, it costs nothing, and it cannot be ignored by a model. */
+const POP_HUES = {red:0, scarlet:6, crimson:352, maroon:355, rust:16, orange:25, brown:25, amber:40,
+  gold:45, yellow:52, lime:80, green:120, emerald:150, teal:175, turquoise:178, cyan:186, blue:220,
+  navy:225, indigo:250, violet:275, purple:285, magenta:310, pink:330};
+function popHue(text){
+  const words = String(text||'').toLowerCase().split(/[^a-z]+/);
+  for(const w of words) if(w in POP_HUES) return POP_HUES[w];
+  return 0;                                   // red is the default colour pop for a reason
+}
+const rgbHue = (r,g,b) => {
+  const mx = Math.max(r,g,b), mn = Math.min(r,g,b);
+  if(mx === mn) return 0;
+  let h;
+  if(mx === r) h = 60*(((g-b)/(mx-mn)) % 6);
+  else if(mx === g) h = 60*(((b-r)/(mx-mn)) + 2);
+  else h = 60*(((r-g)/(mx-mn)) + 4);
+  return h < 0 ? h + 360 : h;
+};
+const hueGap = (a,b) => { const d = Math.abs(a-b) % 360; return d > 180 ? 360-d : d; };
+function applyPop(dataUrl, hue, keepDeg, featherDeg){
+  keepDeg = keepDeg || 32; featherDeg = featherDeg || 22;
+  return new Promise(res=>{
+    const im = new Image();
+    im.onerror = () => res(dataUrl);
+    im.onload = () => {
+      try{
+        const W = im.naturalWidth, H = im.naturalHeight;
+        const c = document.createElement('canvas'); c.width = W; c.height = H;
+        const ctx = c.getContext('2d', {willReadFrequently:true});
+        ctx.drawImage(im, 0, 0);
+        const d = ctx.getImageData(0,0,W,H), px = d.data;
+        for(let i=0;i<px.length;i+=4){
+          const r = px[i], g = px[i+1], b = px[i+2];
+          const mx = Math.max(r,g,b), mn = Math.min(r,g,b);
+          const sat = (mx - mn)/255;
+          // how much of this pixel's colour survives: 1 inside the band, easing to 0
+          // across the feather, and nothing at all if it was barely coloured anyway
+          let keep = 0;
+          if(sat > 0.12){
+            const gap = hueGap(rgbHue(r,g,b), hue);
+            keep = gap <= keepDeg ? 1
+                 : gap >= keepDeg + featherDeg ? 0
+                 : 1 - (gap - keepDeg)/featherDeg;
+            keep *= Math.min(1, (sat - 0.12)/0.10);      // ease in by saturation too
+          }
+          const lum = 0.299*r + 0.587*g + 0.114*b;
+          if(keep < 1){
+            px[i]   = lum + (r - lum)*keep;
+            px[i+1] = lum + (g - lum)*keep;
+            px[i+2] = lum + (b - lum)*keep;
+          }else{
+            // lift what survives, so the pop actually reads at thumbnail size
+            px[i]   = Math.min(255, lum + (r - lum)*1.35);
+            px[i+1] = Math.min(255, lum + (g - lum)*1.35);
+            px[i+2] = Math.min(255, lum + (b - lum)*1.35);
+          }
+        }
+        ctx.putImageData(d, 0, 0);
+        const out = c.toDataURL('image/jpeg', 0.92);
+        c.width = c.height = 0;
+        res(out);
+      }catch(e){ res(dataUrl); }
+    };
+    im.src = dataUrl;
+  });
+}
+/* Everything a returned picture needs before it becomes the slide's image. For a pop
+   slide that means applying the pop; for everything else it is a no-op. */
+async function finishImage(slide, dataUrl){
+  if(!toned(slide) || toneOf(slide) !== 'pop') return dataUrl;
+  return applyPop(dataUrl, popHue(popOf(slide)));
 }
 function statsOfDataURL(dataUrl){
   return new Promise(res=>{
@@ -2567,20 +2650,24 @@ async function genImage(slide, single, attempt, toneTry){
     // prompt asks for colour, so check the pixels and ask again, harder, once.
     const n0 = slideLabel(slide);
     const want = toned(slide) ? toneOf(slide) : '';
-    if(want && want !== 'mono'){
+    // A pop slide is asked for in full colour and popped locally, so what has to be
+    // checked here is that colour arrived at all — you cannot drain the colour out of
+    // a picture that never had any.
+    if(want === 'colour' || want === 'pop'){
       const st = await statsOfDataURL(r.images[0]);
-      if(st && !toneOK(want, st)){
+      if(st && st.mean <= MONO_THRESHOLD){
         if(toneTry < 1){
-          log('slide '+n0+' did not come back as '+want+' — asking again','w');
+          log('slide '+n0+' came back black and white — asking again','w');
           return genImage(slide, single, attempt, toneTry + 1);
         }
-        log('slide '+n0+' is still not '+want+' after a retry — keeping it','w');
+        log('slide '+n0+' is still black and white after a retry — keeping it','w');
       }
     }
-    setImage(slide, r.images[0], autosave);
+    const out = await finishImage(slide, r.images[0]);
+    setImage(slide, out, autosave);
     setStatus(slide,'done');
     slide._job = null;                 // a manual result outranks a pending job's
-    keepInLibrary(slide, r.images[0]);
+    keepInLibrary(slide, out);
   }catch(e){
     const q = quotaInfo(e);
     const n = slideLabel(slide);
@@ -2906,7 +2993,7 @@ async function pollJob(job){
     const dest = (j.dest && j.dest.inlinedResponses) || (j.response && j.response.inlinedResponses);
     if(dest){
       let got = 0, failed = 0, skipped = 0;
-      const tonedSlides = [];
+      const tonedSlides = [], popLater = [];
       dest.forEach((item, i)=>{
         const key = (item.metadata && item.metadata.key) || item.key || job.slideIds[i];
         const slide = findSlide(key);
@@ -2924,9 +3011,16 @@ async function pollJob(job){
         setStatus(slide,'done');
         slide._job = null;
         keepInLibrary(slide, out.images[0]);
+        // pop is applied after the fact, off the main pass, so one slow filter doesn't
+        // hold up the rest of the results landing
+        if(toned(slide) && toneOf(slide) === 'pop') popLater.push(slide);
         if(toned(slide) && toneOf(slide) !== 'mono') tonedSlides.push(slide);
         got++;
       });
+      for(const s of popLater){
+        const done = await finishImage(s, s.img);
+        if(done !== s.img){ setImage(s, done, autosave); keepInLibrary(s, done); }
+      }
       job.done = true;
       S.batch.forEach(d=>{                      // decks the job just filled are complete now
         if(!d.slides.length) return;
@@ -3320,7 +3414,7 @@ function factDeckPrompt(cat, subj, n, deckTone){
    '- Pick one colour and stay with it. Do not name two colours.\n'
  : 'TONE — this carousel is '+(deckTone === 'colour' ? 'IN COLOUR' : 'IN BLACK AND WHITE')+'. Give every slide a "tone" of "'+deckTone+'", '+
    (deckTone === 'colour'
-     ? 'except any moment that is genuinely archival or long past, which may be "mono".'
+     ? 'and that means every single slide. Do not mark any slide "mono".'
      : 'except the moments that earn colour — a present-day photograph, the aftermath as it looks now, a modern location, or the single most striking reveal. Mark those "colour". Use it sparingly and deliberately, never at random.\n' +
        '- The COVER is always "colour", whatever the rest of the carousel is. Write its scene as a colour photograph.'))+'\n\n' +
 'IMAGES — "scene" describes a photograph only: what is happening, who or what is in frame, the setting and the light. It never asks for words, numbers, logos or UI.\n' +
@@ -3359,17 +3453,23 @@ function applySlideTones(deck){
   // above are the exception, since there the whole deck has to match.
   const cover = deck.slides.find(s=>s.kind === 'hook');
   if(cover) cover.tone = 'colour';
+
+  // The sliders decide, not the writer. This used to read "if the writer didn't say
+  // mono, make it colour" — and a writer told a historical moment may be monochrome
+  // marks every slide mono, so a carousel set to 100% colour came out entirely black
+  // and white. The writer's picks now only choose WHICH slides, never how many.
   if(deck.tone === 'colour'){
-    deck.slides.forEach(s=>{ if(s.tone !== 'mono') s.tone = 'colour'; });
+    deck.slides.forEach(s=>{ s.tone = 'colour'; });
     return;
   }
-  const want = Math.round(deck.slides.length * ((+($('rColourSlides').value) || 0) / 100));
+  const pct = Math.max(0, Math.min(100, +($('rColourSlides').value) || 0)) / 100;
+  const want = Math.round(deck.slides.length * pct);
   const body = deck.slides.filter(s=>s.kind !== 'hook');
-  let have = body.filter(s=>s.tone === 'colour').length;
-  const candidates = body.filter(s=>s.tone !== 'colour');
-  // prefer the later slides — aftermath and present-day sit at the end of the story
-  candidates.reverse();
-  for(const s of candidates){
+  const picked = body.filter(s=>toneOf(s) === 'colour');            // the writer's choices, honoured first
+  const rest = body.filter(s=>toneOf(s) !== 'colour').reverse();    // then from the end — aftermath, present day
+  body.forEach(s=>{ s.tone = 'mono'; });
+  let have = cover ? 1 : 0;
+  for(const s of picked.concat(rest)){
     if(have >= want) break;
     s.tone = 'colour'; have++;
   }
@@ -3400,7 +3500,7 @@ async function runFacts(){
     // just one with a single element left in colour — so switching it on doesn't quietly
     // reduce how many full-colour carousels the slider asked for.
     const popOn = $('factPopToggle') && $('factPopToggle').dataset.on === '1';
-    const nPop = popOn ? Math.max(1, Math.round((subjects.length - nColour) / 2)) : 0;
+    const nPop = popOn ? Math.round((subjects.length - nColour) / 2) : 0;   // out of the mono half only
     const tones = subjects.map((_,i)=> i < nColour ? 'colour' : i < nColour + nPop ? 'pop' : 'mono');
     for(let i=tones.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [tones[i],tones[j]]=[tones[j],tones[i]]; }
     const newDecks = subjects.map((s,i)=>({id:uid(), hook:s.claim || s.subject, subject:s.subject, cat,

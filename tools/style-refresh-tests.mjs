@@ -12,11 +12,12 @@ const r = await p.evaluate(()=>{
   old.image_prompt_suffix = 'authentic archival documentary photograph, period-accurate clothing equipment and setting.';
   old.font_size_pct = 0.123; old.text_color = '#FF0000';       // user edits
   S.profile = old; S.styleKey = 'preset:'+di;
+  const want = PRESETS[di].v;                                  // whatever the preset is on now
   const added = refreshBuiltinProfile();
   return {added,
     briefRefreshed: !/equipment/.test(S.profile.image_prompt_suffix),
     ladderOn: S.profile.shot_ladder === true,
-    version: S.profile.v,
+    version: S.profile.v, want,
     editsKept: S.profile.font_size_pct === 0.123 && S.profile.text_color === '#FF0000',
     // running it twice must be a no-op
     secondRun: (()=>refreshBuiltinProfile())().length};
@@ -24,7 +25,7 @@ const r = await p.evaluate(()=>{
 const fail=[];
 if(!r.briefRefreshed) fail.push('old image brief survived the version bump');
 if(!r.ladderOn) fail.push('shot ladder not picked up');
-if(r.version !== 2) fail.push('version not stamped');
+if(r.version !== r.want) fail.push('version not stamped: '+r.version+' want '+r.want);
 if(!r.editsKept) fail.push('typography edits were clobbered');
 if(r.secondRun !== 0) fail.push('refresh is not idempotent');
 console.log(JSON.stringify({...r, errs},null,1));

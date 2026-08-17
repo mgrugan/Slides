@@ -903,7 +903,7 @@ const PRESETS = [
     name:'Documentary facts', builtin:true,
     aspect_ratio:'4:5',
     imagery:'archival-documentary-photograph',
-    v: 2,                                      // bump when the image brief below changes
+    v: 3,                                      // bump when the image brief below changes
     // "equipment" was quietly responsible for every slide becoming a bench of apparatus
     image_prompt_suffix:'authentic archival documentary photograph, heavy film grain, high contrast with deep blacks '+
       'and slightly blown highlights, period-accurate clothing and setting, photojournalism, '+
@@ -921,6 +921,7 @@ const PRESETS = [
       'clearly readable colour in the clothing, skin, sky and surroundings. Film colour, not digital colour.',
     caption_treatment:'documentary',
     shot_ladder:true,                          // vary the camera slide to slide, so a deck isn't one shot six times
+    subject_context:true,                      // name the story in every image prompt, so the subject is actually in the picture
     font_family:'Anton', font_weight:400, body_font_family:'Space Mono', body_weight:400, italic:false,
     uppercase:true, letter_spacing_em:-0.005,
     text_color:'#FFFFFF', stroke_color:'#000000', stroke_width:0, text_shadow:0.35, shadow_color:'#000000',
@@ -929,7 +930,8 @@ const PRESETS = [
     bottom_pad_pct:0.055,                       // text block sits this far off the bottom edge
     title_size_pct:0.072, body_size_pct:0.0225, title_gap_em:1.0, title_line_em:0.92,
     max_width_pct:0.90, body_width_pct:0.86,
-    divider:true, portrait_inset:true,          // cover: rule + logo mark, and a round portrait
+    divider:true, portrait_inset:true,          // cover: rule + logo mark, and a round inset
+    auto_inset:true,                           // filled from the deck's own images, not an upload
     logo_scale_pct:0.075, logo_on_all:false,
     text_block_top_pct:0.70, hook_top_pct:0.70,
     auto_number:false,
@@ -1318,7 +1320,7 @@ const autosave = debounce(async ()=>{
    typography are what the live controls edit, and overwriting those would throw
    away work you can see. */
 const BRIEF_KEYS = ['imagery','image_prompt_suffix','image_prompt_suffix_colour',
-                    'mono_suffix','colour_suffix','pop_suffix','shot_ladder','library_collection'];
+                    'mono_suffix','colour_suffix','pop_suffix','shot_ladder','subject_context','auto_inset','library_collection'];
 function refreshBuiltinProfile(){
   const m = /^preset:(\d+)$/.exec(S.styleKey || '');
   const preset = m && PRESETS[+m[1]];
@@ -1719,16 +1721,42 @@ function drawCornerLogo(ctx, W, H, p){
   ctx.restore();
 }
 /* circular portrait inset, top-right, as on the reference cover */
+/* The cover's circle. The image is clipped to a complete circle and fills it, and the
+   ring is stroked afterwards — stroking before the clip threw half its width away, so
+   the ring came out thin and uneven. */
 function drawInset(ctx, img, W, H, p){
   if(!img || !img.complete || !img.naturalWidth) return;
-  const d = W*0.40, cx = W - d/2 - W*0.06, cy = d/2 + H*0.045;
+  const d = W*0.40, r = d/2, cx = W - r - W*0.06, cy = r + H*0.045;
   ctx.save();
-  ctx.beginPath(); ctx.arc(cx, cy, d/2, 0, Math.PI*2); ctx.closePath();
-  ctx.strokeStyle = p.text_color || '#fff'; ctx.lineWidth = Math.max(3, W*0.008); ctx.stroke();
+  ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI*2); ctx.closePath();
   ctx.clip();
-  const s = Math.max(d/img.naturalWidth, d/img.naturalHeight);
-  ctx.drawImage(img, cx - img.naturalWidth*s/2, cy - img.naturalHeight*s/2, img.naturalWidth*s, img.naturalHeight*s);
+  const cr = img._crop || {sx:0, sy:0, sw:img.naturalWidth, sh:img.naturalHeight};
+  const s = Math.max(d/cr.sw, d/cr.sh);
+  ctx.drawImage(img, cr.sx, cr.sy, cr.sw, cr.sh, cx - cr.sw*s/2, cy - cr.sh*s/2, cr.sw*s, cr.sh*s);
   ctx.restore();
+  ctx.save();
+  ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI*2);
+  ctx.strokeStyle = p.text_color || '#fff';
+  ctx.lineWidth = Math.max(3, W*0.009);
+  ctx.stroke();
+  ctx.restore();
+}
+/* Which of the deck's own frames goes in the circle: the second-to-last, falling back
+   to the last, so the cover previews a payoff from deep in the story rather than
+   repeating itself. A manual upload always wins. */
+function insetDonor(slide){
+  const list = (slide._deck && slide._deck.slides) || S.slides;
+  const pool = list.filter(s => s !== slide && s.kind !== 'hook' && s.img);
+  return pool.length ? pool[Math.max(0, pool.length - 2)] : null;
+}
+function insetImageFor(slide, p){
+  if(slide.inset) return IMG_CACHE['inset:' + slide.id];
+  if(!p.auto_inset) return null;
+  const donor = insetDonor(slide);
+  if(!donor) return null;
+  const im = IMG_CACHE[donor.id];
+  if(!im) demandImage(donor);            // evicted by the cache — fetch it and redraw
+  return im;
 }
 
 /* A card is about 330px wide on screen. Painting it at the full 1080x1350 costs
@@ -1772,7 +1800,10 @@ function renderSlide(slide, canvas, p, scale){
 
   if(doc){
     drawScrim(ctx, W, H, p);
-    if(isHook && p.portrait_inset) drawInset(ctx, IMG_CACHE['inset:'+slide.id], W, H, p);
+    // Below a quarter scale the circle is a handful of pixels in a row thumbnail, and
+    // drawing it would decode a second full frame per deck to show them. Skip it there.
+    if(isHook && (p.portrait_inset || p.auto_inset) && scale >= 0.25)
+      drawInset(ctx, insetImageFor(slide, p), W, H, p);
   }
 
   const tSize = (p.title_size_pct||0.05) * H * (isHook && !doc ? 1.4 : 1);
@@ -2350,16 +2381,16 @@ function toneLead(p, slide, insist){
    different lens, distance and vantage, cycling from a per-deck starting point so
    two decks about similar subjects don't open identically. */
 const SHOT_LADDER = [
-  'Shot on a 28mm wide lens: a wide establishing frame, the whole place in view, any figures small within it.',
-  'Shot on an 85mm lens, close: one object, one surface or a pair of hands filling the frame, shallow focus, everything behind it falling away.',
-  'Shot from a high vantage looking down at a steep angle, the scene laid out below.',
-  'Shot on a 50mm at eye level from behind a figure, over the shoulder, the light coming from beyond them.',
-  'Shot on a long lens across a distance, foreground out of focus, caught mid-movement.',
-  'Shot from ground level on a low angle looking up, sky or ceiling filling the top of the frame.',
-  'Shot flat-on and symmetrical, the subject centred, plain wall or open ground behind it.'
+  'Shot on a 28mm wide lens: the whole scene at once, the subject large in the foreground and the setting running away behind it.',
+  'Shot on an 85mm lens, close and tight on the subject, shallow focus, everything behind it falling away.',
+  'Shot from a high vantage looking down at a steep angle, the action laid out below and still moving.',
+  'Shot on a 50mm at eye level, just behind and to the side of the action, the light coming from beyond it.',
+  'Shot on a long lens across a distance, foreground out of focus, caught mid-movement with motion blur.',
+  'Shot from ground level on a low angle looking up at the subject, sky or ceiling filling the top of the frame.',
+  'Shot head-on into the movement as it comes towards the camera, filling the frame.'
 ];
-const COVER_SHOT = 'The single most arresting frame in the whole story: strong depth, one clear focal point, '+
-  'dramatic directional light.';
+const COVER_SHOT = 'The single most arresting frame in the whole story: the subject itself, close, mid-action, '+
+  'strong depth and dramatic directional light. This is the frame that has to stop someone scrolling.';
 const hashStr = s => { let h = 0; for(let i=0;i<s.length;i++) h = (h*31 + s.charCodeAt(i))|0; return Math.abs(h); };
 function shotSuffix(p, slide){
   if(!p.shot_ladder) return '';
@@ -2456,15 +2487,33 @@ async function toneOfDataURL(dataUrl, want){
   const st = await statsOfDataURL(dataUrl);
   return st ? classifyTone(want, st) : '';
 }
+/* The image model only ever saw the scene sentence, never what the carousel was about.
+   If the writer hedged — "a wheat field at dawn" for the Great Emu War — nothing
+   downstream knew an emu was meant to be in it. Naming the subject in the prompt puts
+   it back, whatever the writer wrote. */
+function subjectContext(p, slide){
+  if(!p.subject_context) return '';
+  const deck = slide._deck;
+  const subj = String((deck && (deck.subject || deck.hook)) || slide._label || '').trim();
+  if(!subj) return '';
+  return 'This photograph documents ' + subj.replace(/\.$/, '') + ', and the subject itself must be ' +
+    'clearly visible in the frame. ';
+}
 function imagePrompt(slide, insist){
   const p = S.profile;
   const top = slide.kind === 'hook' ? (p.hook_top_pct ?? 0.34) : (p.text_block_top_pct ?? 0.6);
   const region = top < 0.36 ? 'upper third' : top < 0.58 ? 'middle band' : 'lower third';
+  // A style that lays a dark scrim over the caption doesn't need an empty band to be
+  // readable, and asking for one is half of why these frames came out so bare.
+  const caption = p.scrim_pct
+    ? 'Keep the ' + region + ' of the frame free of the main point of interest, so a caption can sit over it. '+
+      'The frame itself should still be full and alive. '
+    : 'Keep the ' + region + ' of the frame visually calm, uncluttered and even in tone so a caption can be placed over it. ';
   return toneLead(p, slide, insist) + (slide.scene || slide.title) + '. ' +
+    subjectContext(p, slide) +
     styleSuffix(p, slide) + toneSuffix(p, slide) + shotSuffix(p, slide) + ' ' +
     'Aspect ratio ' + (p.aspect_ratio||'9:16') + ', full-bleed composition. ' +
-    'Keep the ' + region + ' of the frame visually calm, uncluttered and even in tone so a caption can be placed over it. ' +
-    NO_TEXT_CLAUSE + ' ' + FULL_BLEED_CLAUSE;
+    caption + NO_TEXT_CLAUSE + ' ' + FULL_BLEED_CLAUSE;
 }
 async function keepInLibrary(slide, dataUrl){
   if(localStorage.getItem('cb.libSave') === '0') return;
@@ -3137,6 +3186,13 @@ async function downloadDecks(decks){
       for(let k = 0; k < d.slides.length; k++){
         const s = d.slides[k];
         if(s.img && !IMG_CACHE[s.id]) await cacheImage(s);
+        // the cover's circle is drawn from another slide's picture, which the loop has
+        // not reached yet — decode it now or the circle exports empty
+        if(s.kind === 'hook'){
+          if(s.inset && !IMG_CACHE['inset:'+s.id]) await cacheInset(s);
+          const donor = S.profile.auto_inset && !s.inset && insetDonor(s);
+          if(donor && donor.img && !IMG_CACHE[donor.id]) await cacheImage(donor);
+        }
         const c = document.createElement('canvas');
         renderSlide(s, c, S.profile);
         folder.file(String(k+1).padStart(2,'0')+'.jpg', c.toDataURL('image/jpeg',0.92).split(',')[1], {base64:true});
@@ -3265,14 +3321,17 @@ function factDeckPrompt(cat, subj, n, deckTone){
  : 'TONE — this carousel is '+(deckTone === 'colour' ? 'IN COLOUR' : 'IN BLACK AND WHITE')+'. Give every slide a "tone" of "'+deckTone+'", '+
    (deckTone === 'colour'
      ? 'except any moment that is genuinely archival or long past, which may be "mono".'
-     : 'except the moments that earn colour — a present-day photograph, the aftermath as it looks now, a modern location, or the single most striking reveal. Mark those "colour". Use it sparingly and deliberately, never at random.'))+'\n\n' +
-'IMAGES — "scene" describes a photograph only: subject, setting, light, period detail. It never asks for words, numbers, logos or UI.\n' +
-'- Do NOT describe a portrait or recognisable likeness of the real named person. These images are generated, and a generated face presented as an archival photograph of a real individual is a fabricated historical document. Describe the setting, the equipment, the landscape, the aftermath, or figures seen at a distance, from behind, or in silhouette.\n' +
-'- The set has to read as a STORY, not one room photographed five times. No two slides may share a setting, a subject or a framing. If one slide is indoors at a workbench, the next is not.\n' +
-'- Anchor each scene to its own beat. It is the moment that body text describes, not a generic illustration of the topic. A scene should be unusable on any other slide.\n' +
-'- Across the deck include at least: one wide exterior or landscape; one close detail of a single object, surface or pair of hands; one human figure at a distance, from behind or in silhouette; and one image of the aftermath, the wreckage, or the place as it is now.\n' +
-'- Name concrete specifics — the weather, the hour, the material, the one object that matters. "A cracked enamel dish on a windowsill at dusk" beats "scientific equipment".\n' +
-'- Avoid the default laboratory-bench shot unless that beat genuinely happens in a laboratory. Most of any story happens somewhere else: a street, a field, a corridor, a coastline, a kitchen, a night sky, a doorway, a crowd.\n' +
+     : 'except the moments that earn colour — a present-day photograph, the aftermath as it looks now, a modern location, or the single most striking reveal. Mark those "colour". Use it sparingly and deliberately, never at random.\n' +
+       '- The COVER is always "colour", whatever the rest of the carousel is. Write its scene as a colour photograph.'))+'\n\n' +
+'IMAGES — "scene" describes a photograph only: what is happening, who or what is in frame, the setting and the light. It never asks for words, numbers, logos or UI.\n' +
+'- SHOW THE THING. Every scene must contain the actual subject of this story, visible and prominent. A carousel about emus has emus in the frame. A carousel about a shipwreck has the ship. A carousel about a bear has the bear. An empty landscape "where it happened" is a failure, not a scene.\n' +
+'- Photograph the MOMENT, not the aftermath. Choose the instant the thing is happening — mid-charge, mid-collapse, mid-flight, the shot being fired, the crowd surging, the wave breaking. Something is in motion in almost every frame. At most one slide in the deck may show the aftermath or the place as it is now, and only if the story ends there.\n' +
+'- The one restriction: do NOT describe the face of the specific real named individual this story is about, because a generated face passed off as a photograph of a real person is a fabricated document. Write them from behind, at a distance, in silhouette, hands only, or out of focus — but they are still IN the shot, doing the thing. This restriction covers that one person\'s face and nothing else. It is not a reason to photograph an empty room. Animals, machines, vehicles, buildings, crowds, weather, objects and unnamed people are all shown directly and in full.\n' +
+'- The set has to read as a STORY, not one room photographed five times. No two slides may share a setting or a framing. If one slide is indoors, the next is not.\n' +
+'- Anchor each scene to its own beat. It is the moment that body text describes. A scene should be unusable on any other slide.\n' +
+'- Name concrete specifics — the weather, the hour, the material, the number of figures, the one object that matters. "Sixty emus scattering across a wheat field as dust rises behind them" beats "the Australian outback".\n' +
+'- Banned as lazy: empty rooms, empty fields, generic laboratory benches, unattended equipment on a table, a single object on a plain surface, anything symbolic or abstract. If a stranger could not tell what the story was from the picture alone, rewrite it.\n' +
+'- The COVER especially: it has to stop a thumb mid-scroll. Make it the single most arresting, most literal image in the whole story — the thing itself, close, in motion, dramatically lit.\n' +
 'Style is '+(p.imagery||'archival black and white photograph')+', so describe something a camera of that era could plausibly have captured.\n\n' +
 'CAPTION for Instagram:\n' +
 '- Exactly three paragraphs separated by blank lines. First paragraph opens with the hook and the core fact. Second gives the detail and context. Third closes with the aftermath or significance, then invites a reply in one short sentence.\n' +
@@ -3295,6 +3354,11 @@ function applySlideTones(deck){
     deck.slides.forEach(s=>{ s.tone = 'pop'; s.pop = deck.pop || ''; });
     return;
   }
+  // The cover is the only frame most people ever see, and a grey one does not stop a
+  // scroll. It is in colour whatever the rest of the carousel does — the pop decks
+  // above are the exception, since there the whole deck has to match.
+  const cover = deck.slides.find(s=>s.kind === 'hook');
+  if(cover) cover.tone = 'colour';
   if(deck.tone === 'colour'){
     deck.slides.forEach(s=>{ if(s.tone !== 'mono') s.tone = 'colour'; });
     return;
@@ -3563,6 +3627,9 @@ async function downloadZip(){
   try{
     if(!window.JSZip) await loadScript('https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js');
     const zip = new JSZip();
+    // everything the deck draws must be decoded first — including the cover's circle,
+    // which is another slide's picture
+    for(const s of S.slides) if(s.img && !IMG_CACHE[s.id]) await cacheImage(s);
     for(let i=0;i<S.slides.length;i++){
       const b64 = slideCanvas(i).toDataURL('image/jpeg',0.92).split(',')[1];
       zip.file(String(i+1).padStart(2,'0')+'.jpg', b64, {base64:true});

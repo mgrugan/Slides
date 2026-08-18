@@ -176,13 +176,18 @@ details summary:hover{color:var(--fg)}
 .badge{
   position:absolute;top:9px;left:9px;padding:2px 7px;border-radius:999px;font-size:11px;font-weight:500;
   background:#00000073;backdrop-filter:blur(6px);color:#fff;line-height:1.6;letter-spacing:.01em}
+/* The row is bounded by the card and wraps. A card can be as narrow as 212px while
+   nine tools need 284px, and the card clips its overflow — so Regenerate and Library,
+   first in the row, were being cut off the left edge and could not be clicked. */
 .tools{
-  position:absolute;right:8px;top:8px;display:flex;gap:4px;opacity:0;transform:translateY(-3px);
+  position:absolute;right:8px;top:8px;left:8px;display:flex;flex-wrap:wrap;justify-content:flex-end;
+  gap:4px;opacity:0;transform:translateY(-3px);pointer-events:none;
   transition:opacity .18s var(--ease),transform .18s var(--ease)}
 .card:hover .tools{opacity:1;transform:none}
 .tools button{
   width:28px;height:28px;border-radius:8px;background:#0a0a0bcc;backdrop-filter:blur(6px);color:#e9e9ec;
-  display:flex;align-items:center;justify-content:center;transition:background .15s var(--ease)}
+  display:flex;align-items:center;justify-content:center;transition:background .15s var(--ease);
+  pointer-events:auto;flex:0 0 auto}
 .tools button:hover{background:#000}
 .tools svg{width:14px;height:14px;stroke:currentColor;fill:none;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
 .state{
@@ -1933,7 +1938,7 @@ function buildGrid(){
           (toneOf(s) === 'colour' ? ' · colour' : toneOf(s) === 'pop' ? ' · pop' : '')+'</span>'+
         '<div class="tools">'+tool('regen','Regenerate image')+tool('lib','Pick from the library')+tool('up','Use my own image')+
           (S.profile.mono_suffix || S.profile.colour_suffix ? tool('tone','Black and white \u2192 colour \u2192 colour pop') : '')+
-          (s.kind === 'hook' && (S.profile.caption_treatment === 'documentary') ? tool('inset','Add a real archival portrait') : '')+
+          (s.kind === 'hook' && (S.profile.caption_treatment === 'documentary') ? tool('inset','Replace the cover circle with your own image') : '')+
           tool('dl','Download JPEG')+tool('left','Move left')+tool('right','Move right')+tool('del','Delete')+'</div>'+
         '<div class="state '+(s.status||'')+'" data-st="'+s.id+'"></div>'+
         '<input type="file" accept="image/*" class="hide" data-a="file">'+

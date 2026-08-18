@@ -2205,12 +2205,11 @@ async function suggestHook(){
   }
   btn.disabled = false; btn.innerHTML = was;
 }
-/* "7 hacks to …" should produce seven points, not whatever the picker was left on */
+/* "7 hacks to …" — or "Seven hacks to …" — should produce seven points, not whatever
+   the picker was left on */
 function syncCountToHook(){
-  const m = String($('hookInput').value||'').trim().match(/^(\d{1,2})\b/);
-  if(!m) return;
-  const n = +m[1] + 1;                                  // the cover is a slide too
-  if(n >= 3 && n <= 13) $('slideCount').value = n;
+  const n = hookItemCount($('hookInput').value);
+  if(n) $('slideCount').value = n + 1;                  // the cover is a slide too
 }
 function applyHook(text){
   const t = $('hookInput');
@@ -2236,9 +2235,17 @@ function parseHookList(text, max){
       .map(l => l.replace(/^[\s\-*•]*\d*[.)]?\s*/,'').replace(/^["'`]+|["'`,]+$/g,'').trim())
       .filter(l => l.length > 12 && !/^[{[\]}]/.test(l) && !/^(json|here|sure|option)/i.test(l));
   }
-  return out.map(s=>String(s).replace(/^["']|["']$/g,'').trim())
+  return out.map(s=>digitiseCounts(String(s).replace(/^["']|["']$/g,'').trim()))
             .filter(s => s.length > 8 && !/\(insert/i.test(s))
             .slice(0, max || 3);
+}
+/* "Six muscle growth myths" reads as prose; "6 muscle growth myths" reads as a
+   listicle and stops a thumb. The writer is asked for digits and does not always
+   comply, so they are converted here as well. "One" is left alone — it is a word
+   far more often than it is a count. */
+function digitiseCounts(text){
+  return String(text||'').replace(/\b(two|three|four|five|six|seven|eight|nine|ten|eleven|twelve)\b/gi,
+    m => NUM_WORDS[m.toLowerCase()]);
 }
 async function fetchHooks(){
   const cats = enabledCats();
@@ -2256,6 +2263,7 @@ async function fetchHooks(){
 '2. Mutate the template. Change wording, rhythm and framing so it reads native to the niche and the style voice. The template is a structural starting point, not a sentence to complete.\n' +
 '3. Most of these hooks were written for talking-head video and open with a spoken address or a piece to camera. Rewrite anything like that into something that works as a static cover slide someone sees for half a second while scrolling: no "hey guys", no "watch this", no "in this video", no direct-to-camera address. If this template cannot survive that translation, invent a hook in the same category and spirit instead of forcing it.\n' +
 '4. Never invent a statistic, a study or a number you are not confident is real.\n' +
+'5. Write counts as digits, never as words: "6 myths", not "Six myths".\n' +
 '5. Max ~14 words. No emoji, no hashtags, no quotation marks around the whole line.\n' +
 (pick.c === 'Numbered'
   ? '6. Keep it a counting hook: it must open with a number between 3 and 12, because the deck will carry exactly that many points. Any other number in the line (days, minutes, dollars) must be plausible and not a claimed research finding.\n'
@@ -2270,9 +2278,13 @@ function autosize(t){ t.style.height = 'auto'; t.style.height = Math.max(76, t.s
 /* ============================ Mode A — deck generation ============================ */
 function deckPrompt(hook, n){
   const p = S.profile;
+  const promised = hookItemCount(hook);
   return (
 'You write short-form social carousels. Write a '+n+'-slide deck.\n\n' +
 'HOOK (slide 1 title, verbatim or lightly tightened): "'+hook+'"\n' +
+(promised ? 'THE HOOK PROMISES '+promised+' ITEMS. Deliver exactly '+promised+' — one per slide, slides 2 to '+
+  (promised+1)+'. Not one more, not one fewer. A carousel headlined "'+promised+'" that contains a different '+
+  'number is broken.\n' : '') +
 'STYLE VOICE: '+(p.voice||'direct second person, blunt')+'\n' +
 'DECK STRUCTURE: '+(p.structure||'hook, then one idea per slide')+'\n' +
 'IMAGERY: '+(p.imagery||'photographic')+'\n\n' +
@@ -2301,7 +2313,7 @@ async function generateDeck(){
     const r = await callModel({model: cfg().textModel, parts:[{type:'text', text: deckPrompt(hook,n)}]});
     S.lastRaw = r.text;
     const j = extractJSON(r.text, false);
-    loadDeck(j);
+    loadDeck(j, hook);
     $('deckStatus').textContent = '';
     $('genDeck').disabled = false;
     generateAllImages();
@@ -2313,7 +2325,7 @@ async function generateDeck(){
     log('deck generation failed: '+apiError(e),'e');
   }
 }
-function loadDeck(j){
+function loadDeck(j, hook){
   S.openBatch = -1;          // a new deck detaches the editor from any batch deck it was showing
   const arr = Array.isArray(j.slides) ? j.slides : [];
   S.slides = arr.map((s,i)=>({
@@ -2322,6 +2334,7 @@ function loadDeck(j){
     title: String(s.title||''), body: String(s.body||''), scene: String(s.scene||''),
     img: '', status: ''
   }));
+  if(hook) S.slides = trimToPromise(hook, S.slides);
   S.caption = String(j.caption||'');
   $('capInput').value = S.caption;
   pruneImageCache();
@@ -3098,11 +3111,55 @@ function renderJobs(){
    deck, so a batch is not a way to hammer the API harder than the app already does. */
 let BATCH_STOP = false;
 const slug = s => String(s||'deck').toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'').slice(0,42) || 'deck';
+/* A hook that promises a number has to deliver it. This only ever matched leading
+   digits, so "Six muscle growth myths" fell straight through to whatever the picker
+   was left on and every listicle came out the same length. It now reads number words
+   too, and skips numbers that are measurements rather than counts — "the 60-second
+   test", "3,000 daily calories", "under 160 pounds", "12 weeks to". */
+const NUM_WORDS = {one:1, two:2, three:3, four:4, five:5, six:6, seven:7, eight:8,
+                   nine:9, ten:10, eleven:11, twelve:12};
+const UNIT_WORD = /^(seconds?|minutes?|hours?|days?|weeks?|months?|years?|pounds?|lbs?|kgs?|kilos?|percent|reps?|sets?|miles?|km|dollars?|degrees?|am|pm|k|x)$/i;
+function hookItemCount(hook){
+  const text = String(hook||'').replace(/(\d),(?=\d{3}\b)/g, '$1');     // 3,000 -> 3000
+  const toks = text.split(/[^A-Za-z0-9-]+/).filter(Boolean);
+  for(let i = 0; i < toks.length; i++){
+    const t = toks[i];
+    let n = null;
+    const dm = /^(\d{1,3})(?:-([A-Za-z]+))?$/.exec(t);
+    if(dm){
+      if(dm[2] && UNIT_WORD.test(dm[2])) continue;                      // "60-second test"
+      n = +dm[1];
+    } else if(t.toLowerCase() in NUM_WORDS){
+      n = NUM_WORDS[t.toLowerCase()];
+    }
+    if(n === null) continue;
+    if(UNIT_WORD.test(toks[i+1] || '')) continue;                       // "12 weeks", "160 pounds"
+    if(n >= 2 && n <= 12) return n;
+  }
+  return 0;
+}
 const deckLen = hook => {
-  const m = String(hook).trim().match(/^(\d{1,2})\b/);
-  const n = m ? +m[1] + 1 : 0;
-  return (n >= 3 && n <= 13) ? n : +$('batchCount').value;
+  const n = hookItemCount(hook);
+  return n ? n + 1 : +$('batchCount').value;                            // the cover is a slide too
 };
+/* Asking is not enough — a deck headlined "Five" that arrives with six items is
+   wrong on the one thing the reader is counting. Extras are dropped; coming up short
+   is said out loud, since inventing a sixth point is not ours to do. */
+function trimToPromise(hook, slides){
+  const want = hookItemCount(hook);
+  if(!want) return slides;
+  const body = slides.filter(s => s.kind !== 'hook');
+  if(body.length > want){
+    const keep = new Set(body.slice(0, want).map(s => s.id));
+    log('"'+String(hook).slice(0,40)+'" came back with '+body.length+' points for a promise of '+want+
+        ' — trimmed to '+want, 'w');
+    return slides.filter(s => s.kind === 'hook' || keep.has(s.id));
+  }
+  if(body.length < want)
+    log('"'+String(hook).slice(0,40)+'" promises '+want+' but only '+body.length+
+        ' came back — edit the hook or regenerate', 'w');
+  return slides;
+}
 
 async function suggestBatchHooks(){
   const n = 10, cats = enabledCats();
@@ -3125,6 +3182,7 @@ async function suggestBatchHooks(){
 '- Mutate the template: change wording, rhythm and framing so it reads native to the niche.\n' +
 '- These were written for talking-head video. Rewrite anything spoken or direct-to-camera into something that works as a static cover slide seen for half a second. If a template cannot survive that, write a different hook in the same spirit.\n' +
 '- Never invent a statistic, a study or a number you are not confident is real.\n' +
+'- Write counts as digits, never as words: "6 myths", not "Six myths".\n' +
 '- Each must be a different angle from the others. Max ~14 words, no emoji, no hashtags.\n\n' +
 'TEMPLATES:\n' + picks.map((p,i)=>(i+1)+'. ['+p.c+'] '+p.t).join('\n') + '\n\n' +
 'Return ONLY a JSON array of exactly '+picks.length+' strings, in the same order.';
@@ -3170,6 +3228,7 @@ async function runBatch(){
         img:'', status:'', _deck: deck, _label: deck.hook.slice(0,28)
       }));
       if(!deck.slides.length) throw new Error('no slides in the reply');
+      deck.slides = trimToPromise(deck.hook, deck.slides);
       deck.caption = String(j.caption||'');
       deck.status = 'written';
     }catch(e){

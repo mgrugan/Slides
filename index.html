@@ -498,6 +498,7 @@ details summary:hover{color:var(--fg)}
     <div class="deckHead">
       <h2><span id="batchTally"></span></h2>
       <span id="batchProgress" class="tiny" style="color:var(--faint)"></span>
+      <span id="spendLine" class="tiny" style="color:var(--faint)"></span>
       <div class="spacer"></div>
       <button id="batchDownloadAll" class="btn sm">Download all</button>
       <button id="batchClear" class="btn sm quiet">Clear</button>
@@ -649,6 +650,16 @@ details summary:hover{color:var(--fg)}
         <select id="apiShape"><option value="auto">auto</option><option value="interactions">interactions</option><option value="generateContent">generateContent</option></select>
       </div>
       <div class="switch"><span>Send imageConfig</span><input type="checkbox" id="sendImageCfg" checked></div>
+      <div class="field"><label for="concurrency">Requests at once</label>
+        <select id="concurrency">
+          <option value="2">2 — gentlest</option>
+          <option value="3">3</option>
+          <option value="4" selected>4 — balanced</option>
+          <option value="6">6</option>
+          <option value="8">8 — fastest</option>
+        </select>
+      </div>
+      <div class="tiny" style="color:var(--faint);margin-top:-2px">Higher finishes sooner. If the API rate limits you the app pauses and retries by itself, so the worst case is that it slows back down.</div>
     </div>
     <div class="group">
       <h3>Console</h3>
@@ -1415,6 +1426,7 @@ function libPick(exclude, p, slide){
   return free.reduce((best,x)=> libScore(x,slide,p,idf) > libScore(best,slide,p,idf) ? x : best, free[0]);
 }
 async function useFromLibrary(slide, item){
+  spend('reused');
   const data = item.data || await libData(item.id);
   if(!data){ log('that background is missing from storage','w'); return; }
   setImage(slide, data, autosave);
@@ -2797,18 +2809,48 @@ async function keepInLibrary(slide, dataUrl){
 }
 /* Library-first: the cover always gets a fresh image, body slides come from the
    library until it runs dry, and only then does anything hit the API. */
-function planImages(slides, useLib){
+/* off  — everything generated
+   all  — cover generated, every body slide from the library
+   half — cover and the front half generated, the back half from the library. The first
+          frames are the ones anyone actually looks at, so they stay bespoke while the
+          tail, which most people never swipe to, comes free. */
+/* Reads a stored library setting, tolerating the '1'/'0' the switch used to write. */
+function libMode(key, dflt){
+  const v = localStorage.getItem(key);
+  if(v === null) return dflt || 'off';
+  if(v === '1') return 'all';
+  if(v === '0') return 'off';
+  return ['off','all','half'].includes(v) ? v : (dflt || 'off');
+}
+function planImages(slides, mode){
   const fresh = [], reused = [];
-  if(useLib === undefined) useLib = localStorage.getItem('cb.useLib') === '1';
+  if(mode === undefined) mode = libMode('cb.useLib');
+  if(mode === true) mode = 'all';                     // older callers passed a boolean
+  if(mode === false) mode = 'off';
+  const useLib = mode !== 'off';
+  // where the library takes over in each carousel, when running half and half
+  const cut = new Map();
+  if(mode === 'half'){
+    const byDeck = new Map();
+    slides.forEach(s=>{
+      const k = (s._deck && s._deck.id) || '_solo';
+      byDeck.set(k, (byDeck.get(k) || 0) + 1);
+    });
+    byDeck.forEach((n, k)=>cut.set(k, Math.ceil(n / 2)));
+  }
+  const seen = new Map();
   // The rule is no repeat WITHIN a carousel. This used to hold one set across the whole
   // run, so a batch of twenty could reuse each background only once between them all and
   // generated the rest at full price — the bigger the batch, the less the library did.
   const takenBy = new Map();
   for(const s of slides){
+    const key = (s._deck && s._deck.id) || '_solo';
+    const at = seen.get(key) || 0;
+    seen.set(key, at + 1);
     // the cover is never reused: it is the frame that has to stop the scroll, and it
     // is the one image in the deck a repeat would be noticed on
     if(!useLib || s.kind === 'hook'){ fresh.push(s); continue; }
-    const key = (s._deck && s._deck.id) || '_solo';
+    if(mode === 'half' && at < (cut.get(key) || 0)){ fresh.push(s); continue; }
     if(!takenBy.has(key)) takenBy.set(key, new Set());
     const taken = takenBy.get(key);
     const item = libPick(taken, S.profile, s);
@@ -2817,6 +2859,27 @@ function planImages(slides, useLib){
   }
   return {fresh, reused};
 }
+/* What this session has actually spent. Retries were the invisible part of the bill —
+   a colour slide that comes back grey is asked again at full price, and nothing said so
+   until the invoice arrived. */
+const SPEND = {images:0, batchImages:0, retries:0, reused:0};
+const IMAGE_PRICE = 0.067;                      // 1K standard; halved on a batch job
+function spend(k, n){ SPEND[k] += (n === undefined ? 1 : n); renderSpend(); }
+function spendLine(){
+  const made = SPEND.images + SPEND.batchImages;
+  const cost = SPEND.images * IMAGE_PRICE + SPEND.batchImages * IMAGE_PRICE / 2;
+  return made + ' image' + (made === 1 ? '' : 's') + ' generated' +
+    (SPEND.batchImages ? ' (' + SPEND.batchImages + ' at half price)' : '') +
+    (SPEND.retries ? ' · ' + SPEND.retries + ' of them retries' : '') +
+    (SPEND.reused ? ' · ' + SPEND.reused + ' free from the library' : '') +
+    ' · ~$' + cost.toFixed(2);
+}
+function renderSpend(){
+  const el = $('spendLine');
+  if(!el) return;
+  el.textContent = (SPEND.images || SPEND.batchImages || SPEND.reused) ? spendLine() : '';
+  el.title = 'Estimated at $' + IMAGE_PRICE + ' per image, standard rate. Half that on a batch job.';
+}
 let QUOTA_NOTED = false;
 const slideLabel = slide => S.slides.indexOf(slide) >= 0 ? S.slides.indexOf(slide)+1 : (slide._label || '?');
 async function genImage(slide, single, attempt, toneTry){
@@ -2824,6 +2887,7 @@ async function genImage(slide, single, attempt, toneTry){
   setStatus(slide,'generating');
   try{
     const r = await callModel({model: cfg().imageModel, parts:[{type:'text', text: imagePrompt(slide, toneTry > 0)}], wantImage:true, aspect:S.profile.aspect_ratio});
+    spend('images');
     if(!r.images.length){
       const said = r.text && !sniffImage(r.text) ? ' — model said: '+r.text.slice(0,140) : '';
       throw new Error('no image in response' + said);
@@ -2840,6 +2904,7 @@ async function genImage(slide, single, attempt, toneTry){
       if(st && st.mean <= MONO_THRESHOLD){
         if(toneTry < 1){
           log('slide '+n0+' came back black and white — asking again','w');
+          spend('retries');
           return genImage(slide, single, attempt, toneTry + 1);
         }
         log('slide '+n0+' is still black and white after a retry — keeping it','w');
@@ -2870,6 +2935,15 @@ async function genImage(slide, single, attempt, toneTry){
   }
   if(single) autosave();
 }
+/* How many requests are in flight at once. Three was a conservative guess from before
+   there was any backoff; there is now a shared gate that pauses everything on a 429 and
+   resumes, so a higher number costs nothing when the API is happy and self-corrects when
+   it is not. Writing runs softer because each call is much longer. */
+const conc = () => {
+  const n = parseInt(localStorage.getItem('cb.conc'), 10);
+  return Number.isFinite(n) ? Math.max(1, Math.min(8, n)) : 4;   // a corrupt value must not stall every queue
+};
+const writeConc = () => Math.max(2, Math.round(conc() / 2));
 async function runQueue(items, limit, worker){
   let i = 0;
   const runners = Array.from({length:Math.min(limit, items.length)}, async ()=>{
@@ -2887,12 +2961,12 @@ async function generateAllImages(){
   const {fresh, reused} = planImages(todo);
   for(const [s, item] of reused) await useFromLibrary(s, item);
   if(reused.length) log(reused.length + ' background' + (reused.length>1?'s':'') + ' taken from the library — free','o');
-  await runQueue(fresh, 3, genImage);
+  await runQueue(fresh, conc(), genImage);
   autosave();
 }
 async function regenAllImages(){
   S.slides.forEach(s=>setStatus(s,'queued'));
-  await runQueue(S.slides.slice(), 3, genImage);
+  await runQueue(S.slides.slice(), conc(), genImage);
   $('imageryNotice').classList.add('hide');
   autosave();
 }
@@ -3157,7 +3231,7 @@ async function redoWrongToneSlides(slides){
   }
   if(!wrong.length) return;
   log(wrong.length+' slide'+(wrong.length>1?'s':'')+' came back in the wrong tone — asking again','w');
-  await runQueue(wrong, 3, s => genImage(s, false, 0, 1));
+  await runQueue(wrong, conc(), s => genImage(s, false, 0, 1));
   const still = [];
   for(const s of wrong){
     const st = s.img && await statsOfDataURL(s.img);
@@ -3200,6 +3274,7 @@ async function pollJob(job){
         // hold up the rest of the results landing
         if(toned(slide) && toneOf(slide) === 'pop') popLater.push(slide);
         if(toned(slide) && toneOf(slide) !== 'mono') tonedSlides.push(slide);
+        spend('batchImages');
         got++;
       });
       for(const s of popLater){
@@ -3383,7 +3458,7 @@ async function runBatch(){
   S.openBatch = -1;
   renderBatch();
 
-  await runQueue(newDecks, 2, async deck => {
+  await runQueue(newDecks, writeConc(), async deck => {
     if(BATCH_STOP) return;
     deck.status = 'writing'; renderBatchRow(deck);
     try{
@@ -3416,9 +3491,9 @@ async function runBatch(){
       if($('batchApiToggle').dataset.on === '1'){
         try{ await submitBatchJob(needGen); }
         catch(e){ log('batch job could not be submitted: '+apiError(e)+' — falling back to normal requests','w');
-                  await runQueue(needGen, 3, async s => { if(!BATCH_STOP){ await genImage(s); batchProgress(); } }); }
+                  await runQueue(needGen, conc(), async s => { if(!BATCH_STOP){ await genImage(s); batchProgress(); } }); }
       } else {
-        await runQueue(needGen, 3, async s => { if(!BATCH_STOP){ await genImage(s); batchProgress(); } });
+        await runQueue(needGen, conc(), async s => { if(!BATCH_STOP){ await genImage(s); batchProgress(); } });
       }
     }
   }
@@ -3765,7 +3840,7 @@ async function runFacts(){
     S.openBatch = -1;
     renderBatch();
 
-    await runQueue(newDecks, 2, async deck => {
+    await runQueue(newDecks, writeConc(), async deck => {
       if(FACT_STOP) return;
       deck.status = 'writing'; renderBatchRow(deck);
       try{
@@ -3797,8 +3872,7 @@ async function runFacts(){
     if($('factImgToggle').dataset.on === '1' && !FACT_STOP){
       const all = newDecks.filter(d=>d.status === 'written').flatMap(d=>d.slides);
       all.forEach(s=>{ s.status = 'queued'; });
-      const useLib = $('factLibToggle').dataset.on === '1';
-      const {fresh: needGen, reused} = planImages(all, useLib);
+      const {fresh: needGen, reused} = planImages(all, libMode('cb.useLibFacts','all'));
       for(const [s, item] of reused) await useFromLibrary(s, item);
       if(reused.length) log(reused.length+' background'+(reused.length>1?'s':'')+' reused from the '+
         currentCollection()+' library — free. Every cover was generated fresh.','o');
@@ -3806,9 +3880,9 @@ async function runFacts(){
         if($('batchApiToggle') && $('batchApiToggle').dataset.on === '1'){
           try{ await submitBatchJob(needGen); }
           catch(e){ log('batch job failed to submit: '+apiError(e)+' — using normal requests','w');
-                    await runQueue(needGen, 3, async s => { if(!FACT_STOP){ await genImage(s); batchProgress(); } }); }
+                    await runQueue(needGen, conc(), async s => { if(!FACT_STOP){ await genImage(s); batchProgress(); } }); }
         } else {
-          await runQueue(needGen, 3, async s => { if(!FACT_STOP){ await genImage(s); batchProgress(); } });
+          await runQueue(needGen, conc(), async s => { if(!FACT_STOP){ await genImage(s); batchProgress(); } });
         }
       }
     }
@@ -4116,11 +4190,39 @@ function init(){
     set(stored === null ? !!defaultOn : stored === '1');
     b.onclick = () => { const on = b.dataset.on !== '1'; localStorage.setItem(key, on ? '1':'0'); set(on); };
   };
-  bindToggle('libToggle','cb.useLib','Library on','Library off','batchLibToggle');
-  bindToggle('batchLibToggle','cb.useLib','Library on','Library off','libToggle');
+  /* The library button cycles rather than toggles, because there is a genuinely useful
+     middle setting: keep the front of each carousel bespoke and let the tail — which
+     most people never swipe to — come free from storage. */
+  const bindLib = (ids, key, dflt) => {
+    const buttons = ids.split(',').map(id=>$(id)).filter(Boolean);
+    if(!buttons.length) return;
+    const paint = mode => {
+      buttons.forEach(b=>{
+        b.dataset.mode = mode;
+        b.dataset.on = mode === 'off' ? '0' : '1';
+        b.textContent = mode === 'off' ? 'Library off' : mode === 'half' ? 'Library half' : 'Library on';
+        b.title = mode === 'off' ? 'Every image is generated'
+          : mode === 'half' ? 'Cover and the front half generated, the back half reused from the library'
+          : 'Cover generated, every other slide reused from the library';
+        b.classList.toggle('quiet', mode === 'off');
+      });
+    };
+    paint(libMode(key, dflt));
+    buttons.forEach(b=>{ b.onclick = () => {
+      const next = {off:'all', all:'half', half:'off'}[b.dataset.mode || 'off'];
+      localStorage.setItem(key, next); paint(next);
+    }; });
+  };
+  const cc = $('concurrency');
+  if(cc){
+    cc.value = String(conc());
+    cc.onchange = () => { localStorage.setItem('cb.conc', cc.value);
+      log('running '+cc.value+' requests at once' + (+cc.value >= 6 ? ' — if the API pushes back the app will pause and resume by itself' : ''), 'o'); };
+  }
+  bindLib('libToggle,batchLibToggle','cb.useLib','off');
   // Facts keep their own switch, on by default: their library is a separate collection,
   // so reusing from it never pulls a golf course into a documentary carousel.
-  bindToggle('factLibToggle','cb.useLibFacts','Library on','Library off','', true);
+  bindLib('factLibToggle','cb.useLibFacts','all');
   bindToggle('factPopToggle','cb.pop','Colour pop on','Colour pop off');
   bindToggle('batchApiToggle','cb.batchApi','Half price on','Half price off');
 

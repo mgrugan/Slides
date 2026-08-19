@@ -1154,30 +1154,101 @@ function makeThumb(dataUrl, edge, type){
 /* ---------------- local tagging: no model, no cost ----------------
    Words that appear in every scene prompt (our own boilerplate and the style
    suffix) carry no information, so they are dropped before tagging. */
+/* Tags are built from the writer's scene sentence, not from our own prompt boilerplate,
+   so this only needs the ordinary function words plus the no-text clause. Words like
+   "field", "light", "view" and "black" were in here because of camera jargon — "shallow
+   depth of field", "natural light" — and that quietly threw away the single most
+   important word in "a wheat field", "a battlefield at dawn", "black smoke". */
 const STOP = new Set(('a an the of in on at to for with and or but if then than that this these those it its into over under ' +
  'from by as is are was were be been being no not any all some very more most much many few one two three ' +
- 'shot image images picture pictures photo photograph photographic photorealistic real natural light lighting ' +
- 'colour color rich cinematic composition editorial documentary framing camera feel style rendering render ' +
+ 'across behind them they their his her him she he you your yours our ours we us above below beside near ' +
+ 'between around through during after before while when where what who whom which how why there here also ' +
+ 'shot image images picture pictures photo photograph photographic photorealistic cinematic composition ' +
+ 'editorial framing camera feel style rendering render colour color rich ' +
  'text letters numbers words captions caption subtitles signage labels logos logo watermark watermarks ui ' +
  'interface charts diagrams writing aspect ratio vertical horizontal full bleed frame region visually calm ' +
  'uncluttered even tone placed sits sit purely absolutely anywhere keep kept leave left third middle upper lower ' +
- 'flat vector cartoon bold black outlines simple saturated blocking minimal shading clean graphic drone phone ' +
- 'depth field shallow view scene background foreground').split(/\s+/));
+ 'vector bold outlines simple saturated blocking minimal shading clean graphic drone phone ' +
+ 'depth shallow scene background foreground').split(/\s+/));
+/* Consistent stemming matters more than being linguistically right: both the query and
+   the stored tags go through the same function, so they meet in the middle. */
+const stem = w => (w.length >= 4 && w.endsWith('s') && !w.endsWith('ss')) ? w.slice(0, -1) : w;
+
+/* Words that mean the same thing to a picture. A scene written as "at dusk" should
+   find one tagged "sunset", and one about emus should find "birds". Each group adds a
+   single shared token, so the match survives a different choice of word. */
+const CONCEPT_WORDS = {
+  water:'sea ocean coast coastal harbour harbor river lake wave shore beach flood tide canal dock port',
+  night:'night nocturnal midnight moonlit starlit lantern torchlight',
+  dusk:'dusk dawn sunset sunrise twilight evening morning golden overcast',
+  snow:'snow snowy ice icy frozen blizzard arctic glacier frost',
+  forest:'forest wood woodland tree jungle redwood pine timber',
+  desert:'desert dune sand arid dust dusty outback plain',
+  mountain:'mountain peak summit cliff ridge alpine valley slope',
+  city:'city street urban alley avenue skyline downtown pavement sidewalk building rooftop',
+  interior:'room indoor interior hall corridor hallway office kitchen basement attic cellar doorway staircase',
+  lab:'laboratory lab bench microscope apparatus equipment instrument specimen dial gauge',
+  military:'soldier army troop regiment infantry battle war rifle gun artillery uniform trench helmet',
+  vehicle:'truck car jeep tank aircraft plane airplane ship boat train locomotive vehicle wagon bicycle',
+  crowd:'crowd people group gathering protest march procession queue audience spectator',
+  fire:'fire flame burning blaze smoke ember explosion ash wreckage',
+  medical:'hospital ward nurse doctor surgery patient clinic ambulance stretcher',
+  document:'document paper file archive letter map blueprint ledger notebook',
+  machine:'machine machinery engine motor gear factory industrial mill turbine cable',
+  animal:'animal bird emu horse dog bear cattle sheep insect bee wildlife feather',
+  farm:'farm field wheat crop harvest barn fence pasture tractor',
+  gym:'gym barbell dumbbell bench squat rack weight plate treadmill kettlebell',
+  food:'food meal plate cooking bread meat vegetable kitchen',
+  sport:'golf course fairway green bunker tee pitch stadium track court net',
+  water_craft:'sail mast deck hull anchor lifeboat',
+  sky:'sky cloud storm rain wind fog mist lightning'
+};
+const CONCEPT_OF = (()=>{
+  const m = {};
+  for(const [c, words] of Object.entries(CONCEPT_WORDS))
+    words.split(/\s+/).forEach(w=>{ m[stem(w)] = '~' + c; });
+  return m;
+})();
+
+/* Bump when the tagging changes: libEnrich re-tags every stored background from its
+   saved scene text, so older ones are never left with a thinner vocabulary than new
+   ones — which would quietly make them lose every comparison. */
+const TAGS_V = 2;
 function tagsFrom(text){
+  const raw = String(text||'').toLowerCase().split(/[^a-z0-9']+/);
+  const seq = raw.map(w=>{
+    if(w.length < 3 || STOP.has(w)) return null;
+    const t = stem(w);
+    return STOP.has(t) ? null : t;
+  });
   const out = [];
-  for(let w of String(text||'').toLowerCase().split(/[^a-z0-9']+/)){
-    if(w.length < 3 || STOP.has(w)) continue;
-    if(w.length > 4 && w.endsWith('s') && !w.endsWith('ss')) w = w.slice(0,-1);   // crude singular
-    if(!STOP.has(w) && !out.includes(w)) out.push(w);
-    if(out.length >= 14) break;
-  }
+  const add = t => { if(t && out.length < 30 && !out.includes(t)) out.push(t); };
+  seq.forEach(add);                                                   // single words
+  for(let i = 0; i < seq.length - 1; i++)                             // adjacent pairs: far more telling
+    if(seq[i] && seq[i+1]) add(seq[i] + ' ' + seq[i+1]);
+  seq.forEach(w=>{ if(w && CONCEPT_OF[w]) add(CONCEPT_OF[w]); });     // shared concepts
   return out;
 }
 /* rare words say more about an image than common ones */
 function libIDF(){
   const df = {}, n = Math.max(1, LIB.length);
   LIB.forEach(x=>new Set(x.tags||[]).forEach(t=>{ df[t] = (df[t]||0)+1; }));
-  return t => Math.log((n + 1) / ((df[t]||0) + 1)) + 0.2;
+  const idf = t => Math.log((n + 1) / ((df[t]||0) + 1)) + 0.2;
+  // the average tag mass of the library, so scoring can tell "richly tagged" from
+  // "unusually richly tagged" instead of rewarding length outright
+  let sum = 0;
+  LIB.forEach(x=>{ let m = 0; new Set(x.tags||[]).forEach(t=>{ m += idf(t); }); sum += m; });
+  idf.avgMass = LIB.length ? sum / LIB.length : 1;
+  return idf;
+}
+/* What a slide is asking for. The deck's subject counts too — a slide inside a
+   carousel about the Great Emu War should prefer a frame with emus in it, even when
+   its own scene sentence never says the word. */
+function queryTags(slide){
+  if(!slide) return new Set();
+  const deck = slide._deck;
+  const parts = [slide.scene || '', slide.title || '', (deck && (deck.subject || deck.hook)) || ''];
+  return new Set(tagsFrom(parts.filter(Boolean).join(' ')));
 }
 /* deterministic image stats on a 24px thumbnail: brightness, hue, and which
    horizontal band is flattest — that band is where a caption will sit best */
@@ -1227,13 +1298,49 @@ const COLL_BY_IMAGERY = {};
 PRESETS.forEach(p=>{ if(p.imagery && p.library_collection) COLL_BY_IMAGERY[p.imagery] = p.library_collection; });
 const strayCollection = x => (!x.collection || x.collection === 'General') && COLL_BY_IMAGERY[x.imagery];
 
+/* Re-describing is pure string work, so it does not need the slow per-item read that
+   the rest of the enrich pass does: one cursor, one transaction, the whole library. */
+async function libRetagAll(){
+  const stale = LIB.filter(x=>!x.tags || x.tagsV !== TAGS_V);
+  if(!stale.length) return 0;
+  const want = new Map(stale.map(x=>[x.id, true]));
+  const db = await idb();
+  const t = db.transaction('lib','readwrite');
+  const store = t.objectStore('lib');
+  let n = 0;
+  await new Promise((res, rej)=>{
+    const q = store.openCursor();
+    q.onerror = () => rej(q.error);
+    q.onsuccess = () => {
+      const cur = q.result;
+      if(!cur) return res();
+      const rec = cur.value;
+      if(rec && want.has(rec.id)){
+        rec.tags = tagsFrom((rec.scene || '') + ' ' + (rec.title || ''));
+        rec.tagsV = TAGS_V;
+        cur.update(rec);
+        const mine = LIB.find(x=>x.id === rec.id);
+        if(mine){ mine.tags = rec.tags; mine.tagsV = TAGS_V; }
+        n++;
+      }
+      cur.continue();
+    };
+  });
+  await new Promise((res, rej)=>{ t.oncomplete = res; t.onerror = () => rej(t.error); });
+  return n;
+}
 async function libEnrich(){
+  try{
+    const n = await libRetagAll();
+    if(n) log('re-described '+n+' background'+(n>1?'s':'')+' with the current vocabulary — '+
+              'older ones match as well as new ones now','o');
+  }catch(e){ log('re-tagging failed: '+e.message,'w'); }
   // toneChecked marks a tone read off the pixels; anything else was only the tone
   // that was *asked* for, which the image model does not reliably honour.
   const todo = LIB.filter(x=>!x.tags || !x.stats || !x.toneChecked || !x.thumb || strayCollection(x));
   let moved = 0;
   for(const item of todo.slice(0, 150)){
-    if(!item.tags) item.tags = tagsFrom(item.scene);
+    if(!item.tags){ item.tags = tagsFrom((item.scene||'') + ' ' + (item.title||'')); item.tagsV = TAGS_V; }
     const home = strayCollection(item);
     if(home){ item.collection = home; moved++; }
     if(!item.stats || !item.toneChecked || !item.thumb){
@@ -1261,11 +1368,20 @@ function libScore(item, slide, p, idf){
   s += item.aspect === (p.aspect_ratio||'9:16') ? 30 : -40;      // wrong shape gets cropped
   s += item.imagery === (p.imagery||'') ? 12 : -6;
 
-  const want = new Set(tagsFrom((slide && (slide.scene || slide.title)) || ''));
+  const want = queryTags(slide);
   if(want.size && item.tags && item.tags.length){
+    const have = new Set(item.tags);
     let hit = 0, total = 0;
-    want.forEach(t=>{ total += idf(t); if(item.tags.includes(t)) hit += idf(t); });
-    s += total ? 45 * (hit/total) : 0;                            // subject match, the main signal
+    want.forEach(t=>{ total += idf(t); if(have.has(t)) hit += idf(t); });
+    // Recall alone rewards having MORE tags — every extra word is another chance to
+    // contain something the query asked for, so a richly worded background would beat
+    // an equally relevant plain one every time. Dividing by the item's own tag mass,
+    // above the library average, takes that advantage back out without punishing a
+    // genuinely descriptive scene.
+    let mass = 0; have.forEach(t=>{ mass += idf(t); });
+    const avg = idf.avgMass || 1;
+    const spread = avg / (avg + Math.max(0, mass - avg) * 0.55);
+    s += total ? 48 * (hit/total) * spread : 0;                   // subject match, the main signal
   }
   const st = item.stats;
   if(st){
@@ -2662,7 +2778,7 @@ async function keepInLibrary(slide, dataUrl){
   if(localStorage.getItem('cb.libSave') === '0') return;
   const scene = slide.scene || slide.title || '';
   const item = {id: uid(), data: dataUrl, scene,
-    tags: tagsFrom(scene + ' ' + (slide.title||'')),
+    tags: tagsFrom(scene + ' ' + (slide.title||'')), tagsV: TAGS_V, title: slide.title || '',
     imagery: S.profile.imagery || '', aspect: S.profile.aspect_ratio || '9:16',
     collection: currentCollection(),
     // record what the picture is, not what was asked for — the model does not always comply
@@ -2816,7 +2932,10 @@ let LIB_COLL = null;        // null = the collection the current style uses
 function libTopTags(coll){
   const count = {};
   LIB.filter(x=>!coll || collectionOf(x) === coll).forEach(x=>(x.tags||[]).forEach(t=>{ count[t] = (count[t]||0)+1; }));
-  return Object.entries(count).filter(([,n])=>n > 1).sort((a,b)=>b[1]-a[1]).slice(0,14);
+  // chips stay single words: the pairs and concept tokens do the matching behind the
+  // scenes, but a row of "~forest" and "wheat field" would just be noise to read
+  return Object.entries(count).filter(([t,n])=>n > 1 && !t.includes(' ') && t[0] !== '~')
+               .sort((a,b)=>b[1]-a[1]).slice(0,14);
 }
 function renderLibrary(){
   const grid = $('libGrid'); if(!grid) return;

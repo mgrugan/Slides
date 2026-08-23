@@ -1407,11 +1407,18 @@ function libScore(item, slide, p, idf){
     }
   }
   if(item.tone && slide && toneOf(slide) !== item.tone) s -= 60;  // a monochrome frame cannot stand in for a colour one
-  s -= Math.min(18, (item.used||0) * 6);                          // spread usage around
+  // Uncapped in practice: this used to stop at 18 after three uses, which could never
+  // outweigh the ~24 points a flat dark frame earns for being easy to caption. A picture
+  // that has served twenty slides has to be able to lose to one that has served none.
+  s -= Math.min(90, (item.used||0) * 7);                          // spread usage around
   if(item.lastUsed && Date.now() - item.lastUsed < 864e5) s -= 8; // used today, rest it
   return s;
 }
-function libPick(exclude, p, slide){
+/* `tally` counts what this planning pass has already handed out. Without it, a whole
+   run is planned before a single image is marked used, so the same top-scoring frame
+   wins in every carousel — which is how two deep-sea photographs ended up on half the
+   slides. The per-deck exclude only ever stopped repeats inside one carousel. */
+function libPick(exclude, p, slide, tally){
   const coll = currentCollection();
   const byTone = toned(slide) || !!(p.mono_suffix || p.colour_suffix) && !!slide;
   const want = slide ? toneOf(slide) : '';
@@ -1423,7 +1430,8 @@ function libPick(exclude, p, slide){
     && (!byTone || (x.toneChecked && x.tone === want)));
   if(!free.length) return null;
   const idf = libIDF();
-  return free.reduce((best,x)=> libScore(x,slide,p,idf) > libScore(best,slide,p,idf) ? x : best, free[0]);
+  const score = x => libScore(x, slide, p, idf) - 9 * ((tally && tally.get(x.id)) || 0);
+  return free.reduce((best,x)=> score(x) > score(best) ? x : best, free[0]);
 }
 async function useFromLibrary(slide, item){
   spend('reused');
@@ -2843,6 +2851,7 @@ function planImages(slides, mode){
   // run, so a batch of twenty could reuse each background only once between them all and
   // generated the rest at full price — the bigger the batch, the less the library did.
   const takenBy = new Map();
+  const tally = new Map();                    // handed out so far in this pass
   for(const s of slides){
     const key = (s._deck && s._deck.id) || '_solo';
     const at = seen.get(key) || 0;
@@ -2853,8 +2862,12 @@ function planImages(slides, mode){
     if(mode === 'half' && at < (cut.get(key) || 0)){ fresh.push(s); continue; }
     if(!takenBy.has(key)) takenBy.set(key, new Set());
     const taken = takenBy.get(key);
-    const item = libPick(taken, S.profile, s);
-    if(item){ taken.add(item.id); reused.push([s, item]); }
+    const item = libPick(taken, S.profile, s, tally);
+    if(item){
+      taken.add(item.id);
+      tally.set(item.id, (tally.get(item.id) || 0) + 1);
+      reused.push([s, item]);
+    }
     else fresh.push(s);
   }
   return {fresh, reused};

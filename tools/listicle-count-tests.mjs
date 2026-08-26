@@ -95,9 +95,16 @@ const facts = await p.evaluate(()=>{
     noPromiseLine: !/THE HOOK PROMISES/.test(numbered),
     lengthFromPicker5: /Write a 5-slide/.test(numbered),
     lengthFromPicker8: /Write a 8-slide/.test(plain),
-    // a fact deck's slides are built directly, never through the listicle trimmer
-    trimmerNotInFactPath: typeof runFacts === 'function' &&
-      !/trimToPromise|deckLen\(/.test(runFacts.toString()),
+    /* A fact deck built from a subject is never put through the listicle trimmer. The
+       client categories that are built from a counting hook are, but only behind their
+       own gate — so a subject that happens to contain a number is still safe. */
+    trimmerOnlyBehindTheHookGate: (()=>{
+      const src = String(runFacts);
+      if(/deckLen\(/.test(src)) return false;
+      const i = src.indexOf('trimToPromise');
+      return i < 0 || /if\(byHook\)\{[^}]*$/.test(src.slice(0, i));
+    })(),
+    lengthNotFromTheHookForSubjects: !/n:\s*hookItemCount\(h\)[^\n]*\n[^\n]*subject/.test(String(runFacts)),
     countNotInFactPrompt: !/hookItemCount/.test(factDeckPrompt.toString())
   };
 });

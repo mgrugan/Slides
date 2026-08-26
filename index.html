@@ -430,6 +430,7 @@ details summary:hover{color:var(--fg)}
         <div class="row" style="padding:10px 12px 0">
           <select id="factCat" style="width:auto;min-width:150px"></select>
           <button id="factEditPrompt" class="btn sm quiet">Edit prompt</button>
+          <button id="factNewCatBtn" class="btn sm quiet" title="Start a blank category and write its prompt yourself">+ New</button>
           <div class="spacer"></div>
           <span id="factLedgerCount" class="tiny muted"></span>
         </div>
@@ -447,6 +448,20 @@ details summary:hover{color:var(--fg)}
         </div>
       </div>
       <div class="hintline">Uses the Documentary facts style · subjects already covered are never repeated</div>
+
+      <div id="factHookPanel" class="panel hide" style="margin-top:10px">
+        <div class="row" style="margin-bottom:8px"><strong style="font-size:13px">Hooks for review</strong>
+          <span class="tiny muted" id="factHookNote"></span></div>
+        <textarea id="factHookText" rows="8" placeholder="One hook per line — each becomes its own carousel."></textarea>
+        <div class="row" style="margin-top:10px">
+          <button id="factHookCreate" class="btn sm primary">Create these carousels</button>
+          <button id="factHookRedo" class="btn sm quiet">New hooks</button>
+          <div class="spacer"></div>
+          <button id="factHookCancel" class="btn sm quiet">Cancel</button>
+        </div>
+        <div class="tiny" style="color:var(--faint);margin-top:6px">Edit or delete any line before creating. A leading number sets that carousel's length.</div>
+      </div>
+
       <div class="panel" style="margin-top:10px">
         <div class="slider"><label for="rColourDecks">Carousels shot in colour <span class="muted" id="vColourDecks"></span></label><span class="val"></span>
           <input type="range" id="rColourDecks" min="0" max="100" step="10"></div>
@@ -1086,6 +1101,10 @@ let LIB = [];                     // in-memory mirror, newest first
 /* Backgrounds are kept in separate collections — a fact carousel must never reach
    into the golf pictures. A style names its own; anything older is "General". */
 const currentCollection = () => S.profile.library_collection || 'General';
+/* A deck may keep its backgrounds somewhere other than the style's own collection —
+   client work does not belong in the Facts library even though it uses the facts look.
+   Slides carry their deck, so the choice survives a batch job that lands hours later. */
+const slideCollection = slide => (slide && slide._deck && slide._deck.collection) || currentCollection();
 const collectionOf = item => item.collection || 'General';
 const libCollections = () => [...new Set(LIB.map(collectionOf))].sort();
 /* The library is the one thing here that grows without limit. Holding every full
@@ -1419,7 +1438,7 @@ function libScore(item, slide, p, idf){
    wins in every carousel — which is how two deep-sea photographs ended up on half the
    slides. The per-deck exclude only ever stopped repeats inside one carousel. */
 function libPick(exclude, p, slide, tally){
-  const coll = currentCollection();
+  const coll = slideCollection(slide);
   const byTone = toned(slide) || !!(p.mono_suffix || p.colour_suffix) && !!slide;
   const want = slide ? toneOf(slide) : '';
   // Tone is a hard filter, not a preference: a colour slide handed a monochrome
@@ -2800,7 +2819,7 @@ async function keepInLibrary(slide, dataUrl){
   const item = {id: uid(), data: dataUrl, scene,
     tags: tagsFrom(scene + ' ' + (slide.title||'')), tagsV: TAGS_V, title: slide.title || '',
     imagery: S.profile.imagery || '', aspect: S.profile.aspect_ratio || '9:16',
-    collection: currentCollection(),
+    collection: slideCollection(slide),
     // record what the picture is, not what was asked for — the model does not always comply
     tone: (await toneOfDataURL(dataUrl, toneOf(slide))) || toneOf(slide), toneChecked: true,
     pop: toneOf(slide) === 'pop' ? popOf(slide) : '',
@@ -3640,8 +3659,34 @@ const FACT_DEFAULTS = {
   'Terrifying': 'Genuinely unsettling true facts: disasters, close calls, biology, deep sea, space, historical cruelty, '+
     'things that were nearly catastrophic. Unnerving because they are documented, not because they are gory.',
   'Science': 'Counter-intuitive true findings and the people behind them: experiments that broke assumptions, '+
-    'accidental discoveries, scale and time facts that reframe how something works.'
+    'accidental discoveries, scale and time facts that reframe how something works.',
+  /* A client category: the facts look, but built from a counting hook rather than a
+     single story, closing on their site. Its backgrounds are nobody else's, so they
+     are kept in the General collection instead of the Facts one. */
+  'Peptides (Peptorium)': {
+    prompt: 'Facts about peptides for a peptide retailer\'s audience: what specific peptides are, what the research '+
+      'actually shows, how they are studied, the history of their discovery, and the claims that do not hold up. '+
+      'Every point must be something a reader could check. Never give dosing, protocols or medical advice, never '+
+      'promise a result, and never imply a product treats or cures anything.',
+    mode: 'hooks',
+    cta: 'peptorium.com',
+    collection: 'General'
+  }
 };
+/* Category values were plain prompt strings and most still are. A few carry a little
+   configuration instead, so both shapes have to read the same way everywhere. */
+function catCfg(name){
+  const v = FACT_CATS[name];
+  const base = {prompt:'', mode:'subjects', cta:'', collection:''};
+  if(v && typeof v === 'object') return Object.assign(base, v);
+  return Object.assign(base, {prompt: String(v||'')});
+}
+const catPrompt = name => catCfg(name).prompt;
+function setCatPrompt(name, text){
+  const v = FACT_CATS[name];
+  if(v && typeof v === 'object') v.prompt = text;
+  else FACT_CATS[name] = text;
+}
 let FACT_CATS = {};
 let LEDGER = [];
 let FACT_STOP = false;
@@ -3766,7 +3811,7 @@ async function pickSubjects(cat, seed, n){
     const recent = LEDGER.slice(-200).map(e=>e.subject).concat(out.map(o=>o.subject));
     const sys =
 'Pick '+ask+' subjects for short documentary-style fact carousels.\n\n' +
-'CATEGORY — '+cat+':\n' + (FACT_CATS[cat]||'') + '\n' +
+'CATEGORY — '+cat+':\n' + catPrompt(cat) + '\n' +
 (seed ? '\nFOCUS: '+seed+'\n' : '') +
 '\nRules:\n' +
 '- Every subject must be a real, well-documented person, event, programme or phenomenon that a reader can verify.\n' +
@@ -3804,13 +3849,123 @@ async function pickSubjects(cat, seed, n){
   return out.slice(0, n);
 }
 
+/* Some categories are not one story per carousel but one counting hook per carousel —
+   the numbered hooks from Mode A, delivered in the facts look. The hooks come back for
+   review before anything is written, because on client work the headline is the thing
+   that gets argued about. */
+async function pickHooks(cat, seed, n){
+  const pool = HOOK_DATA.filter(h=>h.c === 'Numbered');
+  const used = LEDGER.filter(e=>e.cat === cat).slice(-120).map(e=>e.subject);
+  const out = [];
+  let dry = 0;
+  for(let round = 0; out.length < n && round < 3 && dry < 2; round++){
+    const need = n - out.length;
+    const ask = Math.min(20, need + 2);
+    const picks = [];
+    while(picks.length < ask && picks.length < pool.length){
+      const p = pool[Math.floor(Math.random()*pool.length)];
+      if(!picks.includes(p)) picks.push(p);
+    }
+    const avoid = used.concat(out);
+    const sys =
+'Write '+ask+' cover-slide headlines for short fact carousels. Each one becomes its own carousel.\n\n' +
+'SUBJECT AREA — '+cat+':\n' + catPrompt(cat) + '\n' +
+(seed ? '\nFOCUS: '+seed+'\n' : '') +
+'\nAdapt one headline from each template below. The template is a structure, not a sentence to complete: change the wording so it reads native to the subject, and no placeholder or bracket may survive.\n' +
+picks.map((p,i)=>(i+1)+'. '+p.t).join('\n') + '\n' +
+'\nRules for every line:\n' +
+'- It must open with a count written as a digit, between 3 and 10. The carousel will carry exactly that many points, so promise a number you can genuinely fill.\n' +
+'- Everything the carousel will have to say must be documented and checkable. If the striking version of a claim is not established, pick a different angle.\n' +
+'- No medical advice, no dosing, no protocols, no promised outcomes, no claim that anything treats or cures a condition.\n' +
+'- Written for someone scrolling: concrete and specific, max ~14 words, no emoji, no hashtags, no quotation marks around the line.\n' +
+'- Each headline a different angle from the others.\n' +
+(avoid.length ? '- ALREADY USED, do not repeat these or close variants:\n' + avoid.map(s=>'  · '+s).join('\n') + '\n' : '') +
+'\nReturn ONLY a JSON array of exactly '+ask+' strings, nothing else.';
+    const r = await callModel({model: cfg().textModel, parts:[{type:'text', text:sys}]});
+    S.lastRaw = r.text;
+    const list = parseHookList(r.text, ask);
+    let added = 0;
+    for(const h of list){
+      if(out.some(x => sameSubject(x, h)) || used.some(x => sameSubject(x, h))) continue;
+      out.push(h); added++;
+      if(out.length >= n) break;
+    }
+    dry = added ? 0 : dry + 1;
+    if(out.length < n) $('factStatus').textContent = 'writing hooks… ' + out.length + ' of ' + n;
+  }
+  return out.slice(0, n);
+}
+
+/* The counting-hook carousel: the facts look and the facts truth rules, but the deck
+   delivers the number in the headline and closes on the client's site. */
+function factHookDeckPrompt(cat, hook, items, deckTone, cta){
+  const p = S.profile;
+  deckTone = deckTone || 'mono';
+  return (
+'Write a fact carousel for this cover headline, verbatim or lightly tightened: "'+hook+'"\n' +
+'SUBJECT AREA — '+cat+': '+catPrompt(cat)+'\n\n' +
+'THE HEADLINE PROMISES '+items+' POINTS. Deliver exactly '+items+' — one per slide, slides 2 to '+(items+1)+
+'. Not one more, not one fewer. A carousel headlined "'+items+'" that carries a different number is broken.\n\n' +
+'TRUTH RULES — this is a facts account, so accuracy is the product:\n' +
+'- Every claim must be genuinely documented. Nothing invented, exaggerated or "commonly said".\n' +
+'- Never invent a statistic, date, name or number. If you are not confident, write the sentence without it.\n' +
+'- Say what the research actually shows, including where it is preliminary, in animals, or contested.\n' +
+'- No medical advice, no dosing, no protocols, no promised outcomes, and never state or imply that something treats or cures a condition.\n\n' +
+'STRUCTURE:\n' +
+'- Slide 1 is the cover: the headline only. No body text.\n' +
+'- Each following slide carries one point: a short title (2-6 words) and a body of 2-3 short declarative sentences, max ~40 words.\n' +
+'- Flat documentary narration. No hype words, no "you won\'t believe", no emoji.\n' +
+'- Do not write a call to action into these slides. The closing slide is returned separately.\n\n' +
+(deckTone === 'pop'
+ ? 'TONE — this carousel is BLACK AND WHITE WITH A SINGLE COLOUR POP. Give every slide a "tone" of "pop", with no exceptions.\n' +
+   '- Also return a top-level "pop": the one element that keeps its colour on every slide, named in a few words, e.g. "an amber vial", "a single blue label". It must appear in every scene you write.\n'
+ : 'TONE — this carousel is '+(deckTone === 'colour' ? 'IN COLOUR' : 'IN BLACK AND WHITE')+'. Give every slide a "tone" of "'+deckTone+'"'+
+   (deckTone === 'colour' ? ', and that means every slide. Do not mark any slide "mono".'
+                          : ', except the one or two moments that earn colour — a present-day photograph, a modern laboratory, the single most striking image. Mark those "colour".'))+'\n\n' +
+'IMAGES — "scene" describes a photograph only: what is in frame, the setting and the light. It never asks for words, numbers, logos, packaging text or UI.\n' +
+'- Show something real and specific to the point on that slide: laboratory glassware in use, a centrifuge mid-spin, a researcher\'s hands at a bench, cold storage, a microscope stage, a field of study in progress.\n' +
+'- No two slides may share a setting or a framing, and something is happening in almost every frame.\n' +
+'- Banned as lazy: an empty room, an unattended bench, a single object on a plain surface, anything symbolic or abstract.\n' +
+'- Keep one region of the frame calm and even in tone so a caption can sit over it.\n' +
+'Style is '+(p.imagery||'archival black and white photograph')+'.\n\n' +
+'CLOSING SLIDE — return it separately as "cta":\n' +
+'- One or two short sentences pointing the reader onward. Plain and factual, no hype, no promises, no medical claims.\n' +
+'- The slide carries '+cta+' as its title already, so do not repeat the address in the line.\n' +
+'- Also return "cta_scene": a photograph for it, in the same style, with no text or packaging in frame.\n\n' +
+'CAPTION for Instagram:\n' +
+'- Exactly three paragraphs separated by blank lines, then one final line of 3 to 5 hashtags ordered from the most niche to the broadest.\n\n' +
+'Return ONLY JSON:\n' +
+'{'+(deckTone === 'pop' ? '"pop":"an amber vial",' : '')+
+'"slides":[{"kind":"hook","title":"...","scene":"...","tone":"'+(deckTone === 'pop' ? 'pop' : 'mono|colour')+'"},'+
+'{"kind":"slide","title":"...","body":"...","scene":"...","tone":"'+(deckTone === 'pop' ? 'pop' : 'mono|colour')+'"}],'+
+'"cta":"...","cta_scene":"...","caption":"para1\\n\\npara2\\n\\npara3\\n\\n#niche #mid #broad"}'
+  );
+}
+/* The client is paying for the last slide, so it is never left to chance: whatever the
+   writer returned, the deck ends on one slide that names the site. */
+function appendCTA(deck, cta){
+  if(!cta) return;
+  const cover = deck.slides.find(s=>s.kind === 'hook');
+  const j = deck._cta || {};
+  deck.slides.push({
+    id: uid(), kind: 'slide',
+    title: cta.toUpperCase(),
+    body: String(j.cta||'').trim() || 'The research behind every one of these points, with its sources.',
+    scene: String(j.cta_scene||'').trim() || 'sealed glass vials in a rack on a laboratory bench in soft daylight',
+    tone: cover ? cover.tone : (deck.tone || 'mono'),
+    pop: cover ? (cover.pop||'') : '',
+    img:'', status:'', _deck: deck, _label: String(deck.hook||'').slice(0,28)
+  });
+  delete deck._cta;
+}
+
 function factDeckPrompt(cat, subj, n, deckTone){
   const p = S.profile;
   deckTone = deckTone || 'mono';
   return (
 'Write a '+n+'-slide documentary fact carousel about: '+subj.subject+'\n' +
 (subj.claim ? 'The hook is: '+subj.claim+'\n' : '') +
-'CATEGORY — '+cat+': '+(FACT_CATS[cat]||'')+'\n\n' +
+'CATEGORY — '+cat+': '+catPrompt(cat)+'\n\n' +
 'TRUTH RULES — this is a facts account, so accuracy is the product:\n' +
 '- Every claim must be genuinely documented. Nothing invented, exaggerated or "commonly said".\n' +
 '- Never invent a statistic, date, name or number. If you are not confident, write the sentence without it.\n' +
@@ -3888,13 +4043,43 @@ function applySlideTones(deck){
     s.tone = 'colour'; have++;
   }
 }
-async function runFacts(){
+/* How many of a run's carousels are shot in colour, and which. Colour pop is drawn from
+   the monochrome half — it IS a black and white photograph, just one with a single
+   element left in colour — so switching it on doesn't quietly reduce how many
+   full-colour carousels the slider asked for. */
+function deckTones(count){
+  const colourShare = (+($('rColourDecks').value) || 0) / 100;
+  const nColour = Math.round(count * colourShare);
+  const popOn = $('factPopToggle') && $('factPopToggle').dataset.on === '1';
+  const nPop = popOn ? Math.round((count - nColour) / 2) : 0;   // out of the mono half only
+  const tones = Array.from({length:count}, (_,i)=> i < nColour ? 'colour' : i < nColour + nPop ? 'pop' : 'mono');
+  for(let i=tones.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [tones[i],tones[j]]=[tones[j],tones[i]]; }
+  return tones;
+}
+const mapDeckSlides = (arr, deck, label) => (Array.isArray(arr) ? arr : []).map((s,i)=>({
+  id: uid(), kind: (i === 0 || s.kind === 'hook') ? 'hook' : 'slide',
+  title: String(s.title||''), body: String(s.body||''), scene: String(s.scene||''),
+  tone: s.tone ? (/pop/i.test(s.tone) ? 'pop' : /colour|color/i.test(s.tone) ? 'colour' : 'mono') : (deck.tone || 'mono'),
+  img:'', status:'', _deck: deck, _label: label
+}));
+
+async function runFacts(opts){
+  opts = opts || {};
   const cat = $('factCat').value;
+  const conf = catCfg(cat);
   const n = +$('factCount').value, slides = +$('factSlides').value;
   const seed = $('factSeed').value.trim();
+  const byHook = conf.mode === 'hooks';
+  if(!conf.prompt.trim()){
+    $('factCatName').textContent = cat;
+    $('factPromptText').value = '';
+    $('factPromptPanel').classList.remove('hide');
+    $('factPromptText').focus();
+    return log('"'+cat+'" has no prompt yet — write what it should cover, then Save.','w');
+  }
   FACT_STOP = false;
   $('factStop').classList.remove('hide'); $('runFacts').disabled = true;
-  $('factStatus').textContent = 'picking subjects…';
+  $('factStatus').textContent = byHook ? 'writing hooks…' : 'picking subjects…';
 
   // the look is part of the format — make sure a documentary style is active
   if((S.profile.caption_treatment||'') !== 'documentary'){
@@ -3903,22 +4088,40 @@ async function runFacts(){
   }
 
   try{
-    const subjects = await pickSubjects(cat, seed, n);
-    if(!subjects.length) throw new Error('no fresh subjects came back — try a different category or clear the ledger');
-    if(subjects.length < n) log('only '+subjects.length+' fresh subjects available for this category','w');
+    /* Hook categories stop here the first time through: the headlines go into the
+       review panel and nothing is written until they come back approved. */
+    if(byHook && !opts.hooks){
+      const list = await pickHooks(cat, seed, n);
+      if(!list.length) throw new Error('no hooks came back — try again, or add a focus');
+      if(list.length < n) log('asked for '+n+' hooks and got '+list.length+' fresh ones','w');
+      $('factHookText').value = list.join('\n');
+      $('factHookNote').textContent = list.length + ' · ' + cat;
+      $('factHookPanel').classList.remove('hide');
+      $('factStatus').textContent = '';
+      log(list.length+' hooks ready — read them, edit anything, then press Create','o');
+      $('factStop').classList.add('hide'); $('runFacts').disabled = false;
+      return;
+    }
 
+    let newDecks;
+    if(byHook){
+      const hooks = opts.hooks;
+      const tones = deckTones(hooks.length);
+      newDecks = hooks.map((h,i)=>({id:uid(), hook:h, subject:h, cat, tone:tones[i],
+        // the number in the headline sets the length; the closing slide is extra
+        n: hookItemCount(h) ? hookItemCount(h) + 1 : slides,
+        collection: conf.collection || '', cta: conf.cta || '',
+        slides:[], caption:'', status:'queued', error:''}));
+    } else {
+      const subjects = await pickSubjects(cat, seed, n);
+      if(!subjects.length) throw new Error('no fresh subjects came back — try a different category or clear the ledger');
+      if(subjects.length < n) log('only '+subjects.length+' fresh subjects available for this category','w');
+      const tones = deckTones(subjects.length);
+      newDecks = subjects.map((s,i)=>({id:uid(), hook:s.claim || s.subject, subject:s.subject, cat,
+        tone:tones[i], n:slides, collection: conf.collection || '',
+        slides:[], caption:'', status:'queued', error:''}));
+    }
     const awaiting = S.batch.filter(d=>d.slides.some(s=>s._job && JOBS.some(j=>j.name === s._job && !j.done)));
-    const colourShare = (+($('rColourDecks').value) || 0) / 100;
-    const nColour = Math.round(subjects.length * colourShare);
-    // Colour pop is drawn from the monochrome half — it IS a black and white photograph,
-    // just one with a single element left in colour — so switching it on doesn't quietly
-    // reduce how many full-colour carousels the slider asked for.
-    const popOn = $('factPopToggle') && $('factPopToggle').dataset.on === '1';
-    const nPop = popOn ? Math.round((subjects.length - nColour) / 2) : 0;   // out of the mono half only
-    const tones = subjects.map((_,i)=> i < nColour ? 'colour' : i < nColour + nPop ? 'pop' : 'mono');
-    for(let i=tones.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [tones[i],tones[j]]=[tones[j],tones[i]]; }
-    const newDecks = subjects.map((s,i)=>({id:uid(), hook:s.claim || s.subject, subject:s.subject, cat,
-                                       tone:tones[i], n:slides, slides:[], caption:'', status:'queued', error:''}));
     S.batch = awaiting.concat(newDecks);
     S.openBatch = -1;
     renderBatch();
@@ -3927,29 +4130,36 @@ async function runFacts(){
       if(FACT_STOP) return;
       deck.status = 'writing'; renderBatchRow(deck);
       try{
-        const r = await callModel({model: cfg().textModel,
-          parts:[{type:'text', text: factDeckPrompt(cat, {subject:deck.subject, claim:deck.hook}, deck.n, deck.tone)}]});
+        const prompt = byHook
+          ? factHookDeckPrompt(cat, deck.hook, deck.n - 1, deck.tone, deck.cta)
+          : factDeckPrompt(cat, {subject:deck.subject, claim:deck.hook}, deck.n, deck.tone);
+        const r = await callModel({model: cfg().textModel, parts:[{type:'text', text: prompt}]});
         const j = extractJSON(r.text, false);
         // the popped element, if the writer named one — trimmed, since it goes into every prompt
         if(deck.tone === 'pop') deck.pop = String(j.pop || '').trim().slice(0, 60) || 'a single red object';
-        deck.slides = (Array.isArray(j.slides) ? j.slides : []).map((s,i)=>({
-          id: uid(), kind: (i === 0 || s.kind === 'hook') ? 'hook' : 'slide',
-          title: String(s.title||''), body: String(s.body||''), scene: String(s.scene||''),
-          tone: s.tone ? (/pop/i.test(s.tone) ? 'pop' : /colour|color/i.test(s.tone) ? 'colour' : 'mono') : (deck.tone || 'mono'),
-          img:'', status:'', _deck: deck, _label: deck.subject.slice(0,28)
-        }));
+        deck.slides = mapDeckSlides(j.slides, deck, String(deck.subject||deck.hook).slice(0,28));
         applySlideTones(deck);
         if(!deck.slides.length) throw new Error('no slides in the reply');
+        if(byHook){
+          // the headline promises a count, so the deck delivers exactly that many
+          deck.slides = trimToPromise(deck.hook, deck.slides);
+          deck._cta = j;
+          appendCTA(deck, deck.cta);
+        }
         deck.caption = String(j.caption||'');
-        deck.hook = deck.slides[0].title || deck.hook;
-        const asked = deck.subject;
-        deck.subject = String(j.subject || deck.subject);
         deck.status = 'written';
-        // record both the name we asked for and the one that came back
-        await ledgerAdd(asked, deck.slides[0].title, cat, deck.subject);
+        if(byHook){
+          await ledgerAdd(deck.hook, deck.slides[0].title, cat);
+        } else {
+          deck.hook = deck.slides[0].title || deck.hook;
+          const asked = deck.subject;
+          deck.subject = String(j.subject || deck.subject);
+          // record both the name we asked for and the one that came back
+          await ledgerAdd(asked, deck.slides[0].title, cat, deck.subject);
+        }
       }catch(e){
         deck.status = 'failed'; deck.error = apiError(e);
-        log('fact deck failed ('+deck.subject.slice(0,40)+'): '+apiError(e),'e');
+        log('fact deck failed ('+String(deck.subject||deck.hook).slice(0,40)+'): '+apiError(e),'e');
       }
       renderBatchRow(deck); batchProgress(); autosave();
     });
@@ -3960,7 +4170,7 @@ async function runFacts(){
       const {fresh: needGen, reused} = planImages(all, libMode('cb.useLibFacts','all'));
       for(const [s, item] of reused) await useFromLibrary(s, item);
       if(reused.length) log(reused.length+' background'+(reused.length>1?'s':'')+' reused from the '+
-        currentCollection()+' library — free. Every cover was generated fresh.','o');
+        (conf.collection || currentCollection())+' library — free. Every cover was generated fresh.','o');
       if(needGen.length){
         if($('batchApiToggle') && $('batchApiToggle').dataset.on === '1'){
           try{ await submitBatchJob(needGen); }
@@ -3979,6 +4189,7 @@ async function runFacts(){
     renderBatch(); batchProgress(); autosave();
     $('factStatus').textContent = '';
     if(!FACT_STOP) log(newDecks.filter(d=>d.status!=='failed').length+' fact carousels ready','o');
+    if(byHook && !FACT_STOP) $('factHookPanel').classList.add('hide');
   }catch(e){
     $('factStatus').textContent = 'failed';
     log('facts failed: '+apiError(e),'e');
@@ -4351,21 +4562,34 @@ function init(){
     const sel = $('factCat'), keep = sel.value;
     sel.innerHTML = '';
     Object.keys(FACT_CATS).forEach(c=>{ const o = document.createElement('option'); o.value = o.textContent = c; sel.appendChild(o); });
-    sel.value = keep && FACT_CATS[keep] ? keep : (localStorage.getItem('cb.factCat') || Object.keys(FACT_CATS)[0]);
+    // `in`, not truthiness: a brand new category has an empty prompt until it is written
+    sel.value = keep && (keep in FACT_CATS) ? keep : (localStorage.getItem('cb.factCat') || Object.keys(FACT_CATS)[0]);
   };
   fillCats();
   for(let i=3;i<=10;i++){ const o=document.createElement('option'); o.value=i; o.textContent=i+' slides'; if(i===6) o.selected=true; $('factSlides').appendChild(o); }
   // 50 is measured, not guessed: a 50 x 10 run completes with 500 slides, the decoded
   // image cache still capped at 28 and autosave still succeeding.
   [1,3,5,10,15,20,30,40,50].forEach(i=>{ const o=document.createElement('option'); o.value=i; o.textContent=i+(i===1?' carousel':' carousels'); if(i===10) o.selected=true; $('factCount').appendChild(o); });
+  /* A hook category is reviewed before it is written, so the button says so. */
+  const showFactMode = () => {
+    const byHook = catCfg($('factCat').value).mode === 'hooks';
+    $('runFacts').textContent = byHook ? 'Write hooks' : 'Generate';
+    if(!byHook) $('factHookPanel').classList.add('hide');
+  };
   $('factCat').onchange = () => { localStorage.setItem('cb.factCat', $('factCat').value);
-                                  $('factPromptPanel').classList.add('hide'); showCatLogo(); };
-  $('factEditPrompt').onclick = () => {
-    const c = $('factCat').value;
+                                  $('factPromptPanel').classList.add('hide'); showCatLogo(); showFactMode(); };
+  const openPrompt = (c, toggle) => {
     $('factCatName').textContent = c;
-    $('factPromptText').value = FACT_CATS[c] || '';
+    $('factPromptText').value = catPrompt(c);
     showCatLogo();
-    $('factPromptPanel').classList.toggle('hide');
+    if(toggle) $('factPromptPanel').classList.toggle('hide');
+    else $('factPromptPanel').classList.remove('hide');
+  };
+  $('factEditPrompt').onclick = () => openPrompt($('factCat').value, true);
+  // a blank category, prompted by hand: the panel opens on the name field
+  $('factNewCatBtn').onclick = () => {
+    openPrompt($('factCat').value, false);
+    $('factNewCat').focus();
   };
   $('factLogoPick').onclick = () => $('factLogoFile').click();
   $('factLogoFile').onchange = e => {
@@ -4391,20 +4615,33 @@ function init(){
     log('logo cleared for "'+cat+'" — it will use the one in Settings','o');
   };
   $('factPromptSave').onclick = () => {
-    FACT_CATS[$('factCat').value] = $('factPromptText').value.trim();
+    const c = $('factCat').value;
+    setCatPrompt(c, $('factPromptText').value.trim());
     saveFactCats(); $('factPromptPanel').classList.add('hide'); log('prompt saved','o');
   };
   $('factPromptReset').onclick = () => {
     const c = $('factCat').value;
-    if(FACT_DEFAULTS[c]){ FACT_CATS[c] = FACT_DEFAULTS[c]; $('factPromptText').value = FACT_CATS[c]; saveFactCats(); }
+    if(FACT_DEFAULTS[c]){
+      FACT_CATS[c] = typeof FACT_DEFAULTS[c] === 'object'
+        ? JSON.parse(JSON.stringify(FACT_DEFAULTS[c])) : FACT_DEFAULTS[c];
+      $('factPromptText').value = catPrompt(c); saveFactCats();
+    }
     else log('no built-in default for "'+c+'"','w');
   };
-  $('factAddCat').onclick = () => {
+  const addCat = () => {
     const n = $('factNewCat').value.trim(); if(!n) return;
-    FACT_CATS[n] = FACT_CATS[n] || 'Describe the kind of fact you want here.';
+    // genuinely blank — the prompt is the user's to write, and nothing runs until it is
+    if(!(n in FACT_CATS)) FACT_CATS[n] = '';
     saveFactCats(); fillCats(); $('factCat').value = n; $('factNewCat').value = '';
-    $('factCatName').textContent = n; $('factPromptText').value = FACT_CATS[n];
+    localStorage.setItem('cb.factCat', n);
+    showCatLogo(); showFactMode();
+    $('factCatName').textContent = n;
+    $('factPromptText').value = catPrompt(n);
+    $('factPromptText').focus();
+    log('"'+n+'" created — write what it should cover, then Save','o');
   };
+  $('factAddCat').onclick = addCat;
+  $('factNewCat').onkeydown = e => { if(e.key === 'Enter'){ e.preventDefault(); addCat(); } };
   $('factDelCat').onclick = () => {
     const c = $('factCat').value;
     if(Object.keys(FACT_CATS).length < 2) return log('keep at least one category','w');
@@ -4426,7 +4663,16 @@ function init(){
   };
   bindSlider('rColourDecks','cb.colourDecks',50, v=>v+'%');
   bindSlider('rColourSlides','cb.colourSlides',20, v=>v+'%');
-  $('runFacts').onclick = runFacts;
+  $('runFacts').onclick = () => runFacts();
+  const approvedHooks = () => $('factHookText').value.split('\n').map(s=>s.trim()).filter(Boolean);
+  $('factHookCreate').onclick = () => {
+    const hooks = approvedHooks();
+    if(!hooks.length) return log('no hooks left to create — write one per line','w');
+    runFacts({hooks});
+  };
+  $('factHookRedo').onclick = () => runFacts();
+  $('factHookCancel').onclick = () => { $('factHookPanel').classList.add('hide'); $('factHookText').value = ''; };
+  showFactMode();
   $('factStop').onclick = () => { FACT_STOP = true; BATCH_STOP = true; log('stopping after the requests in flight','w'); };
   $('ledgerExport').onclick = () => {
     const blob = new Blob([JSON.stringify(LEDGER,null,1)], {type:'application/json'});

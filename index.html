@@ -3662,13 +3662,80 @@ async function saveLedger(){
   renderLedger();
 }
 const ledgerKey = s => String(s||'').toLowerCase().replace(/[^a-z0-9]+/g,' ').trim();
-function ledgerHas(subject){
-  const k = ledgerKey(subject);
-  return !!k && LEDGER.some(e => ledgerKey(e.subject) === k);
+
+/* Matching subjects by exact name let obvious repeats straight through: "The Great Emu
+   War" and "Great Emu War of 1932" are different strings for the same carousel. These
+   words carry no identity, so they are stripped before comparing. */
+const LEDGER_GENERIC = new Set(('the of a an and or in on at to for with from by their his her its ' +
+  'operation project incident affair case mystery story secret files file program programme ' +
+  'study experiment famous unknown real true great strange odd how why what when who').split(/\s+/));
+/* ...and these are too ordinary to identify anything on their own. "The Halifax
+   Explosion" and "The Texas City Explosion" share a word, not a subject. */
+const LEDGER_COMMON = new Set(('war fire flood plague explosion disaster massacre raid mission flight ' +
+  'expedition bombing trial hoax theory murder crime death ship plane train bomb attack').split(/\s+/));
+
+function subjectTokens(s){
+  return new Set(String(s||'').toLowerCase().split(/[^a-z0-9]+/)
+    // numbers are kept whatever their length: they are often the whole difference
+    // between two subjects, as in Apollo 1 and Apollo 13
+    .filter(w => (w.length > 2 || /^\d+$/.test(w)) && !LEDGER_GENERIC.has(w))
+    .map(w => /^\d+$/.test(w) ? w : stem(w)));
 }
-async function ledgerAdd(subject, title, cat){
+const subjectNumbers = s => new Set(String(s||'').match(/\d+/g) || []);
+/* How rare each ledger token is. A name that turns up in one entry out of two hundred
+   identifies that entry — sharing it means sharing the subject, whatever the wording. */
+function ledgerTokenCounts(){
+  const c = {};
+  LEDGER.forEach(e=>{
+    const t = new Set([...subjectTokens(e.subject), ...subjectTokens(e.alt||'')]);
+    t.forEach(x=>{ c[x] = (c[x]||0) + 1; });
+  });
+  return c;
+}
+function sameSubject(a, b, counts){
+  if(!a || !b) return false;
+  if(ledgerKey(a) === ledgerKey(b)) return true;
+  // If both names carry numbers and none of them match, they are different stories —
+  // Apollo 1 and Apollo 13, Vela and Vela 2, one dynasty and the next.
+  const nA = subjectNumbers(a), nB = subjectNumbers(b);
+  if(nA.size && nB.size){
+    let shared = false; nA.forEach(x=>{ if(nB.has(x)) shared = true; });
+    if(!shared) return false;
+  }
+  const A = subjectTokens(a), B = subjectTokens(b);
+  if(!A.size || !B.size) return false;
+  const [small, big] = A.size <= B.size ? [A, B] : [B, A];
+  let hit = 0; small.forEach(t=>{ if(big.has(t)) hit++; });
+
+  // one name sits entirely inside the other: "Marie Curie" and "Marie Curie's notebooks"
+  if(hit === small.size){
+    const only = small.size === 1 ? [...small][0] : null;
+    if(only && LEDGER_COMMON.has(only)) return false;      // "war" alone is not a subject
+    return true;
+  }
+  // a shared name that is rare across everything covered so far
+  if(counts){
+    for(const t of A){
+      if(t.length >= 4 && B.has(t) && !LEDGER_COMMON.has(t) && (counts[t] || 0) <= 2) return true;
+    }
+  }
+  const union = new Set([...A, ...B]).size;
+  return union ? hit / union >= 0.6 : false;
+}
+function ledgerHas(subject){
+  if(!ledgerKey(subject)) return false;
+  const counts = ledgerTokenCounts();
+  return LEDGER.some(e => sameSubject(e.subject, subject, counts) ||
+                          (e.alt && sameSubject(e.alt, subject, counts)));
+}
+/* `alt` is the name the writer actually came back with. The picker checks one name
+   against the ledger and the writer often returns a different one for the same story —
+   recording only the second left the first free to be suggested again next time. */
+async function ledgerAdd(subject, title, cat, alt){
   if(!subject || ledgerHas(subject)) return;
-  LEDGER.push({subject, title: title||'', cat: cat||'', date: Date.now()});
+  const entry = {subject, title: title||'', cat: cat||'', date: Date.now()};
+  if(alt && ledgerKey(alt) !== ledgerKey(subject)) entry.alt = alt;
+  LEDGER.push(entry);
   await saveLedger();
 }
 function renderLedger(){
@@ -3721,7 +3788,10 @@ async function pickSubjects(cat, seed, n){
     let added = 0;
     for(const o of arr){
       const k = ledgerKey(o.subject);
+      // the same identity check as the ledger, so a run cannot hand itself two
+      // spellings of one story either
       if(!k || seen.has(k) || ledgerHas(o.subject)) continue;
+      if(out.some(prev => sameSubject(prev.subject, o.subject))) continue;
       seen.add(k); out.push(o); added++;
       if(out.length >= n) break;
     }
@@ -3872,9 +3942,11 @@ async function runFacts(){
         if(!deck.slides.length) throw new Error('no slides in the reply');
         deck.caption = String(j.caption||'');
         deck.hook = deck.slides[0].title || deck.hook;
+        const asked = deck.subject;
         deck.subject = String(j.subject || deck.subject);
         deck.status = 'written';
-        await ledgerAdd(deck.subject, deck.slides[0].title, cat);
+        // record both the name we asked for and the one that came back
+        await ledgerAdd(asked, deck.slides[0].title, cat, deck.subject);
       }catch(e){
         deck.status = 'failed'; deck.error = apiError(e);
         log('fact deck failed ('+deck.subject.slice(0,40)+'): '+apiError(e),'e');

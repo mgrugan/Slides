@@ -515,6 +515,7 @@ details summary:hover{color:var(--fg)}
       <span id="batchProgress" class="tiny" style="color:var(--faint)"></span>
       <span id="spendLine" class="tiny" style="color:var(--faint)"></span>
       <div class="spacer"></div>
+      <button id="finishRun" class="btn sm primary hide" title="Generate only what is missing">Finish generations</button>
       <button id="batchDownloadAll" class="btn sm">Download all</button>
       <button id="batchClear" class="btn sm quiet">Clear</button>
     </div>
@@ -1465,7 +1466,8 @@ async function useFromLibrary(slide, item){
 }
 
 const slimSlide = (s, withImages) => ({id:s.id, kind:s.kind, title:s.title, body:s.body, scene:s.scene, tone:s.tone,
-  pop:s.pop||'', status:s.status, img: withImages ? (s.img||'') : '', inset: withImages ? (s.inset||'') : ''});
+  pop:s.pop||'', status:s.status, job:s._job||'',
+  img: withImages ? (s.img||'') : '', inset: withImages ? (s.inset||'') : ''});
 function projectJSON(withImages){
   return {
     v:2, profile:S.profile, styleKey:S.styleKey, caption:S.caption, openBatch:S.openBatch,
@@ -1524,10 +1526,14 @@ async function restoreProject(){
   const added = refreshBuiltinProfile();
   if(added.length) log('style "'+(S.profile.name||S.styleKey)+'" updated with '+added.length+
     ' newer setting'+(added.length>1?'s':'')+': '+added.join(', '),'o');
-  S.caption = p.caption||''; S.slides = (p.slides||[]).map(s=>({...s, status:s.img?'done':(s.status||'')}));
+  // A job the browser was closed on is still running at Google's end and its images are
+  // already paid for, so the link between a slide and its job has to survive the reload.
+  S.caption = p.caption||'';
+  S.slides = (p.slides||[]).map(s=>({...s, _job: s.job || null, status:s.img?'done':(s.status||'')}));
   S.batch = (p.batch||[]).map(d=>{
     const deck = {...d, slides:[]};
-    deck.slides = (d.slides||[]).map(s=>({...s, _deck: deck, _label:(d.subject||d.hook||'').slice(0,28)}));
+    deck.slides = (d.slides||[]).map(s=>({...s, _deck: deck, _job: s.job || null,
+                                          _label:(d.subject||d.hook||'').slice(0,28)}));
     return deck;                       // _deck is not serialised, so relink it on the way back in
   });
   S.openBatch = typeof p.openBatch === 'number' ? p.openBatch : -1;
@@ -3289,10 +3295,15 @@ async function pollJob(job){
         const key = (item.metadata && item.metadata.key) || item.key || job.slideIds[i];
         const slide = findSlide(key);
         if(!slide) return;
-        if(item.error){ failed++; if(slide._job === job.name) setStatus(slide,'failed', apiError({raw: JSON.stringify(item.error)})); return; }
+        /* A project saved before this job was submitted — or one restored by a version
+           that dropped the link — comes back with no job on the slide. The image was
+           still paid for, so an empty slide this job was asked to fill is claimed. */
+        const mine = slide._job === job.name ||
+                     (!slide._job && !slide.img && (job.slideIds||[]).includes(slide.id));
+        if(item.error){ failed++; if(mine) setStatus(slide,'failed', apiError({raw: JSON.stringify(item.error)})); return; }
         const out = parseResponse(item.response || item);
-        if(!out.images.length){ failed++; if(slide._job === job.name) setStatus(slide,'failed','no image in the batch result'); return; }
-        if(slide._job !== job.name){
+        if(!out.images.length){ failed++; if(mine) setStatus(slide,'failed','no image in the batch result'); return; }
+        if(!mine){
           // filled by hand while the job ran — keep the work that's on screen, bank the batch image
           keepInLibrary(slide, out.images[0]);
           skipped++;
@@ -3471,6 +3482,22 @@ async function suggestBatchHooks(){
   btn.disabled = false; btn.innerHTML = was;
 }
 
+/* One deck, written. Kept apart from the run so an interrupted deck can be picked up
+   later with exactly the same prompt it would have had at the time. */
+async function writeBatchDeck(deck){
+  const r = await callModel({model: cfg().textModel, parts:[{type:'text', text: deckPrompt(deck.hook, deck.n)}]});
+  const j = extractJSON(r.text, false);
+  deck.slides = (Array.isArray(j.slides) ? j.slides : []).map((s,i)=>({
+    id: uid(), kind: (i === 0 || s.kind === 'hook') ? 'hook' : 'slide',
+    title: String(s.title||''), body: String(s.body||''), scene: String(s.scene||''),
+    img:'', status:'', _deck: deck, _label: deck.hook.slice(0,28)
+  }));
+  if(!deck.slides.length) throw new Error('no slides in the reply');
+  deck.slides = trimToPromise(deck.hook, deck.slides);
+  deck.caption = String(j.caption||'');
+  deck.status = 'written';
+}
+
 async function runBatch(){
   const hooks = $('batchHooks').value.split('\n').map(s=>s.trim()).filter(Boolean).slice(0,20);
   if(!hooks.length) return log('add at least one hook, one per line','w');
@@ -3493,19 +3520,8 @@ async function runBatch(){
   await runQueue(newDecks, writeConc(), async deck => {
     if(BATCH_STOP) return;
     deck.status = 'writing'; renderBatchRow(deck);
-    try{
-      const r = await callModel({model: cfg().textModel, parts:[{type:'text', text: deckPrompt(deck.hook, deck.n)}]});
-      const j = extractJSON(r.text, false);
-      deck.slides = (Array.isArray(j.slides) ? j.slides : []).map((s,i)=>({
-        id: uid(), kind: (i === 0 || s.kind === 'hook') ? 'hook' : 'slide',
-        title: String(s.title||''), body: String(s.body||''), scene: String(s.scene||''),
-        img:'', status:'', _deck: deck, _label: deck.hook.slice(0,28)
-      }));
-      if(!deck.slides.length) throw new Error('no slides in the reply');
-      deck.slides = trimToPromise(deck.hook, deck.slides);
-      deck.caption = String(j.caption||'');
-      deck.status = 'written';
-    }catch(e){
+    try{ await writeBatchDeck(deck); }
+    catch(e){
       deck.status = 'failed'; deck.error = apiError(e);
       log('batch deck failed ("'+deck.hook.slice(0,40)+'"): '+apiError(e),'e');
     }
@@ -3548,6 +3564,7 @@ function batchProgress(){
     : '';
   const running = !$('batchStop').classList.contains('hide');
   $('batchStatus').textContent = running ? $('batchProgress').textContent : '';   // header already carries it
+  renderFinish();
 }
 function renderBatch(){
   const box = $('batchList'); box.innerHTML = '';
@@ -4063,6 +4080,39 @@ const mapDeckSlides = (arr, deck, label) => (Array.isArray(arr) ? arr : []).map(
   img:'', status:'', _deck: deck, _label: label
 }));
 
+/* One fact deck, written — subject-driven or hook-driven, decided by the deck itself so
+   a deck left half-finished can be picked up later without the run around it. */
+async function writeFactDeck(deck){
+  const cat = deck.cat, byHook = !!deck.byHook;
+  const prompt = byHook
+    ? factHookDeckPrompt(cat, deck.hook, deck.n - 1, deck.tone, deck.cta)
+    : factDeckPrompt(cat, {subject:deck.subject, claim:deck.hook}, deck.n, deck.tone);
+  const r = await callModel({model: cfg().textModel, parts:[{type:'text', text: prompt}]});
+  const j = extractJSON(r.text, false);
+  // the popped element, if the writer named one — trimmed, since it goes into every prompt
+  if(deck.tone === 'pop') deck.pop = String(j.pop || '').trim().slice(0, 60) || 'a single red object';
+  deck.slides = mapDeckSlides(j.slides, deck, String(deck.subject||deck.hook).slice(0,28));
+  applySlideTones(deck);
+  if(!deck.slides.length) throw new Error('no slides in the reply');
+  if(byHook){
+    // the headline promises a count, so the deck delivers exactly that many
+    deck.slides = trimToPromise(deck.hook, deck.slides);
+    deck._cta = j;
+    appendCTA(deck, deck.cta);
+  }
+  deck.caption = String(j.caption||'');
+  deck.status = 'written';
+  if(byHook){
+    await ledgerAdd(deck.hook, deck.slides[0].title, cat);
+  } else {
+    deck.hook = deck.slides[0].title || deck.hook;
+    const asked = deck.subject;
+    deck.subject = String(j.subject || deck.subject);
+    // record both the name we asked for and the one that came back
+    await ledgerAdd(asked, deck.slides[0].title, cat, deck.subject);
+  }
+}
+
 async function runFacts(opts){
   opts = opts || {};
   const cat = $('factCat').value;
@@ -4107,7 +4157,7 @@ async function runFacts(opts){
     if(byHook){
       const hooks = opts.hooks;
       const tones = deckTones(hooks.length);
-      newDecks = hooks.map((h,i)=>({id:uid(), hook:h, subject:h, cat, tone:tones[i],
+      newDecks = hooks.map((h,i)=>({id:uid(), hook:h, subject:h, cat, tone:tones[i], byHook:true,
         // the number in the headline sets the length; the closing slide is extra
         n: hookItemCount(h) ? hookItemCount(h) + 1 : slides,
         collection: conf.collection || '', cta: conf.cta || '',
@@ -4129,35 +4179,8 @@ async function runFacts(opts){
     await runQueue(newDecks, writeConc(), async deck => {
       if(FACT_STOP) return;
       deck.status = 'writing'; renderBatchRow(deck);
-      try{
-        const prompt = byHook
-          ? factHookDeckPrompt(cat, deck.hook, deck.n - 1, deck.tone, deck.cta)
-          : factDeckPrompt(cat, {subject:deck.subject, claim:deck.hook}, deck.n, deck.tone);
-        const r = await callModel({model: cfg().textModel, parts:[{type:'text', text: prompt}]});
-        const j = extractJSON(r.text, false);
-        // the popped element, if the writer named one — trimmed, since it goes into every prompt
-        if(deck.tone === 'pop') deck.pop = String(j.pop || '').trim().slice(0, 60) || 'a single red object';
-        deck.slides = mapDeckSlides(j.slides, deck, String(deck.subject||deck.hook).slice(0,28));
-        applySlideTones(deck);
-        if(!deck.slides.length) throw new Error('no slides in the reply');
-        if(byHook){
-          // the headline promises a count, so the deck delivers exactly that many
-          deck.slides = trimToPromise(deck.hook, deck.slides);
-          deck._cta = j;
-          appendCTA(deck, deck.cta);
-        }
-        deck.caption = String(j.caption||'');
-        deck.status = 'written';
-        if(byHook){
-          await ledgerAdd(deck.hook, deck.slides[0].title, cat);
-        } else {
-          deck.hook = deck.slides[0].title || deck.hook;
-          const asked = deck.subject;
-          deck.subject = String(j.subject || deck.subject);
-          // record both the name we asked for and the one that came back
-          await ledgerAdd(asked, deck.slides[0].title, cat, deck.subject);
-        }
-      }catch(e){
+      try{ await writeFactDeck(deck); }
+      catch(e){
         deck.status = 'failed'; deck.error = apiError(e);
         log('fact deck failed ('+String(deck.subject||deck.hook).slice(0,40)+'): '+apiError(e),'e');
       }
@@ -4195,6 +4218,98 @@ async function runFacts(opts){
     log('facts failed: '+apiError(e),'e');
   }
   $('factStop').classList.add('hide'); $('runFacts').disabled = false;
+}
+
+/* ==================== picking up a run that was cut off ====================
+   Close the laptop mid-batch and the decks are still here on the way back in, some
+   written, some with half their images. Everything already generated is paid for, so
+   the only thing this does is fill the gaps: decks that were never written, and slides
+   with no image. A slide waiting on a batch job is left alone — that image is bought
+   and will land on its own. */
+let FINISH_STOP = false, FINISHING = false;
+
+const jobLive = s => JOBS.some(j => !j.done && (j.name === s._job || (j.slideIds||[]).includes(s.id)));
+function pendingWork(){
+  const all = S.batch.flatMap(d=>d.slides);
+  return {
+    decks: S.batch.filter(d => !d.slides.length && (d.hook || d.subject) && d.status !== 'writing'),
+    slides: all.filter(s => !s.img && !jobLive(s)),
+    waiting: all.filter(s => !s.img && jobLive(s)).length
+  };
+}
+function renderFinish(){
+  const btn = $('finishRun'); if(!btn || FINISHING) return;
+  const {decks, slides, waiting} = pendingWork();
+  const bits = [];
+  if(decks.length) bits.push(decks.length + ' deck' + (decks.length > 1 ? 's' : ''));
+  if(slides.length) bits.push(slides.length + ' image' + (slides.length > 1 ? 's' : ''));
+  btn.classList.toggle('hide', !bits.length);
+  btn.textContent = bits.length ? 'Finish ' + bits.join(' + ') : 'Finish generations';
+  btn.title = 'Only what is missing is generated — every image already made is kept' +
+    (waiting ? '. '+waiting+' more are already paid for and waiting on a batch job; those land on their own' : '');
+}
+async function finishRun(){
+  if(FINISHING){ FINISH_STOP = true; $('finishRun').textContent = 'stopping…'; return; }
+  stashEditorDeck();
+  const {decks, slides, waiting} = pendingWork();
+  if(!decks.length && !slides.length)
+    return log(waiting ? waiting+' image'+(waiting>1?'s are':' is')+' still with the batch job — they land here on their own'
+                       : 'nothing left to finish', 'o');
+  FINISHING = true; FINISH_STOP = false;
+  const btn = $('finishRun');
+  btn.classList.remove('hide'); btn.textContent = 'Stop';
+  log('picking up where it stopped: '+decks.length+' deck'+(decks.length===1?'':'s')+' to write, '+
+      slides.length+' image'+(slides.length===1?'':'s')+' missing'+
+      (waiting ? ', '+waiting+' already paid for and waiting on a job' : ''), 'o');
+  try{
+    if(decks.length){
+      await runQueue(decks, writeConc(), async deck => {
+        if(FINISH_STOP) return;
+        deck.status = 'writing'; renderBatchRow(deck);
+        // a deck knows which kind it is: facts carry a category, batch decks carry only a hook
+        try{ deck.cat ? await writeFactDeck(deck) : await writeBatchDeck(deck); }
+        catch(e){ deck.status = 'failed'; deck.error = apiError(e);
+                  log('deck failed ("'+String(deck.subject||deck.hook).slice(0,40)+'"): '+apiError(e),'e'); }
+        renderBatchRow(deck); batchProgress(); autosave();
+      });
+    }
+    // whatever the decks just written need, on top of what was already missing
+    const todo = S.batch.flatMap(d=>d.slides).filter(s => !s.img && !jobLive(s));
+    if(todo.length && !FINISH_STOP){
+      todo.forEach(s=>{ s.status = 'queued'; });
+      // each family keeps its own library setting, so a mixed board resumes correctly
+      const factSlides = todo.filter(s => s._deck && s._deck.cat);
+      const rest = todo.filter(s => !(s._deck && s._deck.cat));
+      const plans = [];
+      if(factSlides.length) plans.push(planImages(factSlides, libMode('cb.useLibFacts','all')));
+      if(rest.length) plans.push(planImages(rest, libMode('cb.useLib')));
+      const reused = plans.flatMap(p=>p.reused), fresh = plans.flatMap(p=>p.fresh);
+      for(const [s, item] of reused) await useFromLibrary(s, item);
+      if(reused.length) log(reused.length+' background'+(reused.length>1?'s':'')+' taken from the library — free','o');
+      if(fresh.length && !FINISH_STOP){
+        if($('batchApiToggle') && $('batchApiToggle').dataset.on === '1'){
+          try{ await submitBatchJob(fresh); }
+          catch(e){ log('batch job failed to submit: '+apiError(e)+' — using normal requests','w');
+                    await runQueue(fresh, conc(), async s => { if(!FINISH_STOP){ await genImage(s); batchProgress(); } }); }
+        } else {
+          await runQueue(fresh, conc(), async s => { if(!FINISH_STOP){ await genImage(s); batchProgress(); } });
+        }
+      }
+    }
+    S.batch.forEach(d=>{
+      if(!d.slides.length || d.status === 'failed') return;
+      d.status = d.slides.every(s=>s.img) ? 'done'
+        : d.slides.some(s=>s.status === 'queued') ? 'written' : 'partial';
+    });
+  }catch(e){ log('could not finish: '+apiError(e),'e'); }
+  FINISHING = false;
+  const left = pendingWork();
+  renderBatch(); batchProgress(); autosave();
+  log(FINISH_STOP ? 'stopped — '+(left.decks.length+left.slides.length)+' still unfinished'
+                  : (left.decks.length || left.slides.length)
+                    ? 'finished what it could — '+left.slides.length+' image'+(left.slides.length===1?'':'s')+' still missing'
+                    : 'everything is complete', 'o');
+  FINISH_STOP = false;
 }
 
 /* ============================ Mode B — clone ============================ */
@@ -4696,6 +4811,7 @@ function init(){
 
   $('batchSuggest').onclick = suggestBatchHooks;
   $('runBatch').onclick = runBatch;
+  $('finishRun').onclick = finishRun;
   $('batchStop').onclick = () => { BATCH_STOP = true; log('stopping after the requests already in flight','w'); };
   $('batchImgToggle').onclick = () => {
     const b = $('batchImgToggle');
@@ -4779,6 +4895,15 @@ function init(){
     if(ok){
       S.slides.forEach(s=>{ if(s.img) setImage(s, s.img); });
       $('saveState').textContent = 'restored';
+      // say it out loud, so a run cut off by a closed laptop is not quietly re-run from scratch
+      const left = pendingWork();
+      if(left.decks.length || left.slides.length)
+        log('this project stopped part-way: '+left.decks.length+' deck'+(left.decks.length===1?'':'s')+
+            ' unwritten and '+left.slides.length+' image'+(left.slides.length===1?'':'s')+' missing. '+
+            'Finish generations fills only those — nothing already made is generated again.','w');
+      if(left.waiting)
+        log(left.waiting+' image'+(left.waiting>1?'s are':' is')+' still owed by a batch job and already paid for — '+
+            'they land here when Google finishes.','o');
     }
     if(!cfg().key){ openDrawer('drawerSettings'); $('apiKey').focus(); }
     log('ready — '+HOOK_META.kept+' hook templates loaded');

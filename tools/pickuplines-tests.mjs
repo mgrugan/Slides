@@ -155,6 +155,54 @@ const r = await p.evaluate(async ()=>{
   out.promptsDiffer = lp !== sp && sp.includes('documented') && lp.includes('double quotation marks');
   out.promptNoText = sp.includes('never asks for words');
 
+  // --- nothing on this template is set in light small type
+  out.bodyIsHeavy = S.profile.body_weight >= 800 && S.profile.body_font_family === S.profile.font_family;
+  out.bodyIsBig = S.profile.body_size_pct >= 0.03 && S.profile.body_size_pct > S.profile.title_size_pct * 0.5;
+  /* Measured rather than declared — but measured off the type, not off pixels. The
+     test box has no network, so Archivo never loads and both weights fall back to the
+     same face; counting white pixels would be measuring the fallback, not the change.
+     Text width scales with the size that was actually asked for. */
+  const wasThin = Object.assign(JSON.parse(JSON.stringify(S.profile)),
+    {body_font_family:'Inter', body_weight:500, body_size_pct:0.024});
+  const widthAt = prof => {
+    const g = document.createElement('canvas').getContext('2d');
+    g.font = fontStr(prof, prof.body_size_pct * H, prof.body_weight, prof.body_font_family);
+    return g.measureText('She kept every reply in a biscuit tin').width;
+  };
+  out.bodyReadsBigger = widthAt(S.profile) > widthAt(wasThin) * 1.25;
+  out.bodyAsksForWeight = /800/.test(fontStr(S.profile, 40, S.profile.body_weight, S.profile.body_font_family));
+
+  // --- the cast: the same people, frame to frame, and named figures who look like themselves
+  const cast = [{name:'Ada', look:'a woman of about thirty, dark cropped hair, sharp jaw, navy wool coat'},
+                {name:'Tom', look:'a broad man of fifty, grey beard, heavy glasses, brown corduroy jacket'}];
+  const castDeck = {id:'cd', cat:'Pickuplines', angle:'saga', kind:'story', tone:'colour', cast, slides:[]};
+  castDeck.slides = [
+    {id:'c1', kind:'slide', title:'T', body:'b', scene:'Ada on the stairs with the letter open', cast:['Ada'], tone:'colour', _deck:castDeck},
+    {id:'c2', kind:'slide', title:'T', body:'b', scene:'the two of them across a kitchen table', cast:['Ada','Tom'], tone:'colour', _deck:castDeck},
+    {id:'c3', kind:'slide', title:'T', body:'b', scene:'rain on an empty platform at night', cast:[], tone:'colour', _deck:castDeck},
+    {id:'c4', kind:'slide', title:'T', body:'b', scene:'Tom locking the shop door', cast:[], tone:'colour', _deck:castDeck}
+  ];
+  const ip = castDeck.slides.map(x=>imagePrompt(x));
+  out.castOnNamed   = ip[0].includes('navy wool coat') && !ip[0].includes('corduroy');
+  out.castBothNamed = ip[1].includes('navy wool coat') && ip[1].includes('corduroy');
+  out.castNoneWhenEmpty = !/navy wool coat|corduroy/.test(ip[2]);
+  // a writer that forgets the list still gets continuity from the name in the scene
+  out.castFromScene = ip[3].includes('corduroy');
+  out.castInsists   = ip[0].includes('MUST LOOK IDENTICAL IN EVERY FRAME');
+  // a deck with no cast is untouched, so no other mode is affected
+  out.noCastNoBlock = !/MUST LOOK IDENTICAL/.test(imagePrompt(deck.slides[1]));
+  out.castSurvivesSave = (()=>{ const slim = slimSlide(castDeck.slides[1], false); return slim.cast.length === 2; })();
+
+  // --- the brief itself
+  const briefDeck = {subject:'A saga', hook:'They met twice', angle:'saga', kind:'story', n:6, cat:'Pickuplines'};
+  const bp = pickupDeckPrompt('Pickuplines', briefDeck);
+  out.asksForCast = bp.includes('"cast"') && bp.includes('AS THEY ACTUALLY LOOKED');
+  out.asksForDrama = bp.includes('SHOOT THE SENTENCE') && bp.includes('DRAMATIC, NOT DECORATIVE');
+  out.bansStock = ['rose petals', 'sell a mattress', 'silhouettes at sunset'].every(t=>bp.includes(t));
+  out.capsBodyLength = /24 words/.test(bp);
+  out.noFacelessRule = !bp.includes('in silhouette, hands only');
+  out.livingPersonLine = bp.includes('only alleged of them');
+
   // --- the review round trip: planned lines go out tagged and come back as decks
   const set = conf.angles;
   const planned = [{angle:'saga', kind:'story', hook:'They met twice, forty years apart'},
@@ -208,6 +256,11 @@ const want = {
   anglesDocumented:true, dealtAll:true, dealtSpread:true, rotationMoves:true,
   listKeepsCloser:true, listTrimsExtra:true, listPromptCounts:true, promptsAskSwipe:true,
   promptsGuard:true, promptsDiffer:true, promptNoText:true,
+  bodyIsHeavy:true, bodyIsBig:true, bodyReadsBigger:true, bodyAsksForWeight:true,
+  castOnNamed:true, castBothNamed:true, castNoneWhenEmpty:true, castFromScene:true, castInsists:true,
+  noCastNoBlock:true, castSurvivesSave:true,
+  asksForCast:true, asksForDrama:true, bansStock:true, capsBodyLength:true, noFacelessRule:true,
+  livingPersonLine:true,
   linesTagged:true, roundTrip:true, tagStripped:true, untaggedList:true, untaggedStory:true,
   badTagSafe:true, blankLinesDropped:true, everyAngleHasSwipe:true, swipeFallsBack:true, swipeFromDeck:true,
   panelAngles:true, panelPlain:true, panelHooks:true, tallyCounts:true, tallyIgnoresOthers:true

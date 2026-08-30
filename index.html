@@ -998,14 +998,16 @@ const PRESETS = [
   {
     name:'Pickuplines', builtin:true,
     aspect_ratio:'4:5',
-    imagery:'candid-modern-photograph',
+    imagery:'cinematic-dramatic-photograph',
     v: 1,
-    image_prompt_suffix:'candid contemporary documentary photograph, 35mm, natural available light, '+
-      'shallow depth of field, true-to-life colour, real people caught mid-moment and unaware of the camera, '+
-      'editorial photojournalism, lived-in real locations, no studio lighting, no posed stock-photo smiling.',
-    image_prompt_suffix_colour:'candid contemporary documentary photograph, 35mm, natural available light, '+
-      'shallow depth of field, warm true-to-life colour, real people caught mid-moment and unaware of the camera, '+
-      'editorial photojournalism, lived-in real locations, no studio lighting, no posed stock-photo smiling.',
+    image_prompt_suffix:'cinematic film still from a character drama, 35mm, dramatic directional light with deep '+
+      'shadows and strong highlights, shallow depth of field, rich saturated colour, a real human face carrying '+
+      'real emotion at the height of the moment, tension in the body, lived-in specific location, shot like a scene '+
+      'rather than an illustration of one. Not a stock photograph, not an advertisement, not a posed portrait.',
+    image_prompt_suffix_colour:'cinematic film still from a character drama, 35mm, dramatic directional light with '+
+      'deep shadows and strong highlights, shallow depth of field, rich saturated colour, a real human face carrying '+
+      'real emotion at the height of the moment, tension in the body, lived-in specific location, shot like a scene '+
+      'rather than an illustration of one. Not a stock photograph, not an advertisement, not a posed portrait.',
     mono_suffix:'Black and white only — monochrome, absolutely no colour anywhere in the frame.',
     colour_suffix:'Full modern colour: warm skin tones, readable colour in clothing and surroundings, '+
       'the palette of a present-day photograph rather than a filtered one.',
@@ -1014,14 +1016,18 @@ const PRESETS = [
     caption_treatment:'documentary',
     shot_ladder:true,
     subject_context:false,          // the scenes name their own moment; a story label pasted on top read as a caption
-    font_family:'Archivo', font_weight:900, body_font_family:'Inter', body_weight:500, italic:false,
+    // One voice at two sizes: the body is the same heavy face as the headline, because a
+    // slide read at arm's length on a phone has no room for light 24px type. Sentence
+    // case, though — a paragraph in caps at this weight is a wall, not a sentence.
+    font_family:'Archivo', font_weight:900, body_font_family:'Archivo', body_weight:800, italic:false,
     uppercase:true, body_uppercase:false, letter_spacing_em:-0.012,
     text_color:'#FFFFFF', stroke_color:'#000000', stroke_width:0, text_shadow:0.35, shadow_color:'#000000',
     label_bg:'#FFFFFF',
     scrim_pct:0.60, scrim_alpha:0.92,
     bottom_pad_pct:0.045,
-    title_size_pct:0.062, body_size_pct:0.024, title_gap_em:1.0, title_line_em:0.95,
-    max_width_pct:0.90, body_width_pct:0.86,
+    // the headline gives a little back so the body can be big enough to read
+    title_size_pct:0.056, body_size_pct:0.032, title_gap_em:0.8, title_line_em:0.95, body_line_em:1.16,
+    max_width_pct:0.90, body_width_pct:0.90,
     divider:false,                              // the account row replaces the rule-and-mark
     portrait_inset:true, auto_inset:true,       // the cover's circle, cut from the deck's own frames
     /* the signature along the foot of every frame */
@@ -1525,7 +1531,7 @@ async function useFromLibrary(slide, item){
 }
 
 const slimSlide = (s, withImages) => ({id:s.id, kind:s.kind, title:s.title, body:s.body, scene:s.scene, tone:s.tone,
-  pop:s.pop||'', swipe:s.swipe||'', status:s.status, job:s._job||'',
+  pop:s.pop||'', swipe:s.swipe||'', cast:s.cast||[], status:s.status, job:s._job||'',
   img: withImages ? (s.img||'') : '', inset: withImages ? (s.inset||'') : ''});
 function projectJSON(withImages){
   return {
@@ -3059,6 +3065,25 @@ function subjectContext(p, slide){
   return 'This photograph documents ' + subj.replace(/\.$/, '') + ', and the subject itself must be ' +
     'clearly visible in the frame. ';
 }
+/* A carousel is one story, so the people in it have to be the same people from frame
+   to frame. The writer casts the deck once — a name and a description detailed enough
+   to draw twice — and every scene that character appears in is handed that same
+   description verbatim. Without it each slide invents a new couple and the set reads as
+   five unrelated photographs, which is exactly what it did. */
+function castBlock(slide){
+  const deck = slide._deck;
+  const cast = (deck && Array.isArray(deck.cast) ? deck.cast : []).filter(c => c && c.name && c.look);
+  if(!cast.length) return '';
+  const named = new Set((slide.cast || []).map(n => String(n).toLowerCase().trim()));
+  const scene = String(slide.scene || '').toLowerCase();
+  // named on the slide, or simply mentioned in the scene — a writer that forgets the
+  // list still gets continuity, which matters more than the list being tidy
+  const inFrame = cast.filter(c => named.has(c.name.toLowerCase()) || scene.includes(c.name.toLowerCase()));
+  if(!inFrame.length) return '';
+  return 'THE PEOPLE IN THIS PICTURE ARE THE SAME PEOPLE AS IN THE REST OF THE SET AND MUST LOOK IDENTICAL IN '+
+    'EVERY FRAME — the same face, age, hair, build and clothing, changed only where the story changes them. ' +
+    inFrame.map(c => c.name + ' — ' + c.look).join(' ') + ' ';
+}
 function imagePrompt(slide, insist){
   const p = S.profile;
   const top = slide.kind === 'hook' ? (p.hook_top_pct ?? 0.34) : (p.text_block_top_pct ?? 0.6);
@@ -3070,7 +3095,7 @@ function imagePrompt(slide, insist){
       'The frame itself should still be full and alive. '
     : 'Keep the ' + region + ' of the frame visually calm, uncluttered and even in tone so a caption can be placed over it. ';
   return toneLead(p, slide, insist) + (slide.scene || slide.title) + '. ' +
-    subjectContext(p, slide) +
+    subjectContext(p, slide) + castBlock(slide) +
     styleSuffix(p, slide) + toneSuffix(p, slide) + shotSuffix(p, slide) + ' ' +
     'Aspect ratio ' + (p.aspect_ratio||'9:16') + ', full-bleed composition. ' +
     caption + NO_TEXT_CLAUSE + ' ' + FULL_BLEED_CLAUSE;
@@ -4468,12 +4493,12 @@ function pickupDeckPrompt(cat, deck){
 (list
  ? '- THE HEADLINE PROMISES '+items+' POINTS. Deliver exactly '+items+', one per slide, slides 2 to '+(items+1)+'. Not one more, not one fewer. A list headlined '+items+' that carries a different number is broken.\n' +
    '- Slide '+(items+2)+' is one extra CLOSING slide beyond the '+items+' points. It is not another point.\n' +
-   '- Each point has a title of 2 to 6 words and a body of 2 to 3 short sentences, about 40 words at most.\n' +
+   '- Each point has a title of 2 to 6 words and a body of AT MOST 2 short sentences and 24 words. It is set in heavy type on a photograph, so anything longer will not be read.\n' +
    (deck.angle === 'openers'
      ? '- Each body opens with the line itself in double quotation marks, exactly as it would be sent, then one sentence on why it works.\n'
      : '- Each body says the thing, then the reason it is true. The reason is the half people screenshot.\n')
  : '- Slide 2 opens it: a title of 2 to 4 words and a body that says who these people were and when.\n' +
-   '- Each middle slide carries one beat of the story, in order, with a title of 2 to 6 words and a body of 2 to 3 short sentences, about 40 words at most.\n' +
+   '- Each middle slide carries one beat of the story, in order, with a title of 2 to 6 words and a body of AT MOST 2 short sentences and 24 words. It is set in heavy type on a photograph, so a long sentence simply will not be read.\n' +
    '- The story has to turn. One slide in the second half is the moment everything changes, and it should land hard because of what it says, not how it is written.\n') +
 '- The last slide' + (list ? ' (the closing one)' : '') + ': ' + angle.close + '\n' +
 '- Voice: plain, warm and blunt. Short declarative sentences. No hype words, no "you won\'t believe", no emoji, no hashtags in the slides, no exclamation marks.\n\n' +
@@ -4482,15 +4507,22 @@ function pickupDeckPrompt(cat, deck){
 '- One short line that sits under the cover headline and makes the swipe worth it. Under 10 words, specific to THIS post, never "swipe to find out more".\n' +
 '- It says what the reader gets, or teases the turn. Examples of the shape, not the words: "The last one is the reason they split." / "Number 4 is the one people argue about."\n\n' +
 
-'IMAGES — "scene" describes a photograph and nothing else: what is in frame, who is doing what, the setting, the light. It never asks for words, letters, numbers, logos, screens with text, or UI.\n' +
-'- Photograph PEOPLE, in a real moment, doing something. Two hands on a table and one pulling away. Someone reading a phone on a night bus. A crowded bar and one person looking past everyone. A couple arguing in a car park with the engine still running.\n' +
-'- Anchor every scene to its own slide. It is the moment that body describes, and it should be unusable on any other slide.\n' +
-'- No two slides may share a setting or a framing. If one is indoors, the next is not.\n' +
-'- Do not describe the face of a specific real named person: write them from behind, at a distance, in silhouette, hands only, or out of focus. Unnamed people are photographed directly and in full.\n' +
-'- Banned as lazy: an empty room, a bed nobody is in, two silhouettes at sunset, a heart drawn in anything, a couple laughing at nothing, rose petals, a single ring on a table.\n' +
-'- The COVER has to stop a thumb: the most arresting, most human, most specific frame in the whole deck, close and mid-moment with strong directional light.\n' +
+'CAST — return it as "cast", before anything else. These are the people this story is about, at most three of them, and they are the same people in every frame.\n' +
+'- Each is {"name": what the story calls them, "look": a description detailed enough that two different photographs of them read as the same person}.\n' +
+'- A "look" names age, build, hair colour and cut, face shape, notable features, skin tone, and the clothing they are wearing in this story. About 25 to 40 words. Not a mood, not an adjective — a description a stranger could pick them out of a crowd with.\n' +
+'- WHEN THE STORY IS ABOUT A REAL NAMED PERSON, WRITE THEM AS THEY ACTUALLY LOOKED, at the age this story happens: their real hair, their real build, the clothes of that year. The picture is meant to look like them. A faceless silhouette where the story names somebody is a wasted slide.\n' +
+'- The one thing not to write: a real, living, named person staged in the act of a crime, an affair or anything sexual that is only alleged of them. Photograph them before it, after it, or leaving — never performing it.\n' +
+'- Then every slide lists who is in its frame as "cast": ["Name"]. A slide with nobody in it lists none — but almost every slide should have somebody in it.\n\n' +
+
+'IMAGES — "scene" describes a photograph and nothing else: who is in frame, what they are doing, the setting, the light. It never asks for words, letters, numbers, logos, screens with text, or UI.\n' +
+'- SHOOT THE SENTENCE. The scene is the exact moment that slide\'s body describes, at the instant it happens. If the body says she read the letter on the stairs, the picture is her on the stairs with the letter open. A picture that could sit on any other slide is the wrong picture.\n' +
+'- DRAMATIC, NOT DECORATIVE. This is a film still from the most charged second of the scene: the face at the moment it changes, the hand already reaching, the door half open, the drink going over. Name the emotion on the face and what is in motion.\n' +
+'- Name the specifics that make it real: the hour and the weather, the exact light and where it comes from, the room and what is in it, what they are wearing, what they are holding, how many people are there.\n' +
+'- No two slides may share a setting or a framing. If one is indoors, the next is not. The set has to read as a story moving through time, not one room photographed six ways.\n' +
+'- BANNED, all of them stock-photo tells: an empty room, an unmade bed nobody is in, two silhouettes at sunset, hands forming a heart, rose petals, a ring on a table, a couple laughing at nothing on a white sofa, a model looking wistfully out of a window, anyone smiling at the camera. If the frame could sell a mattress, rewrite it.\n' +
+'- The COVER has to stop a thumb: the single most arresting frame in the story, close on a face at the height of the moment, hard directional light.\n' +
 '- Keep one region of each frame calm in tone, because the caption sits over it.\n' +
-'Style is '+(p.imagery||'candid modern photograph')+' — a photograph someone could have taken this year.\n\n' +
+'Style is '+(p.imagery||'cinematic photograph')+'.\n\n' +
 
 'CAPTION for Instagram:\n' +
 '- Exactly three paragraphs separated by blank lines. The first lands the hook, the second gives the detail, the third closes and asks one real question the comments can answer.\n' +
@@ -4498,7 +4530,8 @@ function pickupDeckPrompt(cat, deck){
 
 'Return ONLY JSON:\n' +
 '{"subject":"short canonical name for this post","swipe":"...",' +
-'"slides":[{"kind":"hook","title":"...","scene":"..."},{"kind":"slide","title":"...","body":"...","scene":"..."}],' +
+'"cast":[{"name":"...","look":"..."}],' +
+'"slides":[{"kind":"hook","title":"...","scene":"...","cast":["Name"]},{"kind":"slide","title":"...","body":"...","scene":"...","cast":["Name"]}],' +
 '"caption":"para1\\n\\npara2\\n\\npara3\\n\\n#niche #mid #broad"}'
   );
 }
@@ -4666,6 +4699,7 @@ function deckTones(count){
 const mapDeckSlides = (arr, deck, label) => (Array.isArray(arr) ? arr : []).map((s,i)=>({
   id: uid(), kind: (i === 0 || s.kind === 'hook') ? 'hook' : 'slide',
   title: String(s.title||''), body: String(s.body||''), scene: String(s.scene||''),
+  cast: Array.isArray(s.cast) ? s.cast.map(String).slice(0,4) : [],
   tone: s.tone ? (/pop/i.test(s.tone) ? 'pop' : /colour|color/i.test(s.tone) ? 'colour' : 'mono') : (deck.tone || 'mono'),
   img:'', status:'', _deck: deck, _label: label
 }));
@@ -4688,6 +4722,10 @@ async function writeFactDeck(deck){
   if(!deck.slides.length) throw new Error('no slides in the reply');
   if(byAngle){
     // the promise under the headline is the deck's, and the cover is what draws it
+    deck.cast = (Array.isArray(j.cast) ? j.cast : []).slice(0, 4)
+      .map(c => ({name: String((c && c.name) || '').trim().slice(0, 60),
+                  look: String((c && c.look) || '').trim().slice(0, 400)}))
+      .filter(c => c.name && c.look);
     const fallback = (angleIn(catCfg(cat).angles, deck.angle) || {}).swipe || '';
     deck.swipe = String(j.swipe||'').trim().replace(/^["']|["']$/g,'').slice(0, 90) || fallback;
     const cover = deck.slides.find(s=>s.kind === 'hook');

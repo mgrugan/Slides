@@ -82,11 +82,11 @@ const r = await p.evaluate(async ()=>{
   out.brandFontIsBernoru = S.profile.font_family === 'Bernoru' && S.profile.body_font_family === 'Bernoru';
   // the two faces the page carries itself, and the one it stands in for
   out.bernoruDraws = fontAvailable('Bernoru');
-  out.jostDraws = fontAvailable('Jost');                    // italics only, so upright probes must not decide it
-  out.futuraStandsIn = !fontAvailable('Futura') && S.profile.swipe_font_fallback === 'Jost';
-  out.builtinsNotFetched = BUILTIN_FONTS.has('Bernoru') && BUILTIN_FONTS.has('Jost') &&
+  out.futuraDraws = fontAvailable('Futura');                // italics only, so upright probes must not decide it
+  out.noStandInNeeded = S.profile.swipe_font_family === 'Futura' && !S.profile.swipe_font_fallback;
+  out.builtinsNotFetched = BUILTIN_FONTS.has('Bernoru') && BUILTIN_FONTS.has('Futura') &&
     (()=>{ const before = document.querySelectorAll('link[href*="fonts.googleapis"]').length;
-           ensureFont('Bernoru'); ensureFont('Jost');
+           ensureFont('Bernoru'); ensureFont('Futura');
            return document.querySelectorAll('link[href*="fonts.googleapis"]').length === before; })();
   out.headlineFits = (()=>{                                 // nine words, and not five lines of them
     const g = document.createElement('canvas').getContext('2d');
@@ -104,8 +104,23 @@ const r = await p.evaluate(async ()=>{
     return false;
   };
   out.coverSwipeInk = swipeInkIn(ruleY - cfm.lift - cfm.line, ruleY - cfm.lift + 1);
-  // and nowhere near as high as it used to sit — the band a mark-height above is clear
-  out.swipeNotFloating = !swipeInkIn(ruleY - cfm.d*1.1, ruleY - cfm.d*0.75);
+  /* And it rests on the rule rather than floating a mark-height over it, as it did when
+     the mark hung above the line. Measured on a cover with no headline: the caption now
+     sits low enough to reach into the band this looks at, so on a normal frame there is
+     no way to tell whose ink is whose. */
+  out.swipeNotFloating = (()=>{
+    const bare = {id:'bare', kind:'hook', title:'', scene:'', tone:'colour', img:deck.slides[0].img, _deck:deck};
+    IMG_CACHE[bare.id] = IMG_CACHE[deck.slides[0].id];
+    const c = document.createElement('canvas');
+    renderSlide(bare, c, S.profile, 1);
+    const g = c.getContext('2d');
+    for(let y = Math.round(ruleY - cfm.d*1.1); y < ruleY - cfm.d*0.75; y += 2)
+      for(let x = Math.round(W*0.055 + cfm.d*1.3); x < W*0.9; x += 2){
+        const d = g.getImageData(x, y, 1, 1).data;
+        if(d[0] > 190 && d[1] > 190 && d[2] > 190) return false;
+      }
+    return true;
+  })();
 
   // --- every other frame is signed the way the client asked: rule, mark, rule
   const dm = brandDividerMetrics(W, H, S.profile);
@@ -166,6 +181,42 @@ const r = await p.evaluate(async ()=>{
     return false;
   })();
   out.coverHasNoDivider = !magenta(px(cover, W/2, divCy));
+
+  /* --- the type sits DOWN on the frame, near its footer. Two paddings used to stack —
+     the block's own bottom pad and the footer's reserve — and left the last line
+     floating clear of the rule on every slide, cover and body alike. */
+  const lastInkY = (c, fromX, toX) => {
+    const g = c.getContext('2d');
+    for(let y = Math.round(H*0.95); y > H*0.4; y--)
+      for(let x = Math.round(fromX); x < toX; x += 2){
+        const d = g.getImageData(x, y, 1, 1).data;
+        if(d[0] > 200 && d[1] > 200 && d[2] > 200) return y;
+      }
+    return 0;
+  };
+  // measured left of the mark and left of any rule start, so only caption ink counts
+  out.coverTypeSitsLow = ruleY - lastInkY(cover, W*0.06, W*0.045 + cfm.d*0.9) < H*0.10;
+  out.bodyTypeSitsLow  = (H - dm.pad - dm.d/2) - lastInkY(body, W*0.06, W*0.10) < H*0.13;
+  out.bottomPadTight = S.profile.bottom_pad_pct <= 0.02;
+
+  // --- a version bump carries the look into a project saved before it
+  out.lookRefreshed = (()=>{
+    const preset = PRESETS[pi];
+    const stale = JSON.parse(JSON.stringify(preset));
+    stale.v = 1;                                    // as an older save would have it
+    stale.font_family = 'Archivo';
+    stale.swipe_line = 'Swipe through — it gets worse.';
+    stale.bottom_pad_pct = 0.045;
+    const keep = S.profile, keyKeep = S.styleKey;
+    S.profile = stale; S.styleKey = 'preset:' + pi;
+    const added = refreshBuiltinProfile();
+    const fixed = S.profile.font_family === 'Bernoru' &&
+                  S.profile.swipe_line === 'Comment your thoughts on this below?!' &&
+                  S.profile.bottom_pad_pct === preset.bottom_pad_pct &&
+                  added.includes('font_family');
+    S.profile = keep; S.styleKey = keyKeep;
+    return fixed;
+  })();
 
   // --- the caption stops above whatever footer the frame carries
   out.reserveCover = footerReserve(deck.slides[0], S.profile, W, H);
@@ -324,8 +375,9 @@ const want = {
   coverHasNoDivider:true, coverRuleFades:true, coverRuleFromText:true, thinRing:true,
   markStraddlesRule:true, swipeNotFloating:true,
   swipeIsFuturaItalic:true, swipeIsFixed:true, brandFontIsBernoru:true,
-  bernoruDraws:true, jostDraws:true, futuraStandsIn:true, builtinsNotFetched:true, headlineFits:true,
-  reservesFooter:true, textClearsFooter:true, docUnchanged:true, bodyNotShouted:true,
+  bernoruDraws:true, futuraDraws:true, noStandInNeeded:true, builtinsNotFetched:true, headlineFits:true,
+  reservesFooter:true, textClearsFooter:true,
+  coverTypeSitsLow:true, bodyTypeSitsLow:true, bottomPadTight:true, lookRefreshed:true, docUnchanged:true, bodyNotShouted:true,
   catMode:'angles', catStyle:'Pickuplines', catTone:'colour', angleCount:8, angleKinds:'list,story',
   anglesDocumented:true, dealtAll:true, dealtSpread:true, rotationMoves:true,
   listKeepsCloser:true, listTrimsExtra:true, listPromptCounts:true, promptsAskSwipe:true,

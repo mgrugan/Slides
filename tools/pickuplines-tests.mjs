@@ -81,13 +81,43 @@ const r = await p.evaluate(async ()=>{
     swipeLine(deck.slides[0], S.profile) === 'Comment your thoughts on this below?!';
   out.brandFontIsBernoru = S.profile.font_family === 'Bernoru' && S.profile.body_font_family === 'Bernoru';
   // the two faces the page carries itself, and the one it stands in for
-  out.bernoruDraws = fontAvailable('Bernoru');
   out.futuraDraws = fontAvailable('Futura');                // italics only, so upright probes must not decide it
   out.noStandInNeeded = S.profile.swipe_font_family === 'Futura' && !S.profile.swipe_font_fallback;
-  out.builtinsNotFetched = BUILTIN_FONTS.has('Bernoru') && BUILTIN_FONTS.has('Futura') &&
+  out.builtinsNotFetched = BUILTIN_FONTS.has('Futura') &&
     (()=>{ const before = document.querySelectorAll('link[href*="fonts.googleapis"]').length;
-           ensureFont('Bernoru'); ensureFont('Futura');
+           ensureFont('Futura');
            return document.querySelectorAll('link[href*="fonts.googleapis"]').length === before; })();
+  /* The Bernoru that was supplied is the Black Ultra Expanded cut and is not shipped,
+     so the headline lands on the fallback until the right file arrives. Both halves of
+     that arrangement matter, so both are checked. */
+  out.bernoruNotShipped = !BUILTIN_FONTS.has('Bernoru');
+  out.bernoruStillPreferred = S.profile.font_family === 'Bernoru' && S.profile.font_fallback === 'Archivo';
+  /* And the sizes, against the client's own artboard: a headline line fills about 91%
+     of the frame there and the swipe line about 40%. Measured, not eyeballed. */
+  const widthOf = (font, text) => {
+    const g = document.createElement('canvas').getContext('2d');
+    g.font = font; return g.measureText(text).width / W;
+  };
+  out.headlineMatchesRef = (()=>{
+    const w = widthOf(fontStr(S.profile, S.profile.title_size_pct * H), 'TOM BRADY LAUNCHES');
+    return w > 0.84 && w < 0.98;
+  })();
+  out.swipeMatchesRef = (()=>{
+    const w = widthOf('italic ' + S.profile.swipe_weight + ' ' +
+      Math.round(S.profile.swipe_size_pct * H) + 'px "' + S.profile.swipe_font_family + '"',
+      'Comment your thoughts on this below?!');
+    return w > 0.34 && w < 0.46;
+  })();
+  out.swipeIsGreyAndLight = /^#/.test(S.profile.swipe_color || '') && S.profile.swipe_size_pct < 0.02;
+  out.swipeDrawsGrey = (()=>{                               // and grey on the canvas, not white
+    const g = cover.getContext('2d');
+    for(let y = Math.round(ruleY - cfm.lift - cfm.line); y < ruleY - cfm.lift; y++)
+      for(let x = Math.round(W*0.055 + cfm.d*1.3); x < W*0.9; x++){
+        const d = g.getImageData(x, y, 1, 1).data;
+        if(d[0] > 150 && d[0] < 235 && Math.abs(d[0]-d[1]) < 12 && Math.abs(d[1]-d[2]) < 12) return true;
+      }
+    return false;
+  })();
   out.headlineFits = (()=>{                                 // nine words, and not five lines of them
     const g = document.createElement('canvas').getContext('2d');
     g.font = fontStr(S.profile, S.profile.title_size_pct * H);
@@ -375,7 +405,9 @@ const want = {
   coverHasNoDivider:true, coverRuleFades:true, coverRuleFromText:true, thinRing:true,
   markStraddlesRule:true, swipeNotFloating:true,
   swipeIsFuturaItalic:true, swipeIsFixed:true, brandFontIsBernoru:true,
-  bernoruDraws:true, futuraDraws:true, noStandInNeeded:true, builtinsNotFetched:true, headlineFits:true,
+  futuraDraws:true, noStandInNeeded:true, builtinsNotFetched:true, headlineFits:true,
+  bernoruNotShipped:true, bernoruStillPreferred:true, headlineMatchesRef:true, swipeMatchesRef:true,
+  swipeIsGreyAndLight:true, swipeDrawsGrey:true,
   reservesFooter:true, textClearsFooter:true,
   coverTypeSitsLow:true, bodyTypeSitsLow:true, bottomPadTight:true, lookRefreshed:true, docUnchanged:true, bodyNotShouted:true,
   catMode:'angles', catStyle:'Pickuplines', catTone:'colour', angleCount:8, angleKinds:'list,story',

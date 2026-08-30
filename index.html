@@ -447,7 +447,7 @@ details summary:hover{color:var(--fg)}
           <button id="runFacts" class="btn primary">Generate</button>
         </div>
       </div>
-      <div class="hintline">Uses the Documentary facts style · subjects already covered are never repeated</div>
+      <div class="hintline">Each category brings its own style and its own logo · subjects already covered are never repeated</div>
 
       <div id="factHookPanel" class="panel hide" style="margin-top:10px">
         <div class="row" style="margin-bottom:8px"><strong style="font-size:13px">Hooks for review</strong>
@@ -605,6 +605,13 @@ details summary:hover{color:var(--fg)}
       </div>
       <div class="slider"><label for="rLogo">Logo size</label><span class="val" id="vLogo"></span><input type="range" id="rLogo" min="0.03" max="0.2" step="0.005"></div>
       <div class="switch"><span>Show on every slide</span><input type="checkbox" id="cLogoAll"></div>
+      <div class="pair">
+        <div class="field"><label for="cBrandName">Account name</label><input id="cBrandName" placeholder="Pickuplines"></div>
+        <div class="field"><label for="cBrandHandle">Handle</label><input id="cBrandHandle" placeholder="@pickuplines"></div>
+      </div>
+      <div class="switch"><span>Account row on every slide</span><input type="checkbox" id="cBrandBar"></div>
+      <div class="switch"><span>Verified tick</span><input type="checkbox" id="cBrandVerified"></div>
+      <div class="field"><label for="cSwipeLine">Swipe line — the cover's fallback</label><input id="cSwipeLine" placeholder="Swipe through — it gets worse."></div>
       <div class="switch"><span>Trim borders on generated images</span><input type="checkbox" id="cEdgeTrim" checked></div>
       <div class="tiny" style="color:var(--faint)">A transparent PNG works best. On the Documentary style it sits in the cover's rule.</div>
     </div>
@@ -980,6 +987,57 @@ const PRESETS = [
     library_collection:'Facts',
     structure:'cover states the astonishing claim, then the story unfolds one beat per slide and closes on the aftermath or a quote',
     voice:'flat documentary narration, short declarative sentences, no hype words, the facts do the work'
+  },
+  /* ---------------------------------------------------------------------------
+     The account layout: a full-bleed photograph, the headline hard against the
+     bottom, a circle cut from the deck's own pictures top-right, and the account
+     itself signed along the foot of every single frame — mark, name, tick, handle.
+     The cover swaps that signature for the swipe promise on a rule. It is the
+     Documentary skeleton wearing a modern, in-colour skin. */
+  {
+    name:'Pickuplines', builtin:true,
+    aspect_ratio:'4:5',
+    imagery:'candid-modern-photograph',
+    v: 1,
+    image_prompt_suffix:'candid contemporary documentary photograph, 35mm, natural available light, '+
+      'shallow depth of field, true-to-life colour, real people caught mid-moment and unaware of the camera, '+
+      'editorial photojournalism, lived-in real locations, no studio lighting, no posed stock-photo smiling.',
+    image_prompt_suffix_colour:'candid contemporary documentary photograph, 35mm, natural available light, '+
+      'shallow depth of field, warm true-to-life colour, real people caught mid-moment and unaware of the camera, '+
+      'editorial photojournalism, lived-in real locations, no studio lighting, no posed stock-photo smiling.',
+    mono_suffix:'Black and white only — monochrome, absolutely no colour anywhere in the frame.',
+    colour_suffix:'Full modern colour: warm skin tones, readable colour in clothing and surroundings, '+
+      'the palette of a present-day photograph rather than a filtered one.',
+    pop_suffix:'{pop} is the single most saturated, most colourful thing in the frame and the eye lands on it '+
+      'first. Everything else is naturally muted, so that one colour separates cleanly.',
+    caption_treatment:'documentary',
+    shot_ladder:true,
+    subject_context:false,          // the scenes name their own moment; a story label pasted on top read as a caption
+    font_family:'Archivo', font_weight:900, body_font_family:'Inter', body_weight:500, italic:false,
+    uppercase:true, body_uppercase:false, letter_spacing_em:-0.012,
+    text_color:'#FFFFFF', stroke_color:'#000000', stroke_width:0, text_shadow:0.35, shadow_color:'#000000',
+    label_bg:'#FFFFFF',
+    scrim_pct:0.60, scrim_alpha:0.92,
+    bottom_pad_pct:0.045,
+    title_size_pct:0.062, body_size_pct:0.024, title_gap_em:1.0, title_line_em:0.95,
+    max_width_pct:0.90, body_width_pct:0.86,
+    divider:false,                              // the account row replaces the rule-and-mark
+    portrait_inset:true, auto_inset:true,       // the cover's circle, cut from the deck's own frames
+    /* the signature along the foot of every frame */
+    brand_bar:true, brand_name:'Pickuplines', brand_handle:'@pickuplines', brand_verified:true,
+    brand_badge_color:'#1D9BF0', brand_logo_ring:true,
+    brand_mark_pct:0.085, brand_name_pct:0.026, brand_handle_pct:0.023, brand_pad_pct:0.032,
+    footer_scrim_pct:0.22, footer_scrim_alpha:0.55,
+    /* the cover's own version of it: mark, promise, rule */
+    cover_swipe:true, swipe_line:'Swipe through — it gets worse.',
+    cover_mark_pct:0.10, swipe_size_pct:0.0215,
+    logo_scale_pct:0.075, logo_on_all:false,
+    text_block_top_pct:0.70, hook_top_pct:0.70,
+    auto_number:false,
+    text_align:'left',
+    library_collection:'Pickuplines',
+    structure:'cover carries the promise, the middle slides pay it off one beat at a time, the last slide asks the reader something',
+    voice:'plain and warm, short declarative sentences, no hype words and no lecturing — the story or the point does the work'
   }
 ];
 
@@ -1466,7 +1524,7 @@ async function useFromLibrary(slide, item){
 }
 
 const slimSlide = (s, withImages) => ({id:s.id, kind:s.kind, title:s.title, body:s.body, scene:s.scene, tone:s.tone,
-  pop:s.pop||'', status:s.status, job:s._job||'',
+  pop:s.pop||'', swipe:s.swipe||'', status:s.status, job:s._job||'',
   img: withImages ? (s.img||'') : '', inset: withImages ? (s.inset||'') : ''});
 function projectJSON(withImages){
   return {
@@ -1967,6 +2025,184 @@ function insetImageFor(slide, p){
   return im;
 }
 
+/* ============================ the account's signature ============================
+   The reference layout signs every frame, not just the cover: a round mark, the
+   account name with its verified tick, the handle underneath, sitting over a gentle
+   gradient so it reads over a bright photograph as well as a dark one. The cover
+   carries the swipe promise instead — mark, one line, and a rule beneath it.
+   Everything here is measured off the frame, so it exports identically at any size. */
+const brandName   = p => String(p.brand_name || '').trim();
+const brandHandle = p => {
+  const h = String(p.brand_handle || '').trim();
+  return h && h[0] !== '@' ? '@' + h : h;
+};
+/* the cover's one line: the deck writes its own, the style holds the fallback */
+function swipeLine(slide, p){
+  return String((slide && (slide.swipe || (slide._deck && slide._deck.swipe))) || p.swipe_line || '').trim();
+}
+const brandFont = p => p.brand_font_family || p.body_font_family || p.font_family;
+
+/* a second, shallower gradient under the signature. The caption scrim above it is
+   built for a block of type; this one only has to lift a single row off the picture. */
+function drawFooterScrim(ctx, W, H, p){
+  const hgt = (p.footer_scrim_pct || 0) * H;
+  if(hgt <= 0) return;
+  const a = p.footer_scrim_alpha ?? 0.55;
+  const g = ctx.createLinearGradient(0, H - hgt, 0, H);
+  g.addColorStop(0, 'rgba(0,0,0,0)');
+  g.addColorStop(0.55, 'rgba(0,0,0,'+(a*0.45).toFixed(3)+')');
+  g.addColorStop(1, 'rgba(0,0,0,'+a.toFixed(3)+')');
+  ctx.fillStyle = g;
+  ctx.fillRect(0, H - hgt, W, hgt);
+}
+/* the mark as a profile picture: filled to the circle and cropped, not letterboxed
+   inside it, then ringed so it separates from whatever is behind it */
+function drawAvatar(ctx, img, cx, cy, r, p){
+  if(!img || !img.complete || !img.naturalWidth) return false;
+  ctx.save();
+  ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI*2); ctx.closePath();
+  ctx.clip();
+  const iw = img.naturalWidth, ih = img.naturalHeight;
+  const s = Math.max(2*r/iw, 2*r/ih);
+  ctx.drawImage(img, cx - iw*s/2, cy - ih*s/2, iw*s, ih*s);
+  ctx.restore();
+  if(p.brand_logo_ring){
+    ctx.save();
+    ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI*2);
+    ctx.strokeStyle = p.text_color || '#fff';
+    ctx.globalAlpha = 0.9;
+    ctx.lineWidth = Math.max(1.5, r*0.08);
+    ctx.stroke();
+    ctx.restore();
+  }
+  return true;
+}
+/* The verified tick, drawn rather than uploaded. A supplied PNG would have to be
+   installed per machine and would soften at export size; a path is exact at every
+   scale and takes the badge colour from the style. */
+function drawVerified(ctx, cx, cy, r, colour){
+  ctx.save();
+  ctx.beginPath();
+  for(let i = 0; i <= 360; i += 2){
+    const a = i*Math.PI/180;
+    const rad = r * (0.86 + 0.14*Math.cos(8*a));
+    const x = cx + rad*Math.cos(a), y = cy + rad*Math.sin(a);
+    i ? ctx.lineTo(x, y) : ctx.moveTo(x, y);
+  }
+  ctx.closePath();
+  ctx.fillStyle = colour || '#1D9BF0';
+  ctx.fill();
+  ctx.strokeStyle = '#fff';
+  ctx.lineWidth = Math.max(1.2, r*0.22);
+  ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+  ctx.beginPath();
+  ctx.moveTo(cx - r*0.42, cy + r*0.02);
+  ctx.lineTo(cx - r*0.12, cy + r*0.32);
+  ctx.lineTo(cx + r*0.44, cy - r*0.30);
+  ctx.stroke();
+  ctx.restore();
+}
+/* how tall each footer is, so the caption above it can be told where to stop */
+function brandBarMetrics(W, H, p){
+  const d      = (p.brand_mark_pct   || 0.085) * W;
+  const name   = (p.brand_name_pct   || 0.026) * H;
+  const handle = (p.brand_handle_pct || 0.023) * H;
+  const gap    = name * 0.26;
+  const blockH = Math.max(d, name + gap + handle);
+  const pad    = (p.brand_pad_pct ?? 0.032) * H;
+  return {d, name, handle, gap, blockH, pad, height: blockH + pad};
+}
+function coverFooterMetrics(W, H, p){
+  const d    = (p.cover_mark_pct  || 0.10) * W;
+  const line = (p.swipe_size_pct  || 0.0215) * H;
+  const pad  = (p.brand_pad_pct ?? 0.032) * H;
+  const rule = line * 0.95;                      // the gap between the row and its rule
+  return {d, line, rule, pad, height: d + rule + pad};
+}
+/* The space a frame owes its footer: the footer itself plus a breath above it, so
+   the last line of caption never sits on the account name. */
+function footerReserve(slide, p, W, H){
+  const cover = slide && slide.kind === 'hook';
+  const m = cover && p.cover_swipe ? coverFooterMetrics(W, H, p)
+          : p.brand_bar            ? brandBarMetrics(W, H, p)
+          : null;
+  return m ? m.height + (p.brand_gap_pct ?? 0.022) * H : 0;
+}
+/* mark · name + tick · handle, centred as one group along the bottom */
+function drawBrandBar(ctx, W, H, p, mark){
+  const nameTxt = brandName(p), handleTxt = brandHandle(p);
+  if(!nameTxt && !handleTxt && !mark) return;
+  const m = brandBarMetrics(W, H, p);
+  const cy = H - m.pad - m.blockH/2;
+  ctx.save();
+  if('letterSpacing' in ctx) ctx.letterSpacing = '0px';
+  ctx.textBaseline = 'top';
+  ctx.textAlign = 'left';
+  const fam = brandFont(p);
+  ctx.font = fontStr(p, m.name, 800, fam);
+  const nameW = nameTxt ? ctx.measureText(nameTxt).width : 0;
+  const tickD = (p.brand_verified && nameTxt) ? m.name*0.72 : 0;
+  const tickGap = tickD ? m.name*0.24 : 0;
+  ctx.font = fontStr(p, m.handle, 500, fam);
+  const handleW = handleTxt ? ctx.measureText(handleTxt).width : 0;
+  const textW = Math.max(nameW + tickGap + tickD, handleW);
+  const markGap = mark ? m.d*0.30 : 0;
+  const total = (mark ? m.d : 0) + markGap + textW;
+  let x = (W - total)/2;
+  if(mark && drawAvatar(ctx, mark, x + m.d/2, cy, m.d/2, p)) x += m.d + markGap;
+  const topY = cy - (m.name + m.gap + m.handle)/2;
+  if(nameTxt){
+    ctx.font = fontStr(p, m.name, 800, fam);
+    ctx.fillStyle = p.text_color || '#fff';
+    ctx.fillText(nameTxt, x, topY);
+    if(tickD) drawVerified(ctx, x + nameW + tickGap + tickD/2, topY + m.name*0.56, tickD/2, p.brand_badge_color);
+  }
+  if(handleTxt){
+    ctx.font = fontStr(p, m.handle, 500, fam);
+    ctx.fillStyle = p.brand_handle_color || 'rgba(255,255,255,0.66)';
+    ctx.fillText(handleTxt, x, topY + m.name + m.gap);
+  }
+  ctx.restore();
+}
+/* the cover's row: the mark, the promise beside it, a rule underneath */
+function drawCoverFooter(ctx, W, H, p, mark, text){
+  const m = coverFooterMetrics(W, H, p);
+  const x0 = W * (p.cover_footer_x_pct ?? 0.055);
+  const ruleY = H - m.pad;
+  const cy = ruleY - m.rule - m.d/2;
+  ctx.save();
+  if('letterSpacing' in ctx) ctx.letterSpacing = '0px';
+  const hasMark = drawAvatar(ctx, mark, x0 + m.d/2, cy, m.d/2, p);
+  const tx = x0 + (hasMark ? m.d + m.d*0.30 : 0);
+  const line = String(text || '');
+  if(line){
+    ctx.font = fontStr(p, m.line, 500, brandFont(p));
+    ctx.fillStyle = p.text_color || '#fff';
+    ctx.globalAlpha = 0.94;
+    ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+    // one line only: a promise that runs to two looks like body copy
+    const maxW = W - tx - W*0.055;
+    let t = line;
+    if(ctx.measureText(t).width > maxW){
+      while(t.length > 1 && ctx.measureText(t + '…').width > maxW) t = t.slice(0, -1);
+      t = t.replace(/[\s,;:.–-]+$/, '') + '…';
+    }
+    ctx.fillText(t, tx, cy);
+    ctx.globalAlpha = 1;
+  }
+  ctx.strokeStyle = p.text_color || '#fff';
+  ctx.globalAlpha = 0.9;
+  ctx.lineWidth = Math.max(1.5, H*0.0018);
+  ctx.beginPath(); ctx.moveTo(x0, ruleY); ctx.lineTo(W - x0, ruleY); ctx.stroke();
+  ctx.restore();
+}
+/* one entry point, so renderSlide does not have to know which of the two it is */
+function drawFooter(ctx, slide, W, H, p){
+  const cover = slide.kind === 'hook';
+  if(cover && p.cover_swipe) drawCoverFooter(ctx, W, H, p, logoFor(slide), swipeLine(slide, p));
+  else if(p.brand_bar) drawBrandBar(ctx, W, H, p, logoFor(slide));
+}
+
 /* A card is about 330px wide on screen. Painting it at the full 1080x1350 costs
    5.8MB of canvas backing store apiece for pixels nobody can see — six open cards
    was 35MB of them. Screen canvases are sized to the screen; exports still render
@@ -2008,6 +2244,8 @@ function renderSlide(slide, canvas, p, scale){
 
   if(doc){
     drawScrim(ctx, W, H, p);
+    // under the type, not over it: painted after the caption it would wash the last line
+    if(footerReserve(slide, p, W, H)) drawFooterScrim(ctx, W, H, p);
     // Below a quarter scale the circle is a handful of pixels in a row thumbnail, and
     // drawing it would decode a second full frame per deck to show them. Skip it there.
     if(isHook && (p.portrait_inset || p.auto_inset) && scale >= 0.25)
@@ -2024,21 +2262,25 @@ function renderSlide(slide, canvas, p, scale){
   const bWeight = p.body_weight || p.font_weight;
   const bFam = p.body_font_family || p.font_family;
   const cased = t => p.uppercase ? String(t||'').toUpperCase() : t;
+  // A cover shouts and a body paragraph does not: the two cases are separate settings,
+  // and a style that never says so keeps the single one it always had.
+  const casedBody = t => (p.body_uppercase ?? p.uppercase) ? String(t||'').toUpperCase() : t;
 
   ctx.font = fontStr(p, tSize);
   if('letterSpacing' in ctx) ctx.letterSpacing = ((p.letter_spacing_em||0)*tSize).toFixed(2)+'px';
   const tLines = wrap(ctx, cased(displayTitle(slide, p)), maxW);
   ctx.font = fontStr(p, bSize, bWeight, bFam);
   if('letterSpacing' in ctx) ctx.letterSpacing = '0px';
-  const bLines = isHook ? [] : wrap(ctx, cased(slide.body), bMaxW);
+  const bLines = isHook ? [] : wrap(ctx, casedBody(slide.body), bMaxW);
 
   const tLine = titleLineEm(p), bLine = bodyLineEm(p);
   const gap = bLines.length ? bSize*(p.title_gap_em ?? 0.7) : 0;
   const totalH = blockHeight(tSize, tLines.length, treat, tLine) + gap + blockHeight(bSize, bLines.length, treat, bLine);
 
   let top;
+  const footH = doc ? footerReserve(slide, p, W, H) : 0;
   if(doc){
-    top = H - H*(p.bottom_pad_pct ?? 0.055) - totalH;      // bottom-anchored, like the reference
+    top = H - H*(p.bottom_pad_pct ?? 0.055) - footH - totalH;   // bottom-anchored, above its own signature
     if(isHook && p.divider) drawDivider(ctx, W, H, p, top - tSize*0.62, logoFor(slide));
   } else {
     top = (isHook ? (p.hook_top_pct ?? 0.34) : (p.text_block_top_pct ?? 0.6)) * H;
@@ -2047,7 +2289,8 @@ function renderSlide(slide, canvas, p, scale){
 
   const used = drawLines(ctx, tLines, p, tSize, x, top, W, H, null, null, tLine);
   if(bLines.length) drawLines(ctx, bLines, p, bSize, x, top + used + gap, W, H, bWeight, bFam, bLine);
-  if(doc && p.logo_on_all && !(isHook && p.divider)) drawCornerLogo(ctx, W, H, p, logoFor(slide));
+  if(doc && footH) drawFooter(ctx, slide, W, H, p);
+  if(doc && p.logo_on_all && !footH && !(isHook && p.divider)) drawCornerLogo(ctx, W, H, p, logoFor(slide));
 }
 
 /* ============================ slide grid ============================ */
@@ -2149,7 +2392,9 @@ function buildGrid(){
       '</div>'+
       '<div class="edit'+(OPEN.has(s.id) ? '' : ' hide')+'">'+
         '<div class="lbl">Title</div><textarea data-f="title" rows="2"></textarea>'+
-        (s.kind==='hook' ? '' : '<div class="lbl">Body</div><textarea data-f="body" rows="3"></textarea>')+
+        (s.kind==='hook'
+          ? (S.profile.cover_swipe ? '<div class="lbl">Swipe line — one short promise under the headline</div><textarea data-f="swipe" rows="2"></textarea>' : '')
+          : '<div class="lbl">Body</div><textarea data-f="body" rows="3"></textarea>')+
         '<div class="lbl">Scene — picture only, never words</div><textarea data-f="scene" rows="2"></textarea>'+
       '</div>';
     g.appendChild(d);
@@ -2311,6 +2556,11 @@ function syncControls(){
   $('cShadowCol').value = p.shadow_color || '#000000';
   $('rLogo').value = p.logo_scale_pct ?? 0.075;
   $('cLogoAll').checked = !!p.logo_on_all;
+  $('cBrandName').value = p.brand_name || '';
+  $('cBrandHandle').value = p.brand_handle || '';
+  $('cBrandBar').checked = !!p.brand_bar;
+  $('cBrandVerified').checked = !!p.brand_verified;
+  $('cSwipeLine').value = p.swipe_line || '';
   $('vLogo').textContent = (+$('rLogo').value).toFixed(3);
   $('rTitle').value = p.title_size_pct ?? 0.05;
   $('rBody').value = p.body_size_pct ?? 0.033;
@@ -2339,6 +2589,11 @@ function bindControls(){
   live('cShadowCol',()=> S.profile.shadow_color = $('cShadowCol').value);
   live('rLogo',()=> S.profile.logo_scale_pct = +$('rLogo').value);
   live('cLogoAll',()=> S.profile.logo_on_all = $('cLogoAll').checked);
+  live('cBrandName',()=> S.profile.brand_name = $('cBrandName').value);
+  live('cBrandHandle',()=> S.profile.brand_handle = $('cBrandHandle').value);
+  live('cBrandBar',()=> S.profile.brand_bar = $('cBrandBar').checked);
+  live('cBrandVerified',()=> S.profile.brand_verified = $('cBrandVerified').checked);
+  live('cSwipeLine',()=> S.profile.swipe_line = $('cSwipeLine').value);
   live('rTitle', ()=> S.profile.title_size_pct = +$('rTitle').value);
   live('rBody',  ()=> S.profile.body_size_pct = +$('rBody').value);
   live('rStroke',()=> S.profile.stroke_width = +$('rStroke').value);
@@ -3430,14 +3685,18 @@ const deckLen = hook => {
 /* Asking is not enough — a deck headlined "Five" that arrives with six items is
    wrong on the one thing the reader is counting. Extras are dropped; coming up short
    is said out loud, since inventing a sixth point is not ours to do. */
-function trimToPromise(hook, slides){
+/* `extra` is how many slides beyond the promised count the format is allowed — a
+   closing slide that asks the reader something is not a broken promise, and trimming
+   it away was how the ask kept disappearing off the end of a list carousel. */
+function trimToPromise(hook, slides, extra){
   const want = hookItemCount(hook);
   if(!want) return slides;
+  const room = want + (extra || 0);
   const body = slides.filter(s => s.kind !== 'hook');
-  if(body.length > want){
-    const keep = new Set(body.slice(0, want).map(s => s.id));
+  if(body.length > room){
+    const keep = new Set(body.slice(0, room).map(s => s.id));
     log('"'+String(hook).slice(0,40)+'" came back with '+body.length+' points for a promise of '+want+
-        ' — trimmed to '+want, 'w');
+        ' — trimmed to '+room, 'w');
     return slides.filter(s => s.kind === 'hook' || keep.has(s.id));
   }
   if(body.length < want)
@@ -3688,13 +3947,32 @@ const FACT_DEFAULTS = {
     mode: 'hooks',
     cta: 'peptorium.com',
     collection: 'General'
+  },
+  /* The dating account. One category, but not one shape of post: a page that only ever
+     told wild break-up stories would be exhausting and a page that only ever listed
+     openers would be forgettable. So this category rotates through the angles below,
+     and the rotation is what keeps a month of posts from reading like one post. */
+  'Pickuplines': {
+    prompt: 'Dating, attraction and relationships, for a large general audience who are single, dating, '+
+      'or in something complicated. Three kinds of material, and the rotation decides which: '+
+      'true documented relationship stories with a real turn in them; what the actual research on '+
+      'attraction and long relationships found; and genuinely useful, sendable material — openers, '+
+      'replies, questions, the specific words. '+
+      'Everything must be checkable or honestly framed as an opinion. Warm, funny and blunt; never '+
+      'sneering at anyone, never advice that involves deceiving, wearing down or pressuring another person, '+
+      'never a claim that one gender is the problem, never sexually explicit, never therapy or a diagnosis.',
+    mode: 'angles',
+    angles: 'pickuplines',
+    style: 'Pickuplines',
+    collection: 'Pickuplines',
+    tone: 'colour'
   }
 };
 /* Category values were plain prompt strings and most still are. A few carry a little
    configuration instead, so both shapes have to read the same way everywhere. */
 function catCfg(name){
   const v = FACT_CATS[name];
-  const base = {prompt:'', mode:'subjects', cta:'', collection:''};
+  const base = {prompt:'', mode:'subjects', cta:'', collection:'', angles:'', style:'', tone:''};
   if(v && typeof v === 'object') return Object.assign(base, v);
   return Object.assign(base, {prompt: String(v||'')});
 }
@@ -3793,10 +4071,11 @@ function ledgerHas(subject){
 /* `alt` is the name the writer actually came back with. The picker checks one name
    against the ledger and the writer often returns a different one for the same story —
    recording only the second left the first free to be suggested again next time. */
-async function ledgerAdd(subject, title, cat, alt){
+async function ledgerAdd(subject, title, cat, alt, angle){
   if(!subject || ledgerHas(subject)) return;
   const entry = {subject, title: title||'', cat: cat||'', date: Date.now()};
   if(alt && ledgerKey(alt) !== ledgerKey(subject)) entry.alt = alt;
+  if(angle) entry.angle = angle;
   LEDGER.push(entry);
   await saveLedger();
 }
@@ -3911,6 +4190,260 @@ picks.map((p,i)=>(i+1)+'. '+p.t).join('\n') + '\n' +
     if(out.length < n) $('factStatus').textContent = 'writing hooks… ' + out.length + ' of ' + n;
   }
   return out.slice(0, n);
+}
+
+/* ==================== Mode D — angle rotation (the dating account) ====================
+   A facts category asks one question ("what happened?") and every carousel answers it
+   the same way. A dating account cannot work like that: ten wild break-up stories in a
+   row is exhausting, ten lists of openers in a row is wallpaper. So this category
+   carries a rotation of ANGLES, each with its own brief, its own cover rule and its own
+   shape, and a run is dealt across them. The rotation pointer is persisted, so the next
+   run continues where the last one stopped rather than opening on the same angle again.
+
+   Two shapes only, because the layout only has two: `story` unfolds one beat per slide
+   and lands on a turn; `list` promises a number on the cover and delivers exactly that
+   many points. Everything else — voice, truth rules, what a photograph may contain —
+   is shared, so the account reads as one account. */
+const ANGLE_SETS = {
+  pickuplines: [
+    {key:'saga', kind:'story',
+     label:'a love story that ended up on the record',
+     brief:'A real, documented relationship story with a genuine turn in it — a court case, a reported news '+
+       'story, a published letter, a marriage that changed a law, an elopement that became a scandal, two '+
+       'people who met in circumstances nobody would believe. It must be verifiable: reported, recorded, '+
+       'written down. Range across centuries and countries; not only American, not only famous.',
+     cover:'The single most unbelievable true detail, stated flatly, holding the answer back.',
+     close:'The last slide says what happened to them afterwards.'},
+
+    {key:'openers', kind:'list',
+     label:'the actual words to send',
+     brief:'Openers, replies and questions a reader could send tonight, quoted verbatim so they can be '+
+       'copied straight out of the slide. Each one is warm, specific and honest — it works by being '+
+       'interesting and easy to answer, never by pressure, negging, false urgency or pretending to be '+
+       'something you are not. Ground each in why it works: an easy reply, a shared specific, humour, '+
+       'a real question rather than a compliment.',
+     cover:'Promises a count and says what the lines are FOR — a first message, a dry chat, a reply to "hey".',
+     close:'The last slide invites the reader to say which one they would actually send.'},
+
+    {key:'breakup', kind:'story',
+     label:'the break-up that became public record',
+     brief:'A documented ending: a divorce that made law or headlines, a public betrayal with a paper trail, '+
+       'a separation whose consequences outlived both people. The drama has to be in what is established, '+
+       'not in what is rumoured. Say plainly where an account is disputed.',
+     cover:'The consequence first, the cause held back.',
+     close:'The last slide is the aftermath — what it cost, changed or set in motion.'},
+
+    {key:'takes', kind:'list',
+     label:'the take that starts an argument in the comments',
+     brief:'Strong, genuinely defensible opinions about modern dating and relationships — the kind readers '+
+       'split over. Each take is stated in one sentence and then argued in two, with the reasoning that makes '+
+       'it more than a slogan. They are opinions and the deck says so. Never contempt for a group of people, '+
+       'never a take that boils down to blaming one gender.',
+     cover:'States the most contested take in the deck, or promises the count of them.',
+     close:'The last slide asks the reader which one they disagree with.'},
+
+    {key:'styles', kind:'list',
+     label:'how people actually do relationships',
+     brief:'Real relationship structures and customs, described the way a reporter would: polyamory and its '+
+       'working agreements, relationship anarchy, living apart together, commuter marriages, the Mosuo '+
+       'walking marriage, Boston marriages, arranged marriages that became love matches, long-distance rules '+
+       'people actually keep. What it is, how it runs day to day, what the people in it say is hard. '+
+       'Curious and non-judgemental — never held up as strange, never sold as better.',
+     cover:'Promises a count of ways people do it that the reader has probably never considered.',
+     close:'The last slide asks which one the reader could actually live with.'},
+
+    {key:'research', kind:'list',
+     label:'what the studies actually found',
+     brief:'Published research on attraction and long relationships, reported accurately: Gottman on the '+
+       'four horsemen and on turning towards a partner\'s bids, Aron\'s 36 questions, what speed-dating '+
+       'studies found about humour and eye contact, mere exposure, the difference between what people say '+
+       'they want and who they choose. Name what was found and, where it matters, the limit — sample, '+
+       'setting, or that it is correlation. Never dress a finding up as a rule.',
+     cover:'Leads with the most counter-intuitive finding, or promises the count of them.',
+     close:'The last slide gives the reader one thing to try tonight, drawn from the research.'},
+
+    {key:'reunion', kind:'story',
+     label:'found each other again',
+     brief:'A documented reunion: letters delivered decades late, couples separated by war, migration, '+
+       'adoption or a lost address who found each other again, a message answered years after it was sent. '+
+       'Verifiable and reported. The emotion is in the specifics — the date, the distance, the exact words — '+
+       'not in adjectives.',
+     cover:'The gap first: the years, the distance, the odds.',
+     close:'The last slide is the moment they met again, and what they said.'},
+
+    {key:'patterns', kind:'list',
+     label:'the pattern nobody names out loud',
+     brief:'Named behaviours and dynamics with evidence behind them, described so a reader recognises it in '+
+       'their own life: contempt as the strongest predictor of a split, the bid for connection and what '+
+       'ignoring it does, ghostlighting, the difference between a boundary and an ultimatum, the fights that '+
+       'are never about the dishes. Observational and useful. It never diagnoses anyone, never labels a '+
+       'partner with a disorder, and never tells a reader to leave.',
+     cover:'Names the count of patterns and promises the reader will recognise one.',
+     close:'The last slide asks which one the reader has lived through.'}
+  ]
+};
+const angleSet = name => ANGLE_SETS[name] || [];
+const angleIn = (name, key) => angleSet(name).find(a => a.key === key) || null;
+
+/* Deal a run across the rotation, continuing from where the last run stopped, then
+   shuffle so the batch list is not eight decks of one angle followed by eight of the
+   next. Ten carousels over eight angles means two angles come round twice — which two
+   moves every run. */
+function dealAngles(setName, n){
+  const list = angleSet(setName);
+  if(!list.length) return [];
+  const key = 'cb.angle.' + setName;
+  let at = parseInt(localStorage.getItem(key) || '0', 10);
+  if(!Number.isFinite(at) || at < 0) at = 0;
+  const out = [];
+  for(let i = 0; i < n; i++) out.push(list[(at + i) % list.length]);
+  localStorage.setItem(key, String((at + n) % list.length));
+  for(let i = out.length-1; i > 0; i--){ const j = Math.floor(Math.random()*(i+1)); [out[i],out[j]] = [out[j],out[i]]; }
+  return out;
+}
+
+/* One call per angle, not one per carousel: asking for six break-up stories in a single
+   reply is what stops the model handing you the same story six times over. Rounds top
+   up whatever the ledger rejected, exactly as the subject picker does. */
+async function pickAngleIdeas(cat, seed, angles){
+  const byKey = {};
+  angles.forEach(a=>{ (byKey[a.key] = byKey[a.key] || {angle:a, want:0}).want++; });
+  const ideas = [];
+  await runQueue(Object.values(byKey), writeConc(), async ({angle, want}) => {
+    const got = [];
+    let dry = 0;
+    for(let round = 0; got.length < want && round < 4 && dry < 2; round++){
+      const need = want - got.length;
+      const ask = Math.min(20, need + Math.ceil(need*0.6) + 2);
+      // what this angle has already covered, then everything else the account has —
+      // a break-up story must not repeat a saga carousel either
+      const mine = LEDGER.filter(e => e.cat === cat && e.angle === angle.key).slice(-80).map(e=>e.subject);
+      const others = LEDGER.filter(e => e.cat === cat && e.angle !== angle.key).slice(-80).map(e=>e.subject);
+      const avoid = mine.concat(others, got.map(g=>g.subject), ideas.map(g=>g.subject));
+      const sys =
+'You are planning posts for a large dating and relationships account. Pick '+ask+' ideas, each of which becomes its own carousel.\n\n' +
+'THE ACCOUNT:\n' + catPrompt(cat) + '\n\n' +
+'THIS BATCH IS ONE ANGLE ONLY — '+angle.label.toUpperCase()+':\n' + angle.brief + '\n' +
+(seed ? '\nFOCUS: '+seed+'\n' : '') +
+'\nRULES:\n' +
+(angle.kind === 'story'
+  ? '- Every idea is one real, documented story that a reader could look up. Reported, recorded or published — not a rumour, not a "they say", not something you are reconstructing from a vibe.\n' +
+    '- Each carries one specific turn: the detail that makes someone stop scrolling. State it in the claim.\n' +
+    '- Vary era, country and kind of story. No two from the same couple, the same case or the same decade twice over.\n' +
+    '- Do not choose a story about a private individual who did not put it in public themselves. Public record, public figures, or people who told it publicly.\n'
+  : '- Every idea is one carousel-sized list with a clear promise. The "subject" is what the list is about; the "claim" is the cover headline itself.\n' +
+    '- The cover headline must open with a count written as a digit, between 4 and 9, and the carousel will carry exactly that many points — so promise a number you can genuinely fill with distinct points.\n' +
+    '- Each idea a different territory: not five variations on first messages.\n') +
+'- Nothing that shames a group of people, nothing sexually explicit, no manipulation or pressure tactics, no diagnosing anyone, no advice to leave or stay.\n' +
+'- Written for someone scrolling: concrete, specific, under about 14 words, no emoji, no hashtags, no quotation marks around the line.\n' +
+(avoid.length ? '- ALREADY POSTED. Do not choose these or anything close to them:\n' + avoid.map(x=>'  · '+x).join('\n') + '\n' : '') +
+'\nReturn ONLY a JSON array of exactly '+ask+' objects: [{"subject":"short canonical name for this post","claim":"the cover headline, under 14 words"}]';
+      let arr = [];
+      try{
+        const r = await callModel({model: cfg().textModel, parts:[{type:'text', text:sys}]});
+        S.lastRaw = r.text;
+        let j = extractJSON(r.text, true);
+        if(!Array.isArray(j) && j && typeof j === 'object') j = Object.values(j).find(v=>Array.isArray(v)) || [];
+        arr = (j||[]).map(o => typeof o === 'string' ? {subject:o, claim:o} : o).filter(o=>o && o.subject);
+      }catch(e){
+        if(!got.length) log('"'+angle.label+'" ideas failed: '+apiError(e),'w');
+        break;
+      }
+      let added = 0;
+      for(const o of arr){
+        const k = ledgerKey(o.subject);
+        if(!k || ledgerHas(o.subject)) continue;
+        if(ideas.concat(got).some(prev => sameSubject(prev.subject, o.subject))) continue;
+        got.push({angle: angle.key, kind: angle.kind, subject: String(o.subject),
+                  hook: String(o.claim || o.subject)});
+        added++;
+        if(got.length >= want) break;
+      }
+      dry = added ? 0 : dry + 1;
+    }
+    got.forEach(g=>ideas.push(g));
+    $('factStatus').textContent = 'planning posts… ' + ideas.length + ' of ' + angles.length;
+  });
+  // back into rotation order-ish, so a batch is not four of one angle in a row
+  const buckets = {};
+  ideas.forEach(i=>{ (buckets[i.angle] = buckets[i.angle] || []).push(i); });
+  const keys = Object.keys(buckets), out = [];
+  for(let i = 0; out.length < ideas.length; i++){
+    const list = buckets[keys[i % keys.length]];
+    if(list && list.length) out.push(list.shift());
+    if(i > ideas.length * keys.length + 8) break;      // nothing left to interleave
+  }
+  return out;
+}
+
+/* One brief for the whole account, so every carousel sounds like the same page, with
+   the angle's own instructions dropped into the middle of it. */
+function pickupDeckPrompt(cat, deck){
+  const p = S.profile;
+  const angle = angleIn(catCfg(cat).angles, deck.angle) || {kind:'story', label:'', brief:'', cover:'', close:''};
+  const list = angle.kind === 'list';
+  const items = list ? Math.max(3, deck.n - 2) : 0;      // cover + points + the closing ask
+  const name = brandName(p) || 'the account';
+  return (
+'Write a '+deck.n+'-slide carousel for '+name+', a large dating and relationships account.\n\n' +
+'THE POST: '+deck.subject+'\n' +
+'THE COVER HEADLINE, verbatim or lightly tightened: "'+deck.hook+'"\n\n' +
+'THE ACCOUNT:\n' + catPrompt(cat) + '\n\n' +
+'THIS POST\'S ANGLE — '+angle.label.toUpperCase()+':\n' + angle.brief + '\n\n' +
+
+'WHAT IS TRUE — this account gets quoted and screenshotted, so accuracy is the product:\n' +
+(list
+ ? '- Every point must be something a reader could check, or an opinion the deck openly owns as an opinion.\n' +
+   '- Never invent a study, a statistic, a date or a name. If you are not confident of a number, write the sentence without it.\n' +
+   '- Where you cite research, say what was actually found and, if it matters, the limit of it — the setting, the sample, or that it is a correlation.\n'
+ : '- Every beat must be documented. Nothing invented, nothing exaggerated, nothing "commonly said".\n' +
+   '- Never invent a quotation, a date or a number. If the famous version of this story is disputed, write what is actually established instead.\n' +
+   '- Name the people only as the public record names them.\n') +
+'\nWHAT THIS ACCOUNT WILL NOT POST, whatever the angle:\n' +
+'- Nothing that demeans a group of people, and no take that reduces to blaming one gender.\n' +
+'- No tactic that works by deceiving, pressuring, wearing down or manipulating another person. If a line only works on someone who has not consented to be worked on, it does not go in.\n' +
+'- Nothing sexually explicit, nothing about anyone under 18.\n' +
+'- No diagnosing, no therapy, no "your partner is a narcissist", no telling the reader to leave or to stay.\n' +
+'- No shaming the reader. The voice is on their side.\n\n' +
+
+'STRUCTURE:\n' +
+'- Slide 1 is the cover: the headline only, 6 to 12 words, no body text. ' + angle.cover + '\n' +
+(list
+ ? '- THE HEADLINE PROMISES '+items+' POINTS. Deliver exactly '+items+', one per slide, slides 2 to '+(items+1)+'. Not one more, not one fewer. A list headlined '+items+' that carries a different number is broken.\n' +
+   '- Slide '+(items+2)+' is one extra CLOSING slide beyond the '+items+' points. It is not another point.\n' +
+   '- Each point has a title of 2 to 6 words and a body of 2 to 3 short sentences, about 40 words at most.\n' +
+   (deck.angle === 'openers'
+     ? '- Each body opens with the line itself in double quotation marks, exactly as it would be sent, then one sentence on why it works.\n'
+     : '- Each body says the thing, then the reason it is true. The reason is the half people screenshot.\n')
+ : '- Slide 2 opens it: a title of 2 to 4 words and a body that says who these people were and when.\n' +
+   '- Each middle slide carries one beat of the story, in order, with a title of 2 to 6 words and a body of 2 to 3 short sentences, about 40 words at most.\n' +
+   '- The story has to turn. One slide in the second half is the moment everything changes, and it should land hard because of what it says, not how it is written.\n') +
+'- The last slide' + (list ? ' (the closing one)' : '') + ': ' + angle.close + '\n' +
+'- Voice: plain, warm and blunt. Short declarative sentences. No hype words, no "you won\'t believe", no emoji, no hashtags in the slides, no exclamation marks.\n\n' +
+
+'THE SWIPE LINE — return it as "swipe":\n' +
+'- One short line that sits under the cover headline and makes the swipe worth it. Under 10 words, specific to THIS post, never "swipe to find out more".\n' +
+'- It says what the reader gets, or teases the turn. Examples of the shape, not the words: "The last one is the reason they split." / "Number 4 is the one people argue about."\n\n' +
+
+'IMAGES — "scene" describes a photograph and nothing else: what is in frame, who is doing what, the setting, the light. It never asks for words, letters, numbers, logos, screens with text, or UI.\n' +
+'- Photograph PEOPLE, in a real moment, doing something. Two hands on a table and one pulling away. Someone reading a phone on a night bus. A crowded bar and one person looking past everyone. A couple arguing in a car park with the engine still running.\n' +
+'- Anchor every scene to its own slide. It is the moment that body describes, and it should be unusable on any other slide.\n' +
+'- No two slides may share a setting or a framing. If one is indoors, the next is not.\n' +
+'- Do not describe the face of a specific real named person: write them from behind, at a distance, in silhouette, hands only, or out of focus. Unnamed people are photographed directly and in full.\n' +
+'- Banned as lazy: an empty room, a bed nobody is in, two silhouettes at sunset, a heart drawn in anything, a couple laughing at nothing, rose petals, a single ring on a table.\n' +
+'- The COVER has to stop a thumb: the most arresting, most human, most specific frame in the whole deck, close and mid-moment with strong directional light.\n' +
+'- Keep one region of each frame calm in tone, because the caption sits over it.\n' +
+'Style is '+(p.imagery||'candid modern photograph')+' — a photograph someone could have taken this year.\n\n' +
+
+'CAPTION for Instagram:\n' +
+'- Exactly three paragraphs separated by blank lines. The first lands the hook, the second gives the detail, the third closes and asks one real question the comments can answer.\n' +
+'- Then one final line of 3 to 5 hashtags, most niche first. No hashtags inside the paragraphs.\n\n' +
+
+'Return ONLY JSON:\n' +
+'{"subject":"short canonical name for this post","swipe":"...",' +
+'"slides":[{"kind":"hook","title":"...","scene":"..."},{"kind":"slide","title":"...","body":"...","scene":"..."}],' +
+'"caption":"para1\\n\\npara2\\n\\npara3\\n\\n#niche #mid #broad"}'
+  );
 }
 
 /* The counting-hook carousel: the facts look and the facts truth rules, but the deck
@@ -4083,8 +4616,10 @@ const mapDeckSlides = (arr, deck, label) => (Array.isArray(arr) ? arr : []).map(
 /* One fact deck, written — subject-driven or hook-driven, decided by the deck itself so
    a deck left half-finished can be picked up later without the run around it. */
 async function writeFactDeck(deck){
-  const cat = deck.cat, byHook = !!deck.byHook;
-  const prompt = byHook
+  const cat = deck.cat, byHook = !!deck.byHook, byAngle = !!deck.angle;
+  const prompt = byAngle
+    ? pickupDeckPrompt(cat, deck)
+    : byHook
     ? factHookDeckPrompt(cat, deck.hook, deck.n - 1, deck.tone, deck.cta)
     : factDeckPrompt(cat, {subject:deck.subject, claim:deck.hook}, deck.n, deck.tone);
   const r = await callModel({model: cfg().textModel, parts:[{type:'text', text: prompt}]});
@@ -4094,6 +4629,14 @@ async function writeFactDeck(deck){
   deck.slides = mapDeckSlides(j.slides, deck, String(deck.subject||deck.hook).slice(0,28));
   applySlideTones(deck);
   if(!deck.slides.length) throw new Error('no slides in the reply');
+  if(byAngle){
+    // the promise under the headline is the deck's, and the cover is what draws it
+    deck.swipe = String(j.swipe||'').trim().replace(/^["']|["']$/g,'').slice(0, 90);
+    const cover = deck.slides.find(s=>s.kind === 'hook');
+    if(cover) cover.swipe = deck.swipe;
+    // a headline that counts has to deliver its count, the same as a hook deck does
+    if(deck.kind === 'list') deck.slides = trimToPromise(deck.hook, deck.slides, 1);   // the closing ask is allowed
+  }
   if(byHook){
     // the headline promises a count, so the deck delivers exactly that many
     deck.slides = trimToPromise(deck.hook, deck.slides);
@@ -4102,7 +4645,12 @@ async function writeFactDeck(deck){
   }
   deck.caption = String(j.caption||'');
   deck.status = 'written';
-  if(byHook){
+  if(byAngle){
+    const asked = deck.subject;
+    deck.subject = String(j.subject || deck.subject);
+    deck.hook = deck.slides[0].title || deck.hook;
+    await ledgerAdd(asked, deck.slides[0].title, cat, deck.subject, deck.angle);
+  } else if(byHook){
     await ledgerAdd(deck.hook, deck.slides[0].title, cat);
   } else {
     deck.hook = deck.slides[0].title || deck.hook;
@@ -4120,6 +4668,7 @@ async function runFacts(opts){
   const n = +$('factCount').value, slides = +$('factSlides').value;
   const seed = $('factSeed').value.trim();
   const byHook = conf.mode === 'hooks';
+  const byAngle = conf.mode === 'angles' && angleSet(conf.angles).length > 0;
   if(!conf.prompt.trim()){
     $('factCatName').textContent = cat;
     $('factPromptText').value = '';
@@ -4129,12 +4678,19 @@ async function runFacts(opts){
   }
   FACT_STOP = false;
   $('factStop').classList.remove('hide'); $('runFacts').disabled = true;
-  $('factStatus').textContent = byHook ? 'writing hooks…' : 'picking subjects…';
+  $('factStatus').textContent = byHook ? 'writing hooks…' : byAngle ? 'planning posts…' : 'picking subjects…';
 
-  // the look is part of the format — make sure a documentary style is active
-  if((S.profile.caption_treatment||'') !== 'documentary'){
-    const i = PRESETS.findIndex(x=>x.caption_treatment === 'documentary');
-    if(i >= 0){ applyStyle('preset:'+i, PRESETS[i]); await fontReady(S.profile); }
+  /* The look is part of the format. A category may name the style it is drawn in —
+     the dating account is a different account wearing a different skin — and anything
+     that names none gets the documentary layout it always had. */
+  const wantStyle = conf.style
+    ? PRESETS.findIndex(x => x.name === conf.style)
+    : (S.profile.caption_treatment||'') !== 'documentary'
+      ? PRESETS.findIndex(x => x.caption_treatment === 'documentary')
+      : -1;
+  if(wantStyle >= 0 && S.profile.name !== PRESETS[wantStyle].name){
+    applyStyle('preset:'+wantStyle, PRESETS[wantStyle]);
+    await fontReady(S.profile);
   }
 
   try{
@@ -4154,7 +4710,19 @@ async function runFacts(opts){
     }
 
     let newDecks;
-    if(byHook){
+    if(byAngle){
+      const dealt = dealAngles(conf.angles, n);
+      const ideas = await pickAngleIdeas(cat, seed, dealt);
+      if(!ideas.length) throw new Error('no fresh post ideas came back — try a focus, or clear some covered subjects');
+      if(ideas.length < n) log('asked for '+n+' posts and found '+ideas.length+' that have not been done before','w');
+      const tones = conf.tone ? ideas.map(()=>conf.tone) : deckTones(ideas.length);
+      newDecks = ideas.map((idea,i)=>({id:uid(), hook:idea.hook, subject:idea.subject, cat,
+        angle:idea.angle, kind:idea.kind, tone:tones[i],
+        // a list headline sets its own length; a story runs to whatever the run asked for
+        n: idea.kind === 'list' ? (hookItemCount(idea.hook) ? hookItemCount(idea.hook) + 2 : slides) : slides,
+        collection: conf.collection || '',
+        slides:[], caption:'', status:'queued', error:''}));
+    } else if(byHook){
       const hooks = opts.hooks;
       const tones = deckTones(hooks.length);
       newDecks = hooks.map((h,i)=>({id:uid(), hook:h, subject:h, cat, tone:tones[i], byHook:true,
@@ -4349,6 +4917,7 @@ const PROFILE_FIELDS = [
   ['caption_treatment','select:outlined,label-boxes,plain,documentary'],['font_family','text'],['font_weight','number'],
   ['body_font_family','text'],['uppercase','check'],['scrim_pct','number'],['scrim_alpha','number'],
   ['bottom_pad_pct','number'],['title_line_em','number'],['body_line_em','number'],['divider','check'],['logo_scale_pct','number'],
+  ['brand_bar','check'],['brand_name','text'],['brand_handle','text'],['brand_verified','check'],['cover_swipe','check'],['swipe_line','text'],
   ['body_weight','number'],['italic','check'],['text_color','color'],['stroke_color','color'],['stroke_width','number'],
   ['text_shadow','number'],['shadow_color','color'],['label_bg','color'],
   ['title_size_pct','number'],['body_size_pct','number'],['title_gap_em','number'],

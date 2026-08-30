@@ -155,6 +155,47 @@ const r = await p.evaluate(async ()=>{
   out.promptsDiffer = lp !== sp && sp.includes('documented') && lp.includes('double quotation marks');
   out.promptNoText = sp.includes('never asks for words');
 
+  // --- the review round trip: planned lines go out tagged and come back as decks
+  const set = conf.angles;
+  const planned = [{angle:'saga', kind:'story', hook:'They met twice, forty years apart'},
+                   {angle:'openers', kind:'list', hook:'5 openers that actually get a reply'}];
+  const lines = ideaLines(planned);
+  out.linesTagged = lines === '[saga] They met twice, forty years apart\n[openers] 5 openers that actually get a reply';
+  const back = parseIdeaLines(set, lines);
+  out.roundTrip = back.length === 2 && back[0].angle === 'saga' && back[0].kind === 'story'
+    && back[1].angle === 'openers' && back[1].kind === 'list'
+    && back[0].hook === 'They met twice, forty years apart';
+  // an edited headline keeps its tag out of the hook
+  out.tagStripped = !back[1].hook.includes('[');
+  // a line typed by hand is read by its own shape, and still lands on a real angle
+  const hand = parseIdeaLines(set, '7 things nobody tells you about long distance\nShe waited nineteen years for a reply');
+  out.untaggedList  = hand[0].kind === 'list'  && !!angleIn(set, hand[0].angle);
+  out.untaggedStory = hand[1].kind === 'story' && !!angleIn(set, hand[1].angle);
+  // a tag nobody recognises is not trusted to name a shape
+  out.badTagSafe = (()=>{ const x = parseIdeaLines(set, '[nonsense] 4 ways people do it')[0];
+                          return !!angleIn(set, x.angle) && x.kind === 'list' && x.hook === '4 ways people do it'; })();
+  out.blankLinesDropped = parseIdeaLines(set, '\n  \n[saga] One story\n\n').length === 1;
+
+  // --- every angle can fall back to a swipe line of its own
+  out.everyAngleHasSwipe = angleSet(set).every(a => a.swipe && a.swipe.length > 12);
+  out.swipeFallsBack = swipeLine({kind:'hook'}, S.profile) === S.profile.swipe_line;
+  out.swipeFromDeck = swipeLine(deck.slides[0], S.profile) === 'The last one is why they split.';
+
+  // --- the panel knows which review it is showing
+  const modeFor = c => { $('factCat').value = c; $('factCat').onchange(); return {
+    run: $('runFacts').textContent, title: $('factHookTitle').textContent, create: $('factHookCreate').textContent }; };
+  const pu = modeFor('Pickuplines'), hist = modeFor('History'), pep = modeFor('Peptides (Peptorium)');
+  out.panelAngles = pu.run === 'Plan posts' && pu.title === 'Posts for review' && pu.create === 'Write these posts';
+  out.panelPlain  = hist.run === 'Generate';
+  out.panelHooks  = pep.run === 'Write hooks' && pep.title === 'Hooks for review';
+
+  // --- the spread, so a lopsided rotation is visible rather than guessed at
+  LEDGER = [{subject:'a', cat:'Pickuplines', angle:'saga'}, {subject:'b', cat:'Pickuplines', angle:'saga'},
+            {subject:'c', cat:'Pickuplines', angle:'takes'}, {subject:'d', cat:'History'}];
+  const tally = angleTally('Pickuplines');
+  out.tallyCounts = /saga 2/.test(tally) && /takes 1/.test(tally) && /openers 0/.test(tally);
+  out.tallyIgnoresOthers = angleTally('History') === '';
+
   return out;
 });
 await b.close();
@@ -166,7 +207,10 @@ const want = {
   catMode:'angles', catStyle:'Pickuplines', catTone:'colour', angleCount:8, angleKinds:'list,story',
   anglesDocumented:true, dealtAll:true, dealtSpread:true, rotationMoves:true,
   listKeepsCloser:true, listTrimsExtra:true, listPromptCounts:true, promptsAskSwipe:true,
-  promptsGuard:true, promptsDiffer:true, promptNoText:true
+  promptsGuard:true, promptsDiffer:true, promptNoText:true,
+  linesTagged:true, roundTrip:true, tagStripped:true, untaggedList:true, untaggedStory:true,
+  badTagSafe:true, blankLinesDropped:true, everyAngleHasSwipe:true, swipeFallsBack:true, swipeFromDeck:true,
+  panelAngles:true, panelPlain:true, panelHooks:true, tallyCounts:true, tallyIgnoresOthers:true
 };
 let bad = 0;
 for(const [k,v] of Object.entries(want)){

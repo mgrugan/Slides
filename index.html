@@ -450,7 +450,7 @@ details summary:hover{color:var(--fg)}
       <div class="hintline">Each category brings its own style and its own logo · subjects already covered are never repeated</div>
 
       <div id="factHookPanel" class="panel hide" style="margin-top:10px">
-        <div class="row" style="margin-bottom:8px"><strong style="font-size:13px">Hooks for review</strong>
+        <div class="row" style="margin-bottom:8px"><strong style="font-size:13px" id="factHookTitle">Hooks for review</strong>
           <span class="tiny muted" id="factHookNote"></span></div>
         <textarea id="factHookText" rows="8" placeholder="One hook per line — each becomes its own carousel."></textarea>
         <div class="row" style="margin-top:10px">
@@ -459,7 +459,7 @@ details summary:hover{color:var(--fg)}
           <div class="spacer"></div>
           <button id="factHookCancel" class="btn sm quiet">Cancel</button>
         </div>
-        <div class="tiny" style="color:var(--faint);margin-top:6px">Edit or delete any line before creating. A leading number sets that carousel's length.</div>
+        <div class="tiny" id="factHookHint" style="color:var(--faint);margin-top:6px">Edit or delete any line before creating. A leading number sets that carousel's length.</div>
       </div>
 
       <div class="panel" style="margin-top:10px">
@@ -496,6 +496,7 @@ details summary:hover{color:var(--fg)}
 
       <div id="factLedgerPanel" class="panel hide">
         <div class="row"><strong style="font-size:13px">Covered subjects</strong>
+          <span class="tiny muted hide" id="factAngleSpread"></span>
           <div class="spacer"></div>
           <button id="ledgerExport" class="btn sm quiet">Export</button>
           <button id="ledgerImport" class="btn sm quiet">Import</button>
@@ -3843,10 +3844,11 @@ function renderBatchRow(deck){
   const row = document.querySelector('[data-deck="'+deck.id+'"]');
   if(!row || i < 0) return;
   const imgs = deck.slides.filter(s=>s.img).length;
-  const state = deck.status === 'failed' ? deck.error || 'failed'
+  const state = (deck.angle ? deck.angle + ' · ' : '') +
+    (deck.status === 'failed' ? deck.error || 'failed'
     : deck.status === 'writing' ? 'writing…'
     : deck.slides.length ? deck.slides.length + ' slides · ' + imgs + '/' + deck.slides.length + ' images'
-    : 'queued';
+    : 'queued');
   row.innerHTML =
     '<canvas></canvas>'+
     '<div style="min-width:0"><div class="nm" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+
@@ -4079,16 +4081,33 @@ async function ledgerAdd(subject, title, cat, alt, angle){
   LEDGER.push(entry);
   await saveLedger();
 }
+/* How much of each angle the current category has already had. A rotation that is
+   quietly lopsided — four sagas and no openers — is invisible in a list of subjects,
+   and it is the thing that makes a page start repeating itself. */
+function angleTally(cat){
+  const set = angleSet(catCfg(cat).angles);
+  if(!set.length) return '';
+  const counts = {};
+  LEDGER.forEach(e=>{ if(e.cat === cat && e.angle) counts[e.angle] = (counts[e.angle]||0) + 1; });
+  return set.map(a => a.key + ' ' + (counts[a.key] || 0)).join(' · ');
+}
 function renderLedger(){
   const n = LEDGER.length;
   const el = $('factLedgerCount');
   if(el) el.textContent = n ? n + ' covered' : 'nothing covered yet';
+  const spread = $('factAngleSpread');
+  if(spread){
+    const sel = $('factCat');
+    const tally = sel ? angleTally(sel.value) : '';
+    spread.textContent = tally;
+    spread.classList.toggle('hide', !tally);
+  }
   const list = $('ledgerList'); if(!list) return;
   list.innerHTML = '';
   LEDGER.slice().reverse().slice(0,120).forEach(e=>{
     const d = document.createElement('div');
     d.className = 'tiny'; d.style.cssText = 'padding:5px 0;border-bottom:1px solid var(--line);color:var(--muted)';
-    d.textContent = e.subject + (e.cat ? '  ·  '+e.cat : '');
+    d.textContent = e.subject + (e.cat ? '  ·  '+e.cat : '') + (e.angle ? '  ·  '+e.angle : '');
     list.appendChild(d);
   });
 }
@@ -4213,7 +4232,8 @@ const ANGLE_SETS = {
        'people who met in circumstances nobody would believe. It must be verifiable: reported, recorded, '+
        'written down. Range across centuries and countries; not only American, not only famous.',
      cover:'The single most unbelievable true detail, stated flatly, holding the answer back.',
-     close:'The last slide says what happened to them afterwards.'},
+     close:'The last slide says what happened to them afterwards.',
+     swipe:'The last slide is what happened to them.'},
 
     {key:'openers', kind:'list',
      label:'the actual words to send',
@@ -4223,7 +4243,8 @@ const ANGLE_SETS = {
        'something you are not. Ground each in why it works: an easy reply, a shared specific, humour, '+
        'a real question rather than a compliment.',
      cover:'Promises a count and says what the lines are FOR — a first message, a dry chat, a reply to "hey".',
-     close:'The last slide invites the reader to say which one they would actually send.'},
+     close:'The last slide invites the reader to say which one they would actually send.',
+     swipe:'Number 3 is the one that actually gets replies.'},
 
     {key:'breakup', kind:'story',
      label:'the break-up that became public record',
@@ -4231,7 +4252,8 @@ const ANGLE_SETS = {
        'a separation whose consequences outlived both people. The drama has to be in what is established, '+
        'not in what is rumoured. Say plainly where an account is disputed.',
      cover:'The consequence first, the cause held back.',
-     close:'The last slide is the aftermath — what it cost, changed or set in motion.'},
+     close:'The last slide is the aftermath — what it cost, changed or set in motion.',
+     swipe:'It cost more than either of them expected.'},
 
     {key:'takes', kind:'list',
      label:'the take that starts an argument in the comments',
@@ -4240,7 +4262,8 @@ const ANGLE_SETS = {
        'it more than a slogan. They are opinions and the deck says so. Never contempt for a group of people, '+
        'never a take that boils down to blaming one gender.',
      cover:'States the most contested take in the deck, or promises the count of them.',
-     close:'The last slide asks the reader which one they disagree with.'},
+     close:'The last slide asks the reader which one they disagree with.',
+     swipe:'You will disagree with at least one of these.'},
 
     {key:'styles', kind:'list',
      label:'how people actually do relationships',
@@ -4250,7 +4273,8 @@ const ANGLE_SETS = {
        'people actually keep. What it is, how it runs day to day, what the people in it say is hard. '+
        'Curious and non-judgemental — never held up as strange, never sold as better.',
      cover:'Promises a count of ways people do it that the reader has probably never considered.',
-     close:'The last slide asks which one the reader could actually live with.'},
+     close:'The last slide asks which one the reader could actually live with.',
+     swipe:'The third one is more common than you think.'},
 
     {key:'research', kind:'list',
      label:'what the studies actually found',
@@ -4260,7 +4284,8 @@ const ANGLE_SETS = {
        'they want and who they choose. Name what was found and, where it matters, the limit — sample, '+
        'setting, or that it is correlation. Never dress a finding up as a rule.',
      cover:'Leads with the most counter-intuitive finding, or promises the count of them.',
-     close:'The last slide gives the reader one thing to try tonight, drawn from the research.'},
+     close:'The last slide gives the reader one thing to try tonight, drawn from the research.',
+     swipe:'The last one you can try tonight.'},
 
     {key:'reunion', kind:'story',
      label:'found each other again',
@@ -4269,7 +4294,8 @@ const ANGLE_SETS = {
        'Verifiable and reported. The emotion is in the specifics — the date, the distance, the exact words — '+
        'not in adjectives.',
      cover:'The gap first: the years, the distance, the odds.',
-     close:'The last slide is the moment they met again, and what they said.'},
+     close:'The last slide is the moment they met again, and what they said.',
+     swipe:'What they said first is on the last slide.'},
 
     {key:'patterns', kind:'list',
      label:'the pattern nobody names out loud',
@@ -4279,7 +4305,8 @@ const ANGLE_SETS = {
        'are never about the dishes. Observational and useful. It never diagnoses anyone, never labels a '+
        'partner with a disorder, and never tells a reader to leave.',
      cover:'Names the count of patterns and promises the reader will recognise one.',
-     close:'The last slide asks which one the reader has lived through.'}
+     close:'The last slide asks which one the reader has lived through.',
+     swipe:'You have lived through at least one of these.'}
   ]
 };
 const angleSet = name => ANGLE_SETS[name] || [];
@@ -4374,6 +4401,36 @@ async function pickAngleIdeas(cat, seed, angles){
     if(i > ideas.length * keys.length + 8) break;      // nothing left to interleave
   }
   return out;
+}
+
+/* A run of twenty carousels is twenty covers and a hundred and forty pictures, so the
+   headlines are read before any of it is paid for — the same review the client
+   categories get. The angle travels with each line in a tag, because the tag is what
+   decides the shape of the carousel, and a line typed by hand from scratch is read by
+   its own shape instead: a headline that opens with a count is a list, anything else
+   is a story. */
+/* The panel is plain text, so the canonical name each idea was picked as cannot ride
+   along in it. It is held here instead and re-attached to any line that came back
+   unedited — the ledger matches subjects, and a headline is a worse thing to match on
+   than the name of the story behind it. An edited line keeps its headline as its name,
+   which is the best that can be known about it. */
+let PLANNED = [];
+const ideaLines = ideas => ideas.map(i => '[' + i.angle + '] ' + i.hook).join('\n');
+function parseIdeaLines(setName, text){
+  const list = angleSet(setName);
+  const first = kind => (list.find(a => a.kind === kind) || list[0] || {key:''}).key;
+  const known = h => PLANNED.find(x => String(x.hook).trim().toLowerCase() === h.toLowerCase());
+  return String(text||'').split('\n').map(x=>x.trim()).filter(Boolean).map(line=>{
+    const m = /^\[\s*([A-Za-z-]+)\s*\]\s*(.+)$/.exec(line);
+    const tagged = m ? angleIn(setName, m[1].toLowerCase()) : null;
+    // A tag nobody recognises — a typo, or an angle since renamed — is still a tag, so
+    // it comes off the headline. It just does not get to choose the shape.
+    const hook = (m ? m[2] : line).trim();
+    const kind = tagged ? tagged.kind : (hookItemCount(hook) ? 'list' : 'story');
+    const was = known(hook);
+    return {angle: tagged ? tagged.key : was ? was.angle : first(kind), kind, hook,
+            subject: was ? was.subject : hook};
+  }).filter(x=>x.hook);
 }
 
 /* One brief for the whole account, so every carousel sounds like the same page, with
@@ -4631,7 +4688,8 @@ async function writeFactDeck(deck){
   if(!deck.slides.length) throw new Error('no slides in the reply');
   if(byAngle){
     // the promise under the headline is the deck's, and the cover is what draws it
-    deck.swipe = String(j.swipe||'').trim().replace(/^["']|["']$/g,'').slice(0, 90);
+    const fallback = (angleIn(catCfg(cat).angles, deck.angle) || {}).swipe || '';
+    deck.swipe = String(j.swipe||'').trim().replace(/^["']|["']$/g,'').slice(0, 90) || fallback;
     const cover = deck.slides.find(s=>s.kind === 'hook');
     if(cover) cover.swipe = deck.swipe;
     // a headline that counts has to deliver its count, the same as a hook deck does
@@ -4646,9 +4704,11 @@ async function writeFactDeck(deck){
   deck.caption = String(j.caption||'');
   deck.status = 'written';
   if(byAngle){
+    // The headline was approved in the review panel, so it stays the deck's identity —
+    // taking the writer's cover title instead threw away the line that was signed off,
+    // and with it the count a list carousel promises.
     const asked = deck.subject;
     deck.subject = String(j.subject || deck.subject);
-    deck.hook = deck.slides[0].title || deck.hook;
     await ledgerAdd(asked, deck.slides[0].title, cat, deck.subject, deck.angle);
   } else if(byHook){
     await ledgerAdd(deck.hook, deck.slides[0].title, cat);
@@ -4694,6 +4754,24 @@ async function runFacts(opts){
   }
 
   try{
+    /* Angle categories stop here the first time through, exactly as hook categories do:
+       the planned headlines go out for review, tagged with the angle each will be
+       written as, and nothing is written or generated until they come back. */
+    if(byAngle && !opts.ideas){
+      const dealt = dealAngles(conf.angles, n);
+      const ideas = await pickAngleIdeas(cat, seed, dealt);
+      if(!ideas.length) throw new Error('no fresh post ideas came back — try a focus, or clear some covered subjects');
+      if(ideas.length < n) log('asked for '+n+' posts and found '+ideas.length+' that have not been done before','w');
+      PLANNED = ideas;
+      $('factHookText').value = ideaLines(ideas);
+      $('factHookNote').textContent = ideas.length + ' · ' + cat;
+      $('factHookPanel').classList.remove('hide');
+      $('factStatus').textContent = '';
+      log(ideas.length+' posts planned across '+new Set(ideas.map(i=>i.angle)).size+
+          ' angles — read them, edit anything, then press Create','o');
+      $('factStop').classList.add('hide'); $('runFacts').disabled = false;
+      return;
+    }
     /* Hook categories stop here the first time through: the headlines go into the
        review panel and nothing is written until they come back approved. */
     if(byHook && !opts.hooks){
@@ -4711,10 +4789,7 @@ async function runFacts(opts){
 
     let newDecks;
     if(byAngle){
-      const dealt = dealAngles(conf.angles, n);
-      const ideas = await pickAngleIdeas(cat, seed, dealt);
-      if(!ideas.length) throw new Error('no fresh post ideas came back — try a focus, or clear some covered subjects');
-      if(ideas.length < n) log('asked for '+n+' posts and found '+ideas.length+' that have not been done before','w');
+      const ideas = opts.ideas;
       const tones = conf.tone ? ideas.map(()=>conf.tone) : deckTones(ideas.length);
       newDecks = ideas.map((idea,i)=>({id:uid(), hook:idea.hook, subject:idea.subject, cat,
         angle:idea.angle, kind:idea.kind, tone:tones[i],
@@ -4780,7 +4855,7 @@ async function runFacts(opts){
     renderBatch(); batchProgress(); autosave();
     $('factStatus').textContent = '';
     if(!FACT_STOP) log(newDecks.filter(d=>d.status!=='failed').length+' fact carousels ready','o');
-    if(byHook && !FACT_STOP) $('factHookPanel').classList.add('hide');
+    if((byHook || byAngle) && !FACT_STOP) $('factHookPanel').classList.add('hide');
   }catch(e){
     $('factStatus').textContent = 'failed';
     log('facts failed: '+apiError(e),'e');
@@ -5254,14 +5329,24 @@ function init(){
   // 50 is measured, not guessed: a 50 x 10 run completes with 500 slides, the decoded
   // image cache still capped at 28 and autosave still succeeding.
   [1,3,5,10,15,20,30,40,50].forEach(i=>{ const o=document.createElement('option'); o.value=i; o.textContent=i+(i===1?' carousel':' carousels'); if(i===10) o.selected=true; $('factCount').appendChild(o); });
-  /* A hook category is reviewed before it is written, so the button says so. */
+  /* A category that is reviewed before it is written says so on the button, and the
+     review panel takes its wording from whichever kind of review this is. */
   const showFactMode = () => {
-    const byHook = catCfg($('factCat').value).mode === 'hooks';
-    $('runFacts').textContent = byHook ? 'Write hooks' : 'Generate';
-    if(!byHook) $('factHookPanel').classList.add('hide');
+    const conf = catCfg($('factCat').value);
+    const byHook = conf.mode === 'hooks';
+    const byAngle = conf.mode === 'angles' && angleSet(conf.angles).length > 0;
+    $('runFacts').textContent = byHook ? 'Write hooks' : byAngle ? 'Plan posts' : 'Generate';
+    $('factHookTitle').textContent = byAngle ? 'Posts for review' : 'Hooks for review';
+    $('factHookCreate').textContent = byAngle ? 'Write these posts' : 'Create these carousels';
+    $('factHookRedo').textContent = byAngle ? 'Plan again' : 'New hooks';
+    $('factHookHint').textContent = byAngle
+      ? 'Edit or delete any line before writing. The tag in brackets is the angle it will be written as — '+
+        'retag a line to change its shape, and an untagged line is read as a list if it opens with a number.'
+      : 'Edit or delete any line before creating. A leading number sets that carousel\'s length.';
+    if(!byHook && !byAngle) $('factHookPanel').classList.add('hide');
   };
   $('factCat').onchange = () => { localStorage.setItem('cb.factCat', $('factCat').value);
-                                  $('factPromptPanel').classList.add('hide'); showCatLogo(); showFactMode(); };
+                                  $('factPromptPanel').classList.add('hide'); showCatLogo(); showFactMode(); renderLedger(); };
   const openPrompt = (c, toggle) => {
     $('factCatName').textContent = c;
     $('factPromptText').value = catPrompt(c);
@@ -5350,6 +5435,12 @@ function init(){
   $('runFacts').onclick = () => runFacts();
   const approvedHooks = () => $('factHookText').value.split('\n').map(s=>s.trim()).filter(Boolean);
   $('factHookCreate').onclick = () => {
+    const conf = catCfg($('factCat').value);
+    if(conf.mode === 'angles' && angleSet(conf.angles).length){
+      const ideas = parseIdeaLines(conf.angles, $('factHookText').value);
+      if(!ideas.length) return log('no posts left to write — one headline per line','w');
+      return runFacts({ideas});
+    }
     const hooks = approvedHooks();
     if(!hooks.length) return log('no hooks left to create — write one per line','w');
     runFacts({hooks});

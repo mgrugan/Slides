@@ -83,15 +83,25 @@ const r = await p.evaluate(async ()=>{
   // the two faces the page carries itself, and the one it stands in for
   out.futuraDraws = fontAvailable('Futura');                // italics only, so upright probes must not decide it
   out.noStandInNeeded = S.profile.swipe_font_family === 'Futura' && !S.profile.swipe_font_fallback;
-  out.builtinsNotFetched = BUILTIN_FONTS.has('Futura') &&
+  out.builtinsNotFetched = BUILTIN_FONTS.has('Bernoru') && BUILTIN_FONTS.has('Futura') &&
     (()=>{ const before = document.querySelectorAll('link[href*="fonts.googleapis"]').length;
-           ensureFont('Futura');
+           ensureFont('Bernoru'); ensureFont('Futura');
            return document.querySelectorAll('link[href*="fonts.googleapis"]').length === before; })();
-  /* The Bernoru that was supplied is the Black Ultra Expanded cut and is not shipped,
-     so the headline lands on the fallback until the right file arrives. Both halves of
-     that arrangement matter, so both are checked. */
-  out.bernoruNotShipped = !BUILTIN_FONTS.has('Bernoru');
-  out.bernoruStillPreferred = S.profile.font_family === 'Bernoru' && S.profile.font_fallback === 'Archivo';
+  out.bernoruDraws = fontAvailable('Bernoru');
+  out.bernoruIsTheFace = S.profile.font_family === 'Bernoru' && S.profile.font_fallback === 'Archivo';
+  /* The size, converted off the client's artboard. Theirs is about 1836px across, so
+     the 89 they set is 52 here — and 52 is exactly what this face needs to fill the
+     frame the way their line does. This is the check that would have caught the
+     headline reading a quarter too large. */
+  out.titleMatchesCanva = (()=>{
+    const g = document.createElement('canvas').getContext('2d');
+    g.font = fontStr(S.profile, S.profile.title_size_pct * H);
+    // it has to fit the text column on ONE line, the way it does on their artboard,
+    // and still fill most of it — too small is as wrong as too large
+    const lines = wrap(g, 'TOM BRADY LAUNCHES', W * S.profile.max_width_pct);
+    const frac = g.measureText('TOM BRADY LAUNCHES').width / (W * S.profile.max_width_pct);
+    return lines.length === 1 && frac > 0.92;
+  })();
   /* And the sizes, against the client's own artboard: a headline line fills about 91%
      of the frame there and the swipe line about 40%. Measured, not eyeballed. */
   const widthOf = (font, text) => {
@@ -100,13 +110,13 @@ const r = await p.evaluate(async ()=>{
   };
   out.headlineMatchesRef = (()=>{
     const w = widthOf(fontStr(S.profile, S.profile.title_size_pct * H), 'TOM BRADY LAUNCHES');
-    return w > 0.84 && w < 0.98;
+    return w > 0.84 && w < 0.94;
   })();
   out.swipeMatchesRef = (()=>{
     const w = widthOf('italic ' + S.profile.swipe_weight + ' ' +
       Math.round(S.profile.swipe_size_pct * H) + 'px "' + S.profile.swipe_font_family + '"',
       'Comment your thoughts on this below?!');
-    return w > 0.34 && w < 0.46;
+    return w > 0.38 && w < 0.48;
   })();
   out.swipeIsGreyAndLight = /^#/.test(S.profile.swipe_color || '') && S.profile.swipe_size_pct < 0.02;
   out.swipeDrawsGrey = (()=>{                               // and grey on the canvas, not white
@@ -304,7 +314,11 @@ const r = await p.evaluate(async ()=>{
 
   // --- nothing on this template is set in light small type
   out.bodyIsHeavy = S.profile.body_weight >= 800 && S.profile.body_font_family === S.profile.font_family;
-  out.bodyIsBig = S.profile.body_size_pct >= 0.03 && S.profile.body_size_pct > S.profile.title_size_pct * 0.5;
+  /* Relative, not absolute. The whole template scaled down a quarter when the sizes
+     were converted off the client's artboard, and an absolute floor written before
+     that just fails without meaning anything. What matters is that the body is set
+     large against its own headline, in the same heavy face. */
+  out.bodyIsBig = S.profile.body_size_pct > S.profile.title_size_pct * 0.6;
   /* Measured rather than declared — but measured off the type, not off pixels. The
      test box has no network, so Archivo never loads and both weights fall back to the
      same face; counting white pixels would be measuring the fallback, not the change.
@@ -406,7 +420,7 @@ const want = {
   markStraddlesRule:true, swipeNotFloating:true,
   swipeIsFuturaItalic:true, swipeIsFixed:true, brandFontIsBernoru:true,
   futuraDraws:true, noStandInNeeded:true, builtinsNotFetched:true, headlineFits:true,
-  bernoruNotShipped:true, bernoruStillPreferred:true, headlineMatchesRef:true, swipeMatchesRef:true,
+  bernoruDraws:true, bernoruIsTheFace:true, titleMatchesCanva:true, headlineMatchesRef:true, swipeMatchesRef:true,
   swipeIsGreyAndLight:true, swipeDrawsGrey:true,
   reservesFooter:true, textClearsFooter:true,
   coverTypeSitsLow:true, bodyTypeSitsLow:true, bottomPadTight:true, lookRefreshed:true, docUnchanged:true, bodyNotShouted:true,

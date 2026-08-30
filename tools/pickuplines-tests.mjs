@@ -80,6 +80,19 @@ const r = await p.evaluate(async ()=>{
   out.swipeIsFixed = S.profile.swipe_fixed === true &&
     swipeLine(deck.slides[0], S.profile) === 'Comment your thoughts on this below?!';
   out.brandFontIsBernoru = S.profile.font_family === 'Bernoru' && S.profile.body_font_family === 'Bernoru';
+  // the two faces the page carries itself, and the one it stands in for
+  out.bernoruDraws = fontAvailable('Bernoru');
+  out.jostDraws = fontAvailable('Jost');                    // italics only, so upright probes must not decide it
+  out.futuraStandsIn = !fontAvailable('Futura') && S.profile.swipe_font_fallback === 'Jost';
+  out.builtinsNotFetched = BUILTIN_FONTS.has('Bernoru') && BUILTIN_FONTS.has('Jost') &&
+    (()=>{ const before = document.querySelectorAll('link[href*="fonts.googleapis"]').length;
+           ensureFont('Bernoru'); ensureFont('Jost');
+           return document.querySelectorAll('link[href*="fonts.googleapis"]').length === before; })();
+  out.headlineFits = (()=>{                                 // nine words, and not five lines of them
+    const g = document.createElement('canvas').getContext('2d');
+    g.font = fontStr(S.profile, S.profile.title_size_pct * H);
+    return wrap(g, 'THEY HID THEIR MARRIAGE FOR THIRTY YEARS', W * S.profile.max_width_pct).length <= 4;
+  })();
   // the swipe line prints to the right of the mark, in the band just above the rule
   const swipeInkIn = (top, bot) => {
     const x0 = W*0.055 + cfm.d + cfm.d*0.30;
@@ -311,6 +324,7 @@ const want = {
   coverHasNoDivider:true, coverRuleFades:true, coverRuleFromText:true, thinRing:true,
   markStraddlesRule:true, swipeNotFloating:true,
   swipeIsFuturaItalic:true, swipeIsFixed:true, brandFontIsBernoru:true,
+  bernoruDraws:true, jostDraws:true, futuraStandsIn:true, builtinsNotFetched:true, headlineFits:true,
   reservesFooter:true, textClearsFooter:true, docUnchanged:true, bodyNotShouted:true,
   catMode:'angles', catStyle:'Pickuplines', catTone:'colour', angleCount:8, angleKinds:'list,story',
   anglesDocumented:true, dealtAll:true, dealtSpread:true, rotationMoves:true,

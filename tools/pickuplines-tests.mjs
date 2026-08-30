@@ -64,28 +64,35 @@ const r = await p.evaluate(async ()=>{
   // --- the cover's footer: the mark on the left, and a rule under it
   const cfm = coverFooterMetrics(W, H, S.profile);
   const ruleY = H - cfm.pad;
-  const markCy = ruleY - cfm.rule - cfm.d/2;
+  const markCy = ruleY;                              // the mark straddles the rule, centred on it
   out.coverMark = magenta(px(cover, W*0.055 + cfm.d/2, markCy));
+  out.markStraddlesRule = magenta(px(cover, W*0.055 + cfm.d/2, ruleY + cfm.d*0.3)) &&
+                          magenta(px(cover, W*0.055 + cfm.d/2, ruleY - cfm.d*0.3));
   const ruleInk = x => { let best = 0; for(const dy of [-2,-1,0,1,2]) best = Math.max(best, px(cover, x, ruleY + dy)[0]); return best; };
   out.coverRule = ruleInk(W*0.5) > 120;
   // it fades out to the right rather than stopping dead at the margin
   out.coverRuleFades = ruleInk(W*0.30) > ruleInk(W*0.70) + 40 && ruleInk(W*0.93) < 60;
-  // and starts under the line of type, not at the frame edge
-  out.coverRuleFromText = ruleInk(W*0.075) < 40;
+  // and starts under the line of type, not at the frame edge — sampled in the clear
+  // gap between the mark's right edge and where the type begins
+  out.coverRuleFromText = ruleInk(W*0.055 + cfm.d*1.15) < 40;
   out.thinRing = S.profile.brand_ring_pct < 0.06;
   out.swipeIsFuturaItalic = S.profile.swipe_font_family === 'Futura' && S.profile.swipe_italic === true;
   out.swipeIsFixed = S.profile.swipe_fixed === true &&
     swipeLine(deck.slides[0], S.profile) === 'Comment your thoughts on this below?!';
   out.brandFontIsBernoru = S.profile.font_family === 'Bernoru' && S.profile.body_font_family === 'Bernoru';
-  // the swipe line prints to the right of the mark
-  out.coverSwipeInk = (()=>{
+  // the swipe line prints to the right of the mark, in the band just above the rule
+  const swipeInkIn = (top, bot) => {
     const x0 = W*0.055 + cfm.d + cfm.d*0.30;
-    for(let x = x0; x < W*0.9; x++){
-      const q = px(cover, x, markCy);
-      if(q[0] > 190 && q[1] > 190 && q[2] > 190) return true;
-    }
+    for(let y = Math.round(top); y < bot; y++)
+      for(let x = Math.round(x0); x < W*0.9; x++){
+        const q = px(cover, x, y);
+        if(q[0] > 190 && q[1] > 190 && q[2] > 190) return true;
+      }
     return false;
-  })();
+  };
+  out.coverSwipeInk = swipeInkIn(ruleY - cfm.lift - cfm.line, ruleY - cfm.lift + 1);
+  // and nowhere near as high as it used to sit — the band a mark-height above is clear
+  out.swipeNotFloating = !swipeInkIn(ruleY - cfm.d*1.1, ruleY - cfm.d*0.75);
 
   // --- every other frame is signed the way the client asked: rule, mark, rule
   const dm = brandDividerMetrics(W, H, S.profile);
@@ -302,6 +309,7 @@ const want = {
   footerIsDivider:true, divMarkCentred:true, divRules:true, divRuleStopsAtMark:true,
   noNameOnBody:true, noTickOnBody:true, noFooterGradient:true, barStillAvailable:true,
   coverHasNoDivider:true, coverRuleFades:true, coverRuleFromText:true, thinRing:true,
+  markStraddlesRule:true, swipeNotFloating:true,
   swipeIsFuturaItalic:true, swipeIsFixed:true, brandFontIsBernoru:true,
   reservesFooter:true, textClearsFooter:true, docUnchanged:true, bodyNotShouted:true,
   catMode:'angles', catStyle:'Pickuplines', catTone:'colour', angleCount:8, angleKinds:'list,story',

@@ -1054,8 +1054,8 @@ const PRESETS = [
        fades out under it */
     cover_swipe:true, swipe_fixed:true, swipe_line:'Comment your thoughts on this below?!',
     swipe_font_family:'Futura', swipe_italic:true, swipe_weight:500,
-    cover_rule_fade:true,
-    cover_mark_pct:0.10, swipe_size_pct:0.0215,
+    cover_rule_fade:true, cover_rule_pad_pct:0.061, swipe_lift_pct:0.009,
+    cover_mark_pct:0.088, swipe_size_pct:0.0215,
     logo_scale_pct:0.075, logo_on_all:false,
     text_block_top_pct:0.70, hook_top_pct:0.70,
     auto_number:false,
@@ -2204,12 +2204,18 @@ function brandBarMetrics(W, H, p){
   const pad    = (p.brand_pad_pct ?? 0.032) * H;
   return {d, name, handle, gap, blockH, pad, height: blockH + pad};
 }
+/* The mark is centred ON the rule and straddles it, and the line of type sits just
+   above the rule rather than floating half a mark-height over it. Hanging the mark
+   above the rule and dropping the rule below both — which is what this did — put the
+   type too high and left the mark looking uncentred against everything around it. */
 function coverFooterMetrics(W, H, p){
-  const d    = (p.cover_mark_pct  || 0.10) * W;
+  const d    = (p.cover_mark_pct  || 0.088) * W;
   const line = (p.swipe_size_pct  || 0.0215) * H;
-  const pad  = (p.brand_pad_pct ?? 0.032) * H;
-  const rule = line * 0.95;                      // the gap between the row and its rule
-  return {d, line, rule, pad, height: d + rule + pad};
+  const pad  = (p.cover_rule_pad_pct ?? 0.061) * H;   // the rule to the bottom edge
+  const lift = (p.swipe_lift_pct ?? 0.009) * H;       // the type's baseline above the rule
+  // whichever reaches higher — the type or the top half of the mark — sets the height
+  const above = Math.max(line + lift, d/2);
+  return {d, line, pad, lift, above, height: above + pad};
 }
 /* The space a frame owes its footer: the footer itself plus a breath above it, so
    the last line of caption never sits on the account name. */
@@ -2287,7 +2293,7 @@ function drawCoverFooter(ctx, W, H, p, mark, text){
   const m = coverFooterMetrics(W, H, p);
   const x0 = W * (p.cover_footer_x_pct ?? 0.055);
   const ruleY = H - m.pad;
-  const cy = ruleY - m.rule - m.d/2;
+  const cy = ruleY;                                   // the mark sits centred on the rule
   ctx.save();
   if('letterSpacing' in ctx) ctx.letterSpacing = '0px';
   const hasMark = drawAvatar(ctx, mark, x0 + m.d/2, cy, m.d/2, p);
@@ -2299,7 +2305,7 @@ function drawCoverFooter(ctx, W, H, p, mark, text){
                Math.round(m.line) + 'px "' + (p.swipe_font_family || brandFont(p)) + '", Inter, sans-serif';
     ctx.fillStyle = p.text_color || '#fff';
     ctx.globalAlpha = 0.94;
-    ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+    ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
     // one line only: a promise that runs to two looks like body copy
     const maxW = W - tx - W*0.055;
     let t = line;
@@ -2307,7 +2313,12 @@ function drawCoverFooter(ctx, W, H, p, mark, text){
       while(t.length > 1 && ctx.measureText(t + '…').width > maxW) t = t.slice(0, -1);
       t = t.replace(/[\s,;:.–-]+$/, '') + '…';
     }
-    ctx.fillText(t, tx, cy);
+    /* Rest it just above the rule — but clear of it, measured rather than guessed. A
+       fixed gap that suits one face puts the descenders of the next one through the
+       line, and the face here is whichever one the account uploaded. */
+    const mt = ctx.measureText(t);
+    const descent = mt.actualBoundingBoxDescent || m.line*0.22;
+    ctx.fillText(t, tx, ruleY - Math.max(m.lift, descent + m.line*0.14));
     ctx.globalAlpha = 1;
   }
   /* The rule runs from under the line of type, not from the frame edge, and fades out

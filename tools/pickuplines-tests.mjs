@@ -66,10 +66,17 @@ const r = await p.evaluate(async ()=>{
   const ruleY = H - cfm.pad;
   const markCy = ruleY - cfm.rule - cfm.d/2;
   out.coverMark = magenta(px(cover, W*0.055 + cfm.d/2, markCy));
-  out.coverRule = (()=>{                             // white line somewhere in the two px around ruleY
-    for(const dy of [-1,0,1]){ const q = px(cover, W*0.5, ruleY + dy); if(q[0]>190 && q[1]>190 && q[2]>190) return true; }
-    return false;
-  })();
+  const ruleInk = x => { let best = 0; for(const dy of [-2,-1,0,1,2]) best = Math.max(best, px(cover, x, ruleY + dy)[0]); return best; };
+  out.coverRule = ruleInk(W*0.5) > 120;
+  // it fades out to the right rather than stopping dead at the margin
+  out.coverRuleFades = ruleInk(W*0.30) > ruleInk(W*0.70) + 40 && ruleInk(W*0.93) < 60;
+  // and starts under the line of type, not at the frame edge
+  out.coverRuleFromText = ruleInk(W*0.075) < 40;
+  out.thinRing = S.profile.brand_ring_pct < 0.06;
+  out.swipeIsFuturaItalic = S.profile.swipe_font_family === 'Futura' && S.profile.swipe_italic === true;
+  out.swipeIsFixed = S.profile.swipe_fixed === true &&
+    swipeLine(deck.slides[0], S.profile) === 'Comment your thoughts on this below?!';
+  out.brandFontIsBernoru = S.profile.font_family === 'Bernoru' && S.profile.body_font_family === 'Bernoru';
   // the swipe line prints to the right of the mark
   out.coverSwipeInk = (()=>{
     const x0 = W*0.055 + cfm.d + cfm.d*0.30;
@@ -80,35 +87,74 @@ const r = await p.evaluate(async ()=>{
     return false;
   })();
 
-  // --- every other frame is signed: mark, name, tick, handle
-  const bm = brandBarMetrics(W, H, S.profile);
-  const barCy = H - bm.pad - bm.blockH/2;
-  out.barMark = (()=>{                               // the mark sits left of centre in the group
-    for(let x = W*0.15; x < W*0.5; x++) if(magenta(px(body, x, barCy))) return true;
+  // --- every other frame is signed the way the client asked: rule, mark, rule
+  const dm = brandDividerMetrics(W, H, S.profile);
+  const divCy = H - dm.pad - dm.d/2;
+  out.footerIsDivider = dividerFooter(S.profile);
+  out.divMarkCentred = magenta(px(body, W/2, divCy));
+  out.divRules = (()=>{                              // white rule either side of the mark, on its centre line
+    const white = x => { for(const dy of [-1,0,1]){ const q = px(body, x, divCy + dy);
+                          if(q[0]>190 && q[1]>190 && q[2]>190) return true; } return false; };
+    return white(W*0.12) && white(W*0.88);
+  })();
+  out.divRuleStopsAtMark = (()=>{                    // and stops clear of it rather than running underneath
+    const q = px(body, W/2 - dm.d/2 - dm.d*0.07, divCy);
+    return !(q[0]>190 && q[1]>190 && q[2]>190);
+  })();
+  out.noNameOnBody = (()=>{                          // no type in the footer — only the rule, on its own line
+    const g = body.getContext('2d');
+    for(let y = Math.round(divCy - dm.d*0.6); y < divCy + dm.d*0.6; y += 2){
+      if(Math.abs(y - divCy) <= 4) continue;         // the rule itself is meant to be there
+      for(let x = Math.round(W*0.58); x < W*0.90; x += 2){
+        const d = g.getImageData(x, y, 1, 1).data;
+        if(d[0] > 200 && d[1] > 200 && d[2] > 200) return false;
+      }
+    }
+    return true;
+  })();
+  out.noTickOnBody = (()=>{                          // and no blue tick anywhere on the frame
+    for(let y = Math.round(H*0.80); y < H - 2; y += 2)
+      for(let x = 4; x < W - 4; x += 3) if(bluish(px(body, x, y))) return false;
+    return true;
+  })();
+  /* No second gradient under the footer. The caption scrim above it still darkens the
+     bottom of every frame, so the honest comparison is against the same frame WITH the
+     footer scrim switched on — this one has to come out lighter at the edge. */
+  out.noFooterGradient = (()=>{
+    // isolate it: with the caption scrim off, the only thing that could darken the
+    // bottom edge is the footer gradient, and this template no longer has one
+    const bare = prof => {
+      const c = document.createElement('canvas');
+      renderSlide(deck.slides[1], c, Object.assign(JSON.parse(JSON.stringify(S.profile)),
+        {scrim_pct:0}, prof), 1);
+      return c.getContext('2d').getImageData(Math.round(W*0.02), H - 3, 1, 1).data[0];
+    };
+    return S.profile.footer_scrim_pct === 0 && bare({}) > bare({footer_scrim_pct:0.22}) + 60;
+  })();
+  // the account bar is still there for anyone who wants it, just not this preset
+  out.barStillAvailable = (()=>{
+    const alt = Object.assign(JSON.parse(JSON.stringify(S.profile)), {brand_footer:'account'});
+    const c = document.createElement('canvas');
+    renderSlide(deck.slides[1], c, alt, 1);
+    const bm = brandBarMetrics(W, H, alt), cy = H - bm.pad - bm.blockH/2;
+    const g = c.getContext('2d');
+    for(let y = Math.round(cy - bm.blockH/2); y <= cy + bm.blockH/2; y += 2)
+      for(let x = Math.round(W*0.3); x < W*0.9; x += 2){
+        const d = g.getImageData(x, y, 1, 1).data;
+        if(d[2] > 120 && d[2] > d[0] + 40 && d[2] > d[1] + 20) return true;   // the tick
+      }
     return false;
   })();
-  out.barTick = (()=>{                               // the verified tick is the only blue on the frame
-    const top = Math.round(barCy - bm.blockH/2), bot = Math.round(barCy + bm.blockH/2);
-    for(let y = top; y <= bot; y += 2)
-      for(let x = Math.round(W*0.3); x < W*0.9; x += 2)
-        if(bluish(px(body, x, y))) return true;
-    return false;
-  })();
-  out.barGradient = (()=>{                           // the bottom edge is darker than the frame above it
-    const top = px(body, W*0.5, H*0.62), foot = px(body, W*0.5, H - 3);
-    return foot[0] < top[0] - 25;
-  })();
-  // the cover carries the swipe row instead of the account row, and vice versa
-  out.coverHasNoBar = !(()=>{ for(let x = W*0.15; x < W*0.5; x++) if(magenta(px(cover, x, barCy))) return true; return false; })();
+  out.coverHasNoDivider = !magenta(px(cover, W/2, divCy));
 
   // --- the caption stops above whatever footer the frame carries
   out.reserveCover = footerReserve(deck.slides[0], S.profile, W, H);
   out.reserveBody  = footerReserve(deck.slides[1], S.profile, W, H);
-  out.reservesFooter = out.reserveCover > cfm.height && out.reserveBody > bm.height;
+  out.reservesFooter = out.reserveCover > cfm.height && out.reserveBody > dm.height;
   out.textClearsFooter = (()=>{                       // no caption ink inside the footer's own band
     const c = draw(deck.slides[1]);
     const g = c.getContext('2d');
-    const bandTop = Math.round(H - bm.pad - bm.blockH - H*0.012);
+    const bandTop = Math.round(H - dm.pad - dm.blockH - H*0.012);
     // the account row itself is centred, so look out at the margins where only caption could be
     for(let y = bandTop; y < bandTop + 8; y++)
       for(let x = 20; x < W*0.12; x++){
@@ -227,7 +273,10 @@ const r = await p.evaluate(async ()=>{
   // --- every angle can fall back to a swipe line of its own
   out.everyAngleHasSwipe = angleSet(set).every(a => a.swipe && a.swipe.length > 12);
   out.swipeFallsBack = swipeLine({kind:'hook'}, S.profile) === S.profile.swipe_line;
-  out.swipeFromDeck = swipeLine(deck.slides[0], S.profile) === 'The last one is why they split.';
+  out.swipeFromDeck = (()=>{            // with the fixed line off, the deck's own draws again
+    const per = Object.assign(JSON.parse(JSON.stringify(S.profile)), {swipe_fixed:false});
+    return swipeLine(deck.slides[0], per) === 'The last one is why they split.';
+  })();
 
   // --- the panel knows which review it is showing
   const modeFor = c => { $('factCat').value = c; $('factCat').onchange(); return {
@@ -250,7 +299,10 @@ await b.close();
 
 const want = {
   presetExists:true, coverCircleRing:true, coverMark:true, coverRule:true, coverSwipeInk:true,
-  barMark:true, barTick:true, barGradient:true, coverHasNoBar:true,
+  footerIsDivider:true, divMarkCentred:true, divRules:true, divRuleStopsAtMark:true,
+  noNameOnBody:true, noTickOnBody:true, noFooterGradient:true, barStillAvailable:true,
+  coverHasNoDivider:true, coverRuleFades:true, coverRuleFromText:true, thinRing:true,
+  swipeIsFuturaItalic:true, swipeIsFixed:true, brandFontIsBernoru:true,
   reservesFooter:true, textClearsFooter:true, docUnchanged:true, bodyNotShouted:true,
   catMode:'angles', catStyle:'Pickuplines', catTone:'colour', angleCount:8, angleKinds:'list,story',
   anglesDocumented:true, dealtAll:true, dealtSpread:true, rotationMoves:true,

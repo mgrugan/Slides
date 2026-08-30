@@ -582,6 +582,16 @@ details summary:hover{color:var(--fg)}
     <div class="group">
       <h3>Type</h3>
       <div class="field"><label for="cFont">Font family</label><input id="cFont" placeholder="Inter"></div>
+      <div class="field"><label for="cBodyFont">Body font family</label><input id="cBodyFont" placeholder="same as above"></div>
+      <div class="row" style="margin-top:8px">
+        <strong style="font-size:12px">Fonts</strong>
+        <span class="tiny" style="color:var(--faint)">for faces Google does not host</span>
+        <div class="spacer"></div>
+        <button id="fontPick" class="btn sm quiet">Upload</button>
+        <input type="file" id="fontFile" accept=".ttf,.otf,.woff,.woff2,font/*" multiple class="hide">
+      </div>
+      <div id="fontList" class="tiny" style="color:var(--muted)"></div>
+      <div class="tiny" style="color:var(--faint);margin-top:4px">One file per weight. The name and weight are read from the filename — correct them here if they came out wrong, then type the family name in the box above.</div>
       <div class="pair">
         <div class="field"><label for="cWeight">Weight</label><select id="cWeight"><option>400</option><option>600</option><option>700</option><option>800</option><option>900</option></select></div>
         <div class="field"><label for="cAlign">Align</label><select id="cAlign"><option>center</option><option>left</option><option>right</option></select></div>
@@ -1019,7 +1029,7 @@ const PRESETS = [
     // One voice at two sizes: the body is the same heavy face as the headline, because a
     // slide read at arm's length on a phone has no room for light 24px type. Sentence
     // case, though — a paragraph in caps at this weight is a wall, not a sentence.
-    font_family:'Archivo', font_weight:900, body_font_family:'Archivo', body_weight:800, italic:false,
+    font_family:'Bernoru', font_weight:900, body_font_family:'Bernoru', body_weight:800, italic:false,
     uppercase:true, body_uppercase:false, letter_spacing_em:-0.012,
     text_color:'#FFFFFF', stroke_color:'#000000', stroke_width:0, text_shadow:0.35, shadow_color:'#000000',
     label_bg:'#FFFFFF',
@@ -1030,13 +1040,21 @@ const PRESETS = [
     max_width_pct:0.90, body_width_pct:0.90,
     divider:false,                              // the account row replaces the rule-and-mark
     portrait_inset:true, auto_inset:true,       // the cover's circle, cut from the deck's own frames
-    /* the signature along the foot of every frame */
-    brand_bar:true, brand_name:'Pickuplines', brand_handle:'@pickuplines', brand_verified:true,
-    brand_badge_color:'#1D9BF0', brand_logo_ring:true,
+    /* The signature along the foot of every frame: two rules with the mark in the gap
+       and nothing else — no name, no handle, no tick, and no gradient behind it. The
+       name and handle are still set, so the account bar is one field away if it is
+       ever wanted back. */
+    brand_bar:true, brand_footer:'divider',
+    brand_name:'Pickuplines', brand_handle:'@pickuplines', brand_verified:true,
+    brand_badge_color:'#1D9BF0', brand_logo_ring:true, brand_ring_pct:0.045,
     brand_mark_pct:0.085, brand_name_pct:0.026, brand_handle_pct:0.023, brand_pad_pct:0.032,
-    footer_scrim_pct:0.22, footer_scrim_alpha:0.55,
-    /* the cover's own version of it: mark, promise, rule */
-    cover_swipe:true, swipe_line:'Swipe through — it gets worse.',
+    brand_rule_px:0.0022,
+    footer_scrim_pct:0, footer_scrim_alpha:0.55,
+    /* the cover's own version: mark, the call to action in Futura italic, a rule that
+       fades out under it */
+    cover_swipe:true, swipe_fixed:true, swipe_line:'Comment your thoughts on this below?!',
+    swipe_font_family:'Futura', swipe_italic:true, swipe_weight:500,
+    cover_rule_fade:true,
     cover_mark_pct:0.10, swipe_size_pct:0.0215,
     logo_scale_pct:0.075, logo_on_all:false,
     text_block_top_pct:0.70, hook_top_pct:0.70,
@@ -1806,8 +1824,66 @@ function extractJSON(text, wantArray){
 
 /* ============================ fonts ============================ */
 const LOADED_FONTS = new Set(['Inter','Archivo','Anton','Poppins','Bebas Neue','Montserrat']);
+/* ============================ fonts the client owns ============================
+   Bernoru and Futura are licensed faces. Neither is on Google Fonts, so neither can
+   be fetched by name — the file has to be supplied once and kept. Each uploaded file
+   is registered as its own FontFace at the weight it actually is, so a family built
+   from three files behaves like a real family rather than one weight faux-bolded
+   three ways. They live in IndexedDB, so they survive a reload and are never fetched
+   over the network again. */
+let CUSTOM_FONTS = [];                       // [{id, family, weight, italic, data}]
+const REGISTERED = new Set();
+const WEIGHT_WORDS = [['hairline',100],['thin',100],['extralight',200],['ultralight',200],['light',300],
+  ['book',400],['regular',400],['normal',400],['medium',500],['semibold',600],['demibold',600],['demi',600],
+  ['extrabold',800],['ultrabold',800],['bold',700],['heavy',900],['black',900]];
+/* "Bernoru-ExtraBold Italic.otf" is a family, a weight and a slant in one string, and
+   typing all three by hand for eight files is how people give up. Guess, then let it
+   be corrected. */
+function guessFace(filename){
+  const base = String(filename||'').replace(/\.[a-z0-9]+$/i, '').replace(/[_-]+/g, ' ').trim();
+  const low = ' ' + base.toLowerCase() + ' ';
+  const italic = /\b(italic|oblique)\b/.test(low);
+  let weight = 400, word = '';
+  for(const [w, n] of WEIGHT_WORDS) if(low.includes(w) && w.length > word.length){ word = w; weight = n; }
+  const family = base.replace(new RegExp('\\b(' + WEIGHT_WORDS.map(x=>x[0]).join('|') + '|italic|oblique)\\b', 'gi'), '')
+    .replace(/\s+/g, ' ').trim() || base;
+  return {family, weight, italic};
+}
+async function registerCustomFonts(){
+  for(const f of CUSTOM_FONTS){
+    const key = f.family + '|' + f.weight + '|' + (f.italic ? 'i' : 'n');
+    if(REGISTERED.has(key)) continue;
+    try{
+      const ff = new FontFace(f.family, 'url(' + f.data + ')',
+                              {weight: String(f.weight), style: f.italic ? 'italic' : 'normal'});
+      await ff.load();
+      document.fonts.add(ff);
+      REGISTERED.add(key);
+      LOADED_FONTS.add(f.family);            // and never ask Google for a font we hold
+    }catch(e){ log('could not register "'+f.family+'" '+f.weight+': '+e.message,'e'); }
+  }
+}
+async function loadCustomFonts(){
+  try{ CUSTOM_FONTS = (await idbGet('fonts')) || []; }catch(e){ CUSTOM_FONTS = []; }
+  if(!Array.isArray(CUSTOM_FONTS)) CUSTOM_FONTS = [];
+  await registerCustomFonts();
+}
+const saveCustomFonts = () => idbPut('fonts', CUSTOM_FONTS).catch(e=>log('font save failed: '+e.message,'e'));
+const haveCustom = fam => CUSTOM_FONTS.some(f => f.family.toLowerCase() === String(fam||'').toLowerCase());
+/* Whether a family will actually draw, rather than quietly falling back. Asking
+   fonts.check is unreliable for a family the browser has never heard of; measuring is
+   not — a family that does not exist measures exactly the same as the fallback. */
+function fontAvailable(fam){
+  if(!fam) return true;
+  const g = document.createElement('canvas').getContext('2d');
+  const probe = 'MMMWWWiiill1234@#%';
+  g.font = '72px monospace';
+  const base = g.measureText(probe).width;
+  g.font = '72px "' + fam + '", monospace';
+  return g.measureText(probe).width !== base;
+}
 function ensureFont(fam){
-  if(!fam || LOADED_FONTS.has(fam)) return;
+  if(!fam || LOADED_FONTS.has(fam) || haveCustom(fam)) return;
   LOADED_FONTS.add(fam);
   const l = document.createElement('link');
   l.rel = 'stylesheet';
@@ -1816,15 +1892,21 @@ function ensureFont(fam){
   document.head.appendChild(l);
   log('loading font "'+fam+'" from Google Fonts');
 }
+const styleFonts = p => new Set([p.font_family, p.body_font_family, p.swipe_font_family,
+                                 p.brand_font_family].filter(Boolean));
 async function fontReady(p){
-  ensureFont(p.font_family);
-  if(p.body_font_family) ensureFont(p.body_font_family);
+  await registerCustomFonts();
+  styleFonts(p).forEach(ensureFont);
   try{
-    for(const fam of new Set([p.font_family, p.body_font_family].filter(Boolean)))
-      for(const w of new Set([p.font_weight||800, p.body_weight||p.font_weight||800]))
+    for(const fam of styleFonts(p))
+      for(const w of new Set([p.font_weight||800, p.body_weight||p.font_weight||800, 400]))
         await document.fonts.load(((p.italic?'italic ':'') + w + ' 80px "' + fam + '"'));
     await document.fonts.ready;
   }catch(e){ log('font load issue: '+e.message,'w'); }
+  // a licensed face that was never uploaded draws as Inter and looks like a bug
+  const missing = [...styleFonts(p)].filter(f => !fontAvailable(f));
+  if(missing.length) log('no font file for ' + missing.map(f=>'"'+f+'"').join(', ') +
+    ' — the slides fall back to Inter until it is uploaded under Design → Type → Fonts', 'w');
 }
 
 /* ============================ canvas rendering ============================ */
@@ -2045,6 +2127,9 @@ const brandHandle = p => {
 };
 /* the cover's one line: the deck writes its own, the style holds the fallback */
 function swipeLine(slide, p){
+  // Some accounts want one call to action on every cover, not a line per post. The
+  // writer still returns its own and it is still stored — this only decides what draws.
+  if(p.swipe_fixed) return String(p.swipe_line || '').trim();
   return String((slide && (slide.swipe || (slide._deck && slide._deck.swipe))) || p.swipe_line || '').trim();
 }
 const brandFont = p => p.brand_font_family || p.body_font_family || p.font_family;
@@ -2076,9 +2161,9 @@ function drawAvatar(ctx, img, cx, cy, r, p){
   if(p.brand_logo_ring){
     ctx.save();
     ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI*2);
-    ctx.strokeStyle = p.text_color || '#fff';
+    ctx.strokeStyle = p.brand_ring_color || p.text_color || '#fff';
     ctx.globalAlpha = 0.9;
-    ctx.lineWidth = Math.max(1.5, r*0.08);
+    ctx.lineWidth = Math.max(1, r * (p.brand_ring_pct ?? 0.08));
     ctx.stroke();
     ctx.restore();
   }
@@ -2128,9 +2213,11 @@ function coverFooterMetrics(W, H, p){
 }
 /* The space a frame owes its footer: the footer itself plus a breath above it, so
    the last line of caption never sits on the account name. */
+const dividerFooter = p => p.brand_bar && (p.brand_footer || 'account') === 'divider';
 function footerReserve(slide, p, W, H){
   const cover = slide && slide.kind === 'hook';
   const m = cover && p.cover_swipe ? coverFooterMetrics(W, H, p)
+          : dividerFooter(p)       ? brandDividerMetrics(W, H, p)
           : p.brand_bar            ? brandBarMetrics(W, H, p)
           : null;
   return m ? m.height + (p.brand_gap_pct ?? 0.022) * H : 0;
@@ -2171,6 +2258,30 @@ function drawBrandBar(ctx, W, H, p, mark){
   }
   ctx.restore();
 }
+/* The signature the client actually wants on the body slides: two rules with the mark
+   sitting in the gap between them, hard against the bottom, and nothing else — no name,
+   no handle, no tick, no gradient behind it. */
+function brandDividerMetrics(W, H, p){
+  const d   = (p.brand_mark_pct || 0.085) * W;
+  const pad = (p.brand_pad_pct ?? 0.032) * H;
+  return {d, pad, blockH: d, height: d + pad};
+}
+function drawBrandDivider(ctx, W, H, p, mark){
+  const m = brandDividerMetrics(W, H, p);
+  const cy = H - m.pad - m.d/2;
+  const x0 = W * (p.cover_footer_x_pct ?? 0.055);
+  const gap = m.d/2 + m.d*0.14;                 // clear of the mark, not touching it
+  ctx.save();
+  ctx.strokeStyle = p.text_color || '#fff';
+  ctx.globalAlpha = 0.92;
+  ctx.lineWidth = Math.max(1.5, H * (p.brand_rule_px ?? 0.0022));
+  ctx.beginPath();
+  ctx.moveTo(x0, cy);       ctx.lineTo(W/2 - gap, cy);
+  ctx.moveTo(W/2 + gap, cy); ctx.lineTo(W - x0, cy);
+  ctx.stroke();
+  ctx.restore();
+  drawAvatar(ctx, mark, W/2, cy, m.d/2, p);
+}
 /* the cover's row: the mark, the promise beside it, a rule underneath */
 function drawCoverFooter(ctx, W, H, p, mark, text){
   const m = coverFooterMetrics(W, H, p);
@@ -2183,7 +2294,9 @@ function drawCoverFooter(ctx, W, H, p, mark, text){
   const tx = x0 + (hasMark ? m.d + m.d*0.30 : 0);
   const line = String(text || '');
   if(line){
-    ctx.font = fontStr(p, m.line, 500, brandFont(p));
+    // the swipe line is the one piece of type set in a second face, and it is italic
+    ctx.font = (p.swipe_italic ? 'italic ' : '') + (p.swipe_weight || 500) + ' ' +
+               Math.round(m.line) + 'px "' + (p.swipe_font_family || brandFont(p)) + '", Inter, sans-serif';
     ctx.fillStyle = p.text_color || '#fff';
     ctx.globalAlpha = 0.94;
     ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
@@ -2197,16 +2310,32 @@ function drawCoverFooter(ctx, W, H, p, mark, text){
     ctx.fillText(t, tx, cy);
     ctx.globalAlpha = 1;
   }
-  ctx.strokeStyle = p.text_color || '#fff';
-  ctx.globalAlpha = 0.9;
-  ctx.lineWidth = Math.max(1.5, H*0.0018);
-  ctx.beginPath(); ctx.moveTo(x0, ruleY); ctx.lineTo(W - x0, ruleY); ctx.stroke();
+  /* The rule runs from under the line of type, not from the frame edge, and fades out
+     as it goes rather than stopping dead. A hard stop at the margin read as a table
+     border; the fade reads as part of the mark. */
+  const rx0 = p.cover_rule_from_text === false ? x0 : tx;
+  const rx1 = W - x0;
+  ctx.globalAlpha = 1;
+  if(p.cover_rule_fade){
+    const g = ctx.createLinearGradient(rx0, 0, rx1, 0);
+    const c = hexToRGB(p.text_color || '#FFFFFF').join(',');    // [r,g,b], not {r,g,b}
+    g.addColorStop(0,    'rgba('+c+',0.95)');
+    g.addColorStop(0.55, 'rgba('+c+',0.45)');
+    g.addColorStop(1,    'rgba('+c+',0)');
+    ctx.strokeStyle = g;
+  } else {
+    ctx.strokeStyle = p.text_color || '#fff';
+    ctx.globalAlpha = 0.9;
+  }
+  ctx.lineWidth = Math.max(1.5, H * (p.brand_rule_px ?? 0.0022));
+  ctx.beginPath(); ctx.moveTo(rx0, ruleY); ctx.lineTo(rx1, ruleY); ctx.stroke();
   ctx.restore();
 }
 /* one entry point, so renderSlide does not have to know which of the two it is */
 function drawFooter(ctx, slide, W, H, p){
   const cover = slide.kind === 'hook';
   if(cover && p.cover_swipe) drawCoverFooter(ctx, W, H, p, logoFor(slide), swipeLine(slide, p));
+  else if(dividerFooter(p)) drawBrandDivider(ctx, W, H, p, logoFor(slide));
   else if(p.brand_bar) drawBrandBar(ctx, W, H, p, logoFor(slide));
 }
 
@@ -2554,6 +2683,7 @@ function syncControls(){
   $('cAspect').value = p.aspect_ratio || '9:16';
   $('cTreat').value = p.caption_treatment || 'outlined';
   $('cFont').value = p.font_family || 'Inter';
+  $('cBodyFont').value = p.body_font_family || '';
   $('cWeight').value = String(p.font_weight || 800);
   $('cItalic').checked = !!p.italic;
   $('cAlign').value = p.text_align || 'center';
@@ -2587,6 +2717,7 @@ function bindControls(){
   const live = (id, fn) => { $(id).addEventListener('input', ()=>{ fn(); syncControls(); drawAll(); autosave(); }); };
   live('cTreat', ()=> S.profile.caption_treatment = $('cTreat').value);
   live('cFont',  ()=> { S.profile.font_family = $('cFont').value; fontReady(S.profile).then(drawAll); });
+  live('cBodyFont',()=> { S.profile.body_font_family = $('cBodyFont').value; fontReady(S.profile).then(drawAll); });
   live('cWeight',()=> S.profile.font_weight = +$('cWeight').value);
   live('cItalic',()=> S.profile.italic = $('cItalic').checked);
   live('cAlign', ()=> S.profile.text_align = $('cAlign').value);
@@ -5030,7 +5161,9 @@ const PROFILE_FIELDS = [
   ['caption_treatment','select:outlined,label-boxes,plain,documentary'],['font_family','text'],['font_weight','number'],
   ['body_font_family','text'],['uppercase','check'],['scrim_pct','number'],['scrim_alpha','number'],
   ['bottom_pad_pct','number'],['title_line_em','number'],['body_line_em','number'],['divider','check'],['logo_scale_pct','number'],
-  ['brand_bar','check'],['brand_name','text'],['brand_handle','text'],['brand_verified','check'],['cover_swipe','check'],['swipe_line','text'],
+  ['brand_bar','check'],['brand_footer','select:account,divider'],['brand_name','text'],['brand_handle','text'],
+  ['brand_verified','check'],['brand_ring_pct','number'],['cover_swipe','check'],['swipe_line','text'],
+  ['swipe_fixed','check'],['swipe_font_family','text'],['swipe_italic','check'],['cover_rule_fade','check'],
   ['body_weight','number'],['italic','check'],['text_color','color'],['stroke_color','color'],['stroke_width','number'],
   ['text_shadow','number'],['shadow_color','color'],['label_bg','color'],
   ['title_size_pct','number'],['body_size_pct','number'],['title_gap_em','number'],
@@ -5335,6 +5468,61 @@ function init(){
     drawAll(); renderBatch();
     log('edge trim ' + ($('cEdgeTrim').checked ? 'on' : 'off') + ' — existing images re-measured','o');
   };
+  // ---- fonts the client owns ----
+  const renderFonts = () => {
+    const box = $('fontList'); if(!box) return;
+    box.innerHTML = '';
+    if(!CUSTOM_FONTS.length){
+      box.innerHTML = '<div style="color:var(--faint);padding:4px 0">None uploaded — only Google Fonts are available.</div>';
+      return;
+    }
+    CUSTOM_FONTS.forEach(f=>{
+      const row = document.createElement('div');
+      row.className = 'row';
+      row.style.cssText = 'gap:6px;padding:4px 0;border-bottom:1px solid var(--line)';
+      row.innerHTML =
+        '<input value="'+f.family.replace(/"/g,'&quot;')+'" style="flex:1;min-width:0" title="Family name">'+
+        '<select style="max-width:88px">'+[100,200,300,400,500,600,700,800,900]
+          .map(w=>'<option'+(w===f.weight?' selected':'')+'>'+w+'</option>').join('')+'</select>'+
+        '<label class="tiny" style="display:flex;align-items:center;gap:4px;color:var(--faint)">'+
+          '<input type="checkbox"'+(f.italic?' checked':'')+'>ital</label>'+
+        '<button class="btn sm quiet danger">Remove</button>';
+      const [name, weight, ital] = [row.querySelector('input'), row.querySelector('select'), row.querySelector('[type=checkbox]')];
+      const restamp = async () => {
+        f.family = name.value.trim() || f.family;
+        f.weight = +weight.value; f.italic = ital.checked;
+        REGISTERED.clear();                       // the descriptors changed, so register them again
+        await saveCustomFonts(); await registerCustomFonts();
+        await fontReady(S.profile); drawAll(); renderBatch(); renderFonts();
+      };
+      name.onchange = weight.onchange = ital.onchange = restamp;
+      row.querySelector('button').onclick = async () => {
+        CUSTOM_FONTS = CUSTOM_FONTS.filter(x=>x.id !== f.id);
+        REGISTERED.clear(); LOADED_FONTS.delete(f.family);
+        await saveCustomFonts();
+        renderFonts(); log('"'+f.family+'" '+f.weight+' removed — reload the page to stop the browser using it','w');
+      };
+      box.appendChild(row);
+    });
+  };
+  $('fontPick').onclick = () => $('fontFile').click();
+  $('fontFile').onchange = async e => {
+    const files = [...e.target.files];
+    e.target.value = '';
+    for(const file of files){
+      const data = await new Promise(res=>{ const r = new FileReader(); r.onload = ()=>res(r.result); r.readAsDataURL(file); });
+      const g = guessFace(file.name);
+      CUSTOM_FONTS.push({id: uid(), family: g.family, weight: g.weight, italic: g.italic, data});
+    }
+    await saveCustomFonts();
+    await registerCustomFonts();
+    await fontReady(S.profile);
+    drawAll(); renderBatch(); renderFonts();
+    log(files.length + ' font file' + (files.length>1?'s':'') + ' added: ' +
+        CUSTOM_FONTS.slice(-files.length).map(f=>f.family+' '+f.weight).join(', '), 'o');
+  };
+  loadCustomFonts().then(()=>{ renderFonts(); fontReady(S.profile).then(()=>{ drawAll(); renderBatch(); }); });
+
   $('logoPick').onclick = () => $('logoFile').click();
   $('logoFile').onchange = e => {
     const f = e.target.files[0]; if(!f) return;

@@ -322,10 +322,10 @@ const r = await p.evaluate(async ()=>{
   out.promptNoText = sp.includes('never asks for words');
 
   // --- nothing on this template is set in light small type
-  /* The body is Futura Bold now, not the headline face. Heavy enough to hold up on a
-     photograph, and measurably a different family from the headline — asserting the
-     name alone would pass just as happily if the file were missing and it fell back. */
-  out.bodyIsHeavy = S.profile.body_weight >= 700;
+  /* The body is Futura, at the same weight as the swipe line rather than bolder, and
+     measurably a different family from the headline — asserting the name alone would
+     pass just as happily if the file were missing and it fell back to something. */
+  out.bodyMatchesSwipeWeight = S.profile.body_weight === S.profile.swipe_weight;
   out.bodyReallyDrawsFutura = (()=>{
     const g = document.createElement('canvas').getContext('2d');
     const t = 'She kept every reply in a biscuit tin';
@@ -351,7 +351,7 @@ const r = await p.evaluate(async ()=>{
     return g.measureText('She kept every reply in a biscuit tin').width;
   };
   out.bodyReadsBigger = widthAt(S.profile) > widthAt(wasThin) * 1.25;
-  out.bodyAsksForWeight = /700/.test(fontStr(S.profile, 40, S.profile.body_weight, S.profile.body_font_family));
+  out.bodyAsksForWeight = /500/.test(fontStr(S.profile, 40, S.profile.body_weight, S.profile.body_font_family));
 
   // --- the cast: the same people, frame to frame, and named figures who look like themselves
   const cast = [{name:'Ada', look:'a woman of about thirty, dark cropped hair, sharp jaw, navy wool coat'},
@@ -449,7 +449,7 @@ const want = {
   anglesDocumented:true, dealtAll:true, dealtSpread:true, rotationMoves:true,
   listKeepsCloser:true, listTrimsExtra:true, listPromptCounts:true, promptsAskSwipe:true,
   promptsGuard:true, promptsDiffer:true, promptNoText:true,
-  bodyIsHeavy:true, bodyIsBig:true, bodyReadsBigger:true, bodyAsksForWeight:true,
+  bodyMatchesSwipeWeight:true, bodyIsBig:true, bodyReadsBigger:true, bodyAsksForWeight:true,
   castOnNamed:true, castBothNamed:true, castNoneWhenEmpty:true, castFromScene:true, castInsists:true,
   noCastNoBlock:true, castSurvivesSave:true,
   asksForCast:true, asksForDrama:true, bansStock:true, capsBodyLength:true, noFacelessRule:true,

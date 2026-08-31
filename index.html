@@ -1026,7 +1026,7 @@ const PRESETS = [
     name:'Pickuplines', builtin:true,
     aspect_ratio:'4:5',
     imagery:'cinematic-dramatic-photograph',
-    v: 7,                                       // bump to push the look into projects already saved
+    v: 8,                                       // bump to push the look into projects already saved
     image_prompt_suffix:'cinematic film still from a character drama, 35mm, dramatic directional light with deep '+
       'shadows and strong highlights, shallow depth of field, rich saturated colour, a real human face carrying '+
       'real emotion at the height of the moment, tension in the body, lived-in specific location, shot like a scene '+
@@ -1046,9 +1046,9 @@ const PRESETS = [
     // One voice at two sizes: the body is the same heavy face as the headline, because a
     // slide read at arm's length on a phone has no room for light 24px type. Sentence
     // case, though — a paragraph in caps at this weight is a wall, not a sentence.
-    // Headlines in Bernoru, body copy in Futura Bold — the smaller type shares a family
-    // with the swipe line, which is what ties the two halves of the frame together.
-    font_family:'Bernoru', font_weight:900, body_font_family:'Futura', body_weight:700, italic:false,
+    // Headlines in Bernoru, body copy in Futura Medium — the same weight as the swipe
+    // line, so the two pieces of Futura on a frame match rather than compete.
+    font_family:'Bernoru', font_weight:900, body_font_family:'Futura', body_weight:500, italic:false,
     font_fallback:'Archivo',                   // until a Bernoru file is present, stay in the family of shapes
     uppercase:true, body_uppercase:false, letter_spacing_em:-0.012,
     text_color:'#FFFFFF', stroke_color:'#000000', stroke_width:0, text_shadow:0.35, shadow_color:'#000000',

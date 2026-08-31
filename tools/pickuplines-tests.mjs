@@ -83,41 +83,43 @@ const r = await p.evaluate(async ()=>{
   // the two faces the page carries itself, and the one it stands in for
   out.futuraDraws = fontAvailable('Futura');                // italics only, so upright probes must not decide it
   out.noStandInNeeded = S.profile.swipe_font_family === 'Futura' && !S.profile.swipe_font_fallback;
-  out.builtinsNotFetched = BUILTIN_FONTS.has('Archivo') && BUILTIN_FONTS.has('Futura') &&
+  out.builtinsNotFetched = BUILTIN_FONTS.has('Bernoru') && BUILTIN_FONTS.has('Futura') &&
     (()=>{ const before = document.querySelectorAll('link[href*="fonts.googleapis"]').length;
-           ensureFont('Archivo'); ensureFont('Futura');
+           ensureFont('Bernoru'); ensureFont('Futura');
            return document.querySelectorAll('link[href*="fonts.googleapis"]').length === before; })();
   /* Bernoru Medium is a paid cut and is deliberately NOT shipped — the only free file
      is Black Ultra Expanded, and faking Medium out of it means changing weight and
      width at once, which came out mangled. The style names Bernoru first anyway, so a
      bought file takes over on upload; until then Archivo draws and must be present. */
-  out.bernoruNotFaked = !fontAvailable('Bernoru');
-  out.archivoDraws = fontAvailable('Archivo');
+  out.bernoruDraws = fontAvailable('Bernoru');            // the real Black Medium cut, supplied by the client
   out.bernoruIsTheFace = S.profile.font_family === 'Bernoru' && S.profile.font_fallback === 'Archivo';
   /* The size, anchored to the client's own reference line rather than to a number.
      Whichever face is in use, that line has to fit the column on one line and very
      nearly fill it — which is what a headline does on their artboard. Stated as a
      number instead, this check passes happily while the headline is a quarter too
      large, which is exactly what happened. */
-  out.titleFillsColumn = (()=>{
+  /* The client's own cover, set the way they set it: four lines, filling the column.
+     A single short line was too loose a target — several sizes satisfy it — and it is
+     how the headline ended up a quarter too large more than once. */
+  out.refHeadlineBreaks = (()=>{
     const g = document.createElement('canvas').getContext('2d');
     g.font = fontStr(S.profile, S.profile.title_size_pct * H);
-    // it has to fit the text column on ONE line, the way it does on their artboard,
-    // and still fill most of it — too small is as wrong as too large
-    const lines = wrap(g, 'TOM BRADY LAUNCHES', W * S.profile.max_width_pct);
-    const frac = g.measureText('TOM BRADY LAUNCHES').width / (W * S.profile.max_width_pct);
-    return lines.length === 1 && frac > 0.92;
+    const col = W * S.profile.max_width_pct;
+    const head = "THIS INVESTOR BUILT A PICKLEBALL APP USING LOVABLE, GREW IT TO 20,000 " +
+                 "USERS AND SOLD IT TO THE SPORT'S PROFESSIONAL LEAGUE";
+    const lines = wrap(g, head, col);
+    const longest = Math.max(...lines.map(l=>g.measureText(l).width));
+    return lines.length === 4 && longest / col > 0.88;
   })();
-  /* And the sizes, against the client's own artboard: a headline line fills about 91%
-     of the frame there and the swipe line about 40%. Measured, not eyeballed. */
+  /* Only the swipe line is still checked against a single measured line, because that
+     one really is one line. The headline used to be too, and it was a bad target: how
+     much of the column one short string fills depends on how wide the face is, so it
+     re-broke on every change of cut while refHeadlineBreaks above kept measuring the
+     thing that actually matters. */
   const widthOf = (font, text) => {
     const g = document.createElement('canvas').getContext('2d');
     g.font = font; return g.measureText(text).width / W;
   };
-  out.headlineMatchesRef = (()=>{
-    const w = widthOf(fontStr(S.profile, S.profile.title_size_pct * H), 'TOM BRADY LAUNCHES');
-    return w > 0.84 && w < 0.94;
-  })();
   out.swipeMatchesRef = (()=>{
     const w = widthOf('italic ' + S.profile.swipe_weight + ' ' +
       Math.round(S.profile.swipe_size_pct * H) + 'px "' + S.profile.swipe_font_family + '"',
@@ -328,8 +330,9 @@ const r = await p.evaluate(async ()=>{
   /* Measured rather than declared — but measured off the type, not off pixels, since
      pixel counts confound size with weight and with whatever the fallback happens to
      be. Text width scales with the size that was actually asked for. */
+  // the same face at the old size — swapping family too would measure the family
   const wasThin = Object.assign(JSON.parse(JSON.stringify(S.profile)),
-    {body_font_family:'Inter', body_weight:500, body_size_pct:0.024});
+    {body_weight:500, body_size_pct:0.024});
   const widthAt = prof => {
     const g = document.createElement('canvas').getContext('2d');
     g.font = fontStr(prof, prof.body_size_pct * H, prof.body_weight, prof.body_font_family);
@@ -425,7 +428,7 @@ const want = {
   markStraddlesRule:true, swipeNotFloating:true,
   swipeIsFuturaItalic:true, swipeIsFixed:true, brandFontIsBernoru:true,
   futuraDraws:true, noStandInNeeded:true, builtinsNotFetched:true, headlineFits:true,
-  bernoruNotFaked:true, archivoDraws:true, bernoruIsTheFace:true, titleFillsColumn:true, headlineMatchesRef:true, swipeMatchesRef:true,
+  bernoruDraws:true, bernoruIsTheFace:true, refHeadlineBreaks:true, swipeMatchesRef:true,
   swipeIsGreyAndLight:true, swipeDrawsGrey:true,
   reservesFooter:true, textClearsFooter:true,
   coverTypeSitsLow:true, bodyTypeSitsLow:true, bottomPadTight:true, lookRefreshed:true, docUnchanged:true, bodyNotShouted:true,

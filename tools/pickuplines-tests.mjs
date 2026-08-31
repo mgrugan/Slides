@@ -79,7 +79,8 @@ const r = await p.evaluate(async ()=>{
   out.swipeIsFuturaItalic = S.profile.swipe_font_family === 'Futura' && S.profile.swipe_italic === true;
   out.swipeIsFixed = S.profile.swipe_fixed === true &&
     swipeLine(deck.slides[0], S.profile) === 'Comment your thoughts on this below?!';
-  out.brandFontIsBernoru = S.profile.font_family === 'Bernoru' && S.profile.body_font_family === 'Bernoru';
+  out.headlineIsBernoru = S.profile.font_family === 'Bernoru';
+  out.bodyIsFutura = S.profile.body_font_family === 'Futura';
   // the two faces the page carries itself, and the one it stands in for
   out.futuraDraws = fontAvailable('Futura');                // italics only, so upright probes must not decide it
   out.noStandInNeeded = S.profile.swipe_font_family === 'Futura' && !S.profile.swipe_font_fallback;
@@ -321,7 +322,18 @@ const r = await p.evaluate(async ()=>{
   out.promptNoText = sp.includes('never asks for words');
 
   // --- nothing on this template is set in light small type
-  out.bodyIsHeavy = S.profile.body_weight >= 800 && S.profile.body_font_family === S.profile.font_family;
+  /* The body is Futura Bold now, not the headline face. Heavy enough to hold up on a
+     photograph, and measurably a different family from the headline — asserting the
+     name alone would pass just as happily if the file were missing and it fell back. */
+  out.bodyIsHeavy = S.profile.body_weight >= 700;
+  out.bodyReallyDrawsFutura = (()=>{
+    const g = document.createElement('canvas').getContext('2d');
+    const t = 'She kept every reply in a biscuit tin';
+    g.font = fontStr(S.profile, 40, S.profile.body_weight, 'Futura');
+    const futura = g.measureText(t).width;
+    g.font = fontStr(S.profile, 40, S.profile.body_weight, 'Bernoru');
+    return Math.abs(futura - g.measureText(t).width) > 2 && fontAvailable('Futura');
+  })();
   /* Relative, not absolute. The whole template scaled down a quarter when the sizes
      were converted off the client's artboard, and an absolute floor written before
      that just fails without meaning anything. What matters is that the body is set
@@ -339,7 +351,7 @@ const r = await p.evaluate(async ()=>{
     return g.measureText('She kept every reply in a biscuit tin').width;
   };
   out.bodyReadsBigger = widthAt(S.profile) > widthAt(wasThin) * 1.25;
-  out.bodyAsksForWeight = /800/.test(fontStr(S.profile, 40, S.profile.body_weight, S.profile.body_font_family));
+  out.bodyAsksForWeight = /700/.test(fontStr(S.profile, 40, S.profile.body_weight, S.profile.body_font_family));
 
   // --- the cast: the same people, frame to frame, and named figures who look like themselves
   const cast = [{name:'Ada', look:'a woman of about thirty, dark cropped hair, sharp jaw, navy wool coat'},
@@ -426,7 +438,8 @@ const want = {
   noNameOnBody:true, noTickOnBody:true, noFooterGradient:true, barStillAvailable:true,
   coverHasNoDivider:true, coverRuleFades:true, coverRuleFromText:true, thinRing:true,
   markStraddlesRule:true, swipeNotFloating:true,
-  swipeIsFuturaItalic:true, swipeIsFixed:true, brandFontIsBernoru:true,
+  swipeIsFuturaItalic:true, swipeIsFixed:true, headlineIsBernoru:true, bodyIsFutura:true,
+  bodyReallyDrawsFutura:true,
   futuraDraws:true, noStandInNeeded:true, builtinsNotFetched:true, headlineFits:true,
   bernoruDraws:true, bernoruIsTheFace:true, refHeadlineBreaks:true, swipeMatchesRef:true,
   swipeIsGreyAndLight:true, swipeDrawsGrey:true,

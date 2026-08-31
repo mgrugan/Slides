@@ -104,7 +104,11 @@ const r = await p.evaluate(async ()=>{
      how the headline ended up a quarter too large more than once. */
   out.refHeadlineBreaks = (()=>{
     const g = document.createElement('canvas').getContext('2d');
-    g.font = fontStr(S.profile, S.profile.title_size_pct * H);
+    const size = S.profile.title_size_pct * H;
+    g.font = fontStr(S.profile, size);
+    // tracking too: renderSlide applies it, so measuring without it measures a
+    // headline the app never draws — and the wrap is exactly what is under test
+    if('letterSpacing' in g) g.letterSpacing = ((S.profile.letter_spacing_em||0)*size).toFixed(2)+'px';
     const col = W * S.profile.max_width_pct;
     const head = "THIS INVESTOR BUILT A PICKLEBALL APP USING LOVABLE, GREW IT TO 20,000 " +
                  "USERS AND SOLD IT TO THE SPORT'S PROFESSIONAL LEAGUE";
@@ -139,7 +143,9 @@ const r = await p.evaluate(async ()=>{
   })();
   out.headlineFits = (()=>{                                 // nine words, and not five lines of them
     const g = document.createElement('canvas').getContext('2d');
-    g.font = fontStr(S.profile, S.profile.title_size_pct * H);
+    const size = S.profile.title_size_pct * H;
+    g.font = fontStr(S.profile, size);
+    if('letterSpacing' in g) g.letterSpacing = ((S.profile.letter_spacing_em||0)*size).toFixed(2)+'px';
     return wrap(g, 'THEY HID THEIR MARRIAGE FOR THIRTY YEARS', W * S.profile.max_width_pct).length <= 4;
   })();
   // the swipe line prints to the right of the mark, in the band just above the rule
@@ -326,6 +332,7 @@ const r = await p.evaluate(async ()=>{
      measurably a different family from the headline — asserting the name alone would
      pass just as happily if the file were missing and it fell back to something. */
   out.bodyMatchesSwipeWeight = S.profile.body_weight === S.profile.swipe_weight;
+  out.headlineHasAir = S.profile.letter_spacing_em > 0;   // it was negative, and the words ran together
   out.bodyReallyDrawsFutura = (()=>{
     const g = document.createElement('canvas').getContext('2d');
     const t = 'She kept every reply in a biscuit tin';
@@ -449,7 +456,7 @@ const want = {
   anglesDocumented:true, dealtAll:true, dealtSpread:true, rotationMoves:true,
   listKeepsCloser:true, listTrimsExtra:true, listPromptCounts:true, promptsAskSwipe:true,
   promptsGuard:true, promptsDiffer:true, promptNoText:true,
-  bodyMatchesSwipeWeight:true, bodyIsBig:true, bodyReadsBigger:true, bodyAsksForWeight:true,
+  bodyMatchesSwipeWeight:true, headlineHasAir:true, bodyIsBig:true, bodyReadsBigger:true, bodyAsksForWeight:true,
   castOnNamed:true, castBothNamed:true, castNoneWhenEmpty:true, castFromScene:true, castInsists:true,
   noCastNoBlock:true, castSurvivesSave:true,
   asksForCast:true, asksForDrama:true, bansStock:true, capsBodyLength:true, noFacelessRule:true,

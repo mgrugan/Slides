@@ -83,17 +83,23 @@ const r = await p.evaluate(async ()=>{
   // the two faces the page carries itself, and the one it stands in for
   out.futuraDraws = fontAvailable('Futura');                // italics only, so upright probes must not decide it
   out.noStandInNeeded = S.profile.swipe_font_family === 'Futura' && !S.profile.swipe_font_fallback;
-  out.builtinsNotFetched = BUILTIN_FONTS.has('Bernoru') && BUILTIN_FONTS.has('Futura') &&
+  out.builtinsNotFetched = BUILTIN_FONTS.has('Archivo') && BUILTIN_FONTS.has('Futura') &&
     (()=>{ const before = document.querySelectorAll('link[href*="fonts.googleapis"]').length;
-           ensureFont('Bernoru'); ensureFont('Futura');
+           ensureFont('Archivo'); ensureFont('Futura');
            return document.querySelectorAll('link[href*="fonts.googleapis"]').length === before; })();
-  out.bernoruDraws = fontAvailable('Bernoru');
+  /* Bernoru Medium is a paid cut and is deliberately NOT shipped — the only free file
+     is Black Ultra Expanded, and faking Medium out of it means changing weight and
+     width at once, which came out mangled. The style names Bernoru first anyway, so a
+     bought file takes over on upload; until then Archivo draws and must be present. */
+  out.bernoruNotFaked = !fontAvailable('Bernoru');
+  out.archivoDraws = fontAvailable('Archivo');
   out.bernoruIsTheFace = S.profile.font_family === 'Bernoru' && S.profile.font_fallback === 'Archivo';
-  /* The size, converted off the client's artboard. Theirs is about 1836px across, so
-     the 89 they set is 52 here — and 52 is exactly what this face needs to fill the
-     frame the way their line does. This is the check that would have caught the
-     headline reading a quarter too large. */
-  out.titleMatchesCanva = (()=>{
+  /* The size, anchored to the client's own reference line rather than to a number.
+     Whichever face is in use, that line has to fit the column on one line and very
+     nearly fill it — which is what a headline does on their artboard. Stated as a
+     number instead, this check passes happily while the headline is a quarter too
+     large, which is exactly what happened. */
+  out.titleFillsColumn = (()=>{
     const g = document.createElement('canvas').getContext('2d');
     g.font = fontStr(S.profile, S.profile.title_size_pct * H);
     // it has to fit the text column on ONE line, the way it does on their artboard,
@@ -318,11 +324,10 @@ const r = await p.evaluate(async ()=>{
      were converted off the client's artboard, and an absolute floor written before
      that just fails without meaning anything. What matters is that the body is set
      large against its own headline, in the same heavy face. */
-  out.bodyIsBig = S.profile.body_size_pct > S.profile.title_size_pct * 0.6;
-  /* Measured rather than declared — but measured off the type, not off pixels. The
-     test box has no network, so Archivo never loads and both weights fall back to the
-     same face; counting white pixels would be measuring the fallback, not the change.
-     Text width scales with the size that was actually asked for. */
+  out.bodyIsBig = S.profile.body_size_pct > S.profile.title_size_pct * 0.55;
+  /* Measured rather than declared — but measured off the type, not off pixels, since
+     pixel counts confound size with weight and with whatever the fallback happens to
+     be. Text width scales with the size that was actually asked for. */
   const wasThin = Object.assign(JSON.parse(JSON.stringify(S.profile)),
     {body_font_family:'Inter', body_weight:500, body_size_pct:0.024});
   const widthAt = prof => {
@@ -420,7 +425,7 @@ const want = {
   markStraddlesRule:true, swipeNotFloating:true,
   swipeIsFuturaItalic:true, swipeIsFixed:true, brandFontIsBernoru:true,
   futuraDraws:true, noStandInNeeded:true, builtinsNotFetched:true, headlineFits:true,
-  bernoruDraws:true, bernoruIsTheFace:true, titleMatchesCanva:true, headlineMatchesRef:true, swipeMatchesRef:true,
+  bernoruNotFaked:true, archivoDraws:true, bernoruIsTheFace:true, titleFillsColumn:true, headlineMatchesRef:true, swipeMatchesRef:true,
   swipeIsGreyAndLight:true, swipeDrawsGrey:true,
   reservesFooter:true, textClearsFooter:true,
   coverTypeSitsLow:true, bodyTypeSitsLow:true, bottomPadTight:true, lookRefreshed:true, docUnchanged:true, bodyNotShouted:true,

@@ -1103,52 +1103,58 @@ const PRESETS = [
     voice:'plain and warm, short declarative sentences, no hype words and no lecturing — the story or the point does the work'
   },
   /* ---------------------------------------------------------------------------
-     The thrifting page. Not a caption on a photograph — a small dashboard: what the
-     thing is, what it cost, what it is worth now, and the gap between the two set
-     large enough to be the reason the slide exists. The cover is the odd one out and
-     says so through hook_treatment: plain white type over the picture with a flag
-     above it, while every caption after it sits in a white box. */
+     The thrifting page, rebuilt to the account's own posts. Every frame is the same
+     thing: a photograph, a heavy gradient rising off the bottom, and one short line of
+     white caps centred over it. The cover is the only one that differs — a red flag
+     above the headline, the handle in the corner, and a gradient that fades to dark
+     red rather than black, which is what stops it reading as another body slide.
+     No boxes and no dashboard: the earlier build had both, from a different set of
+     the client's posts, and they are not this. */
   {
     name:'Thrifting', builtin:true,
     aspect_ratio:'4:5',
-    imagery:'product-and-archive-photograph',
-    v: 1,
-    image_prompt_suffix:'high-contrast product photograph lit like a sports poster, deep blacks, dramatic rim '+
-      'light and lens flare, the object sharp and centre-frame against a darkened crowd or studio backdrop, '+
-      'saturated colour, collector-grade detail on the surface and edges of the item.',
-    image_prompt_suffix_colour:'high-contrast product photograph lit like a sports poster, deep blacks, dramatic '+
-      'rim light and lens flare, the object sharp and centre-frame against a darkened crowd or studio backdrop, '+
-      'saturated colour, collector-grade detail on the surface and edges of the item.',
-    colour_suffix:'Rich saturated colour, strong reds and warm highlights against near-black surroundings.',
+    imagery:'dramatic-editorial-photograph',
+    v: 2,
+    image_prompt_suffix:'dramatic editorial photograph, hard directional light against deep shadow, the subject '+
+      'large in frame and sharply lit, rich saturated colour, dark surroundings falling away into black, '+
+      'shot like a magazine cover rather than a catalogue.',
+    image_prompt_suffix_colour:'dramatic editorial photograph, hard directional light against deep shadow, the '+
+      'subject large in frame and sharply lit, rich saturated colour, dark surroundings falling away into black, '+
+      'shot like a magazine cover rather than a catalogue.',
+    colour_suffix:'Rich saturated colour, strong highlights against near-black surroundings.',
     mono_suffix:'Black and white only, deep contrast, no colour anywhere in the frame.',
-    caption_treatment:'label-boxes',        // every caption after the cover sits in a white box
-    hook_treatment:'outlined',              // the cover does not
-    shot_ladder:false, subject_context:false,
-    font_family:'Archivo', font_weight:900, body_font_family:'Poppins', body_weight:600, italic:false,
+    /* documentary gives the bottom-anchored caption and the scrim; the inset, rule and
+       account row that usually come with it are all switched off */
+    caption_treatment:'documentary',
+    portrait_inset:false, auto_inset:false, divider:false, brand_bar:false, cover_swipe:false,
+    logo_on_all:false, shot_ladder:false, subject_context:false,
+    font_family:'Archivo', font_weight:900, body_font_family:'Archivo', body_weight:900, italic:false,
     font_fallback:'Inter',
-    uppercase:true, body_uppercase:false, letter_spacing_em:-0.005,
-    text_color:'#FFFFFF', stroke_color:'#000000', stroke_width:0, text_shadow:0.55, shadow_color:'#000000',
+    uppercase:true, body_uppercase:true, letter_spacing_em:-0.005,
+    text_color:'#FFFFFF', stroke_color:'#000000', stroke_width:0, text_shadow:0.30, shadow_color:'#000000',
     label_bg:'#FFFFFF',
-    scrim_pct:0.45, scrim_alpha:0.80,
-    title_size_pct:0.058, body_size_pct:0.030, title_gap_em:0.7, title_line_em:1.14, body_line_em:1.34,
-    max_width_pct:0.86, body_width_pct:0.62,
-    text_block_top_pct:0.035, hook_top_pct:0.745,     // captions top-left, the headline low and centred
-    text_align:'center', body_align:'left', edge_pct:0.035,
-    label_color:'#0B0B0B',                            // ink inside the white boxes, not the cover's white
-    /* the cover's flag */
-    badge_text:'TRENDING', badge_bg:'#E11D28', badge_color:'#FFFFFF',
-    badge_size_pct:0.030, badge_gap_em:0.85, badge_weight:900, badge_tracking_em:0.04,
-    /* bought / worth / the gap between them */
-    stat_boxes:true, stat_color:'#0B0B0B', stat_size_pct:0.040, stat_weight:700,
-    stat_top_pct:0.375, stat_right_pct:0.965, stat_gap_pct:0.035,
-    bought_label:'Bought For:', value_label:'Value Now:',
-    gain_label:'Value Gained', gain_label_pct:0.022, gain_top_pct:0.795,
-    gain_color:'#7ED957', gain_size_pct:0.072, gain_weight:900, gain_italic:true,
-    gain_stroke:10, gain_stroke_color:'#0B0B0B',
+    /* the gradient is most of the look: it has to be heavy enough to hold white caps
+       over a bright photograph, and the cover's foot is red */
+    scrim_pct:0.56, scrim_alpha:0.94, scrim_color:'#000000', hook_scrim_color:'#3A0A0E',
+    bottom_pad_pct:0.028,
+    title_size_pct:0.050, body_size_pct:0.050, title_gap_em:0.5,
+    title_line_em:1.02, body_line_em:1.02,
+    max_width_pct:0.88, body_width_pct:0.88,
+    text_align:'center',
+    /* the flag, and it always says the same thing */
+    badge_fixed:true, badge_text:'TRENDING', badge_bg:'#E11D28', badge_color:'#FFFFFF',
+    badge_size_pct:0.026, badge_gap_em:0.62, badge_weight:900, badge_tracking_em:0.06,
+    badge_radius_em:0.14,
+    /* the account, top right of the cover */
+    handle_text:'@thrifting', handle_size_pct:0.023, handle_weight:900,
+    handle_tracking_em:0.03, handle_top_pct:0.030, handle_pad_pct:0.045, handle_on_all:false,
+    /* the value dashboard from the earlier build stays in the code and stays off here:
+       these posts do not use it, and a stray figure would draw furniture over the caption */
+    stat_boxes:false,
     auto_number:false,
     library_collection:'Thrifting',
-    structure:'cover names the promise, then one item per slide with what it cost and what it is worth now',
-    voice:'flat and factual on the numbers, no hype — the gap between the two figures is the whole story'
+    structure:'cover states the hook in one line, then each slide advances it by one short line',
+    voice:'short, flat and declarative — one line a slide, no adjectives doing work the fact should do'
   }
 ];
 
@@ -2154,16 +2160,34 @@ function blockHeight(size, n, treat, lineEm){
 const titleLineEm = p => p.title_line_em ?? (p.caption_treatment === 'documentary' ? 0.94 : 1.20);
 const bodyLineEm  = p => p.body_line_em  ?? (p.caption_treatment === 'documentary' ? 1.42 : 1.20);
 /* black gradient rising from the bottom, so white type reads over any photograph */
-function drawScrim(ctx, W, H, p){
+function drawScrim(ctx, W, H, p, tint){
   const hgt = (p.scrim_pct || 0) * H;
   if(hgt <= 0) return;
   const g = ctx.createLinearGradient(0, H - hgt, 0, H);
   const a = p.scrim_alpha ?? 0.9;
+  // The foot of the gradient need not be black. The thrifting cover carries a red one,
+  // which is what stops it reading as the same frame as the slides behind it.
+  const c = hexToRGB(tint || p.scrim_color || '#000000').join(',');
   g.addColorStop(0, 'rgba(0,0,0,0)');
   g.addColorStop(0.45, 'rgba(0,0,0,'+(a*0.55).toFixed(3)+')');
-  g.addColorStop(1, 'rgba(0,0,0,'+a.toFixed(3)+')');
+  g.addColorStop(0.82, 'rgba('+c+','+(a*0.92).toFixed(3)+')');
+  g.addColorStop(1, 'rgba('+c+','+a.toFixed(3)+')');
   ctx.fillStyle = g;
   ctx.fillRect(0, H - hgt, W, hgt);
+}
+/* the account's name in the corner, as on the cover */
+function drawHandle(ctx, W, H, p){
+  const t = String(p.handle_text || '').trim();
+  if(!t) return;
+  const size = (p.handle_size_pct || 0.023) * H;
+  ctx.save();
+  ctx.font = fontStr(p, size, p.handle_weight || 800, p.handle_font_family || p.font_family);
+  if('letterSpacing' in ctx) ctx.letterSpacing = ((p.handle_tracking_em ?? 0.03) * size).toFixed(2)+'px';
+  ctx.fillStyle = p.handle_color || p.text_color || '#fff';
+  ctx.globalAlpha = p.handle_alpha ?? 0.95;
+  ctx.textAlign = 'right'; ctx.textBaseline = 'top';
+  ctx.fillText(t.toUpperCase(), W * (1 - (p.handle_pad_pct ?? 0.045)), H * (p.handle_top_pct ?? 0.030));
+  ctx.restore();
 }
 /* Each fact category can carry its own mark — a History deck and a Terrifying deck
    are different accounts wearing the same layout. A category with no logo of its own
@@ -2614,7 +2638,7 @@ function renderSlide(slide, canvas, p, scale){
   const doc = treat === 'documentary';
 
   if(doc){
-    drawScrim(ctx, W, H, p);
+    drawScrim(ctx, W, H, p, isHook ? (p.hook_scrim_color || p.scrim_color) : p.scrim_color);
     // under the type, not over it: painted after the caption it would wash the last line
     if(footerReserve(slide, p, W, H)) drawFooterScrim(ctx, W, H, p);
     // Below a quarter scale the circle is a handful of pixels in a row thumbnail, and
@@ -2662,8 +2686,10 @@ function renderSlide(slide, canvas, p, scale){
 
   const used = drawLines(ctx, tLines, drawP, tSize, x, top, W, H, null, null, tLine);
   if(bLines.length) drawLines(ctx, bLines, drawP, bSize, x, top + used + gap, W, H, bWeight, bFam, bLine);
-  if(!doc && isHook && p.badge_on_cover !== false && slide.badge)
-    drawBadge(ctx, W, H, p, slide.badge, top - tSize * (p.badge_gap_em ?? 0.85));
+  const badgeText = p.badge_fixed ? (p.badge_text || '') : slide.badge;
+  if(isHook && p.badge_on_cover !== false && badgeText)
+    drawBadge(ctx, W, H, p, badgeText, top - tSize * (p.badge_gap_em ?? 0.85));
+  if(p.handle_text && (isHook || p.handle_on_all)) drawHandle(ctx, W, H, p);
   if(!doc && !isHook && p.stat_boxes){ drawStatBoxes(ctx, W, H, p, slide); drawGain(ctx, W, H, p, slide); }
   if(doc && footH) drawFooter(ctx, slide, W, H, p);
   if(doc && p.logo_on_all && !footH && !(isHook && p.divider)) drawCornerLogo(ctx, W, H, p, logoFor(slide));
@@ -4728,7 +4754,7 @@ const ANGLE_SETS = {
      have: `values`, where each slide is an item with what it cost and what it is worth
      now. The gap between those two numbers is the post. */
   thrifting: [
-    {key:'valuegain', kind:'values',
+    {key:'valuegain', kind:'story',
      label:'what it cost then, what it is worth now',
      brief:'One collectible line — a player, a set, a sneaker, a toy — and several specific examples of it, each '+
        'with a real purchase price and a real current value. Graded trading cards, sealed sneakers, boxed toys, '+
@@ -4738,7 +4764,7 @@ const ANGLE_SETS = {
      close:'The last slide is the biggest number of the set.',
      swipe:'The last one is the one that hurts.'},
 
-    {key:'thriftfind', kind:'values',
+    {key:'thriftfind', kind:'story',
      label:'bought for pennies in a charity shop',
      brief:'Real thrift-store and car-boot finds that turned out to be worth a fortune — the ones people post to '+
        'r/ThriftStoreHauls, r/goodwill and r/VintageFashion. A jacket for four pounds, a vase for a dollar, a '+
@@ -4748,7 +4774,7 @@ const ANGLE_SETS = {
      close:'The last slide is the find with the widest gap of the lot.',
      swipe:'Slide 4 was bought for less than a coffee.'},
 
-    {key:'grails', kind:'values',
+    {key:'grails', kind:'story',
      label:'sneakers that became grails',
      brief:'Retro colourways and released-then-forgotten pairs that now resell for many times retail: the '+
        'original retail price against what a deadstock pair fetches today. Jordans, Yeezys, Dunks, collaborations. '+
@@ -4758,7 +4784,7 @@ const ANGLE_SETS = {
      close:'The last slide is the pair with the steepest multiple.',
      swipe:'Number 5 retailed for under £100.'},
 
-    {key:'sealed', kind:'values',
+    {key:'sealed', kind:'story',
      label:'the ones nobody kept sealed',
      brief:'Toys, games, consoles and memorabilia whose value is almost entirely in the box: the same item loose '+
        'against sealed and graded. Star Wars figures, first-run consoles, sealed Pokémon boxes, boxed Lego sets. '+
@@ -4768,7 +4794,7 @@ const ANGLE_SETS = {
      close:'The last slide is the widest loose-to-sealed gap.',
      swipe:'Yours is in the loft. It is not sealed.'},
 
-    {key:'y2k', kind:'values',
+    {key:'y2k', kind:'story',
      label:'Y2K and 90s things that quietly got expensive',
      brief:'Clothing, tech and tat from roughly 1995 to 2008 that now sells for real money: a mobile phone, an '+
        'MP3 player, a brand of jeans, a jacket everybody had. What it cost new — or what it goes for in a charity '+
@@ -4777,7 +4803,7 @@ const ANGLE_SETS = {
      close:'The last slide is the one most readers threw away.',
      swipe:'You almost certainly binned number 3.'},
 
-    {key:'cards', kind:'values',
+    {key:'cards', kind:'story',
      label:'trading cards that ran away',
      brief:'Sports and Pokémon cards whose value moved hard: a specific card, its grade, what it sold for a few '+
        'years ago against what it sells for now. Name the set, the year, the parallel and the grade, because in '+
@@ -4938,13 +4964,14 @@ function parseIdeaLines(setName, text){
   }).filter(x=>x.hook);
 }
 
-/* The value-comparison carousel. Structurally unlike the others: each slide after the
-   cover is an item with two numbers on it, and the whole post lives or dies on whether
-   those numbers are real and whether the gap between them is worth looking at. */
-function valuesDeckPrompt(cat, deck){
+/* The thrifting carousel. Every slide is one short line over a photograph — no body
+   paragraph, no boxes — so the writing constraint is unusually tight: if a beat cannot
+   be said in a dozen words it is the wrong beat. */
+function thriftDeckPrompt(cat, deck){
   const p = S.profile;
   const angle = angleIn(catCfg(cat).angles, deck.angle) || {label:'', brief:'', cover:'', close:''};
-  const items = Math.max(3, deck.n - 1);
+  const list = angle.kind === 'list';
+  const items = list ? Math.max(3, deck.n - 2) : 0;
   return (
 'Write a ' + deck.n + '-slide carousel for a thrifting and collectibles account.\n\n' +
 'THE POST: ' + deck.subject + '\n' +
@@ -4952,40 +4979,46 @@ function valuesDeckPrompt(cat, deck){
 'THE ACCOUNT:\n' + catPrompt(cat) + '\n\n' +
 'THIS POST\'S ANGLE — ' + angle.label.toUpperCase() + ':\n' + angle.brief + '\n\n' +
 
-'THE NUMBERS ARE THE PRODUCT, so they are the thing to be careful about:\n' +
-'- Every "bought" and "value" figure must be a real, findable one: a recorded auction result, a completed sale, a published retail price. Not an estimate, not a round number you reached for.\n' +
-'- If you are not confident of a figure, choose a different item. An invented price is the one mistake this account cannot survive.\n' +
-'- Where a valuation rests on a single sale rather than a market, say so in the item name.\n' +
-'- Give prices exactly as they would be written: "$340", "$19,500", "$5,000,000". Same currency across the whole carousel.\n' +
-'- "gained" is the difference, worked out and written the same way. Check the arithmetic.\n' +
-'- Order the items so the gap widens as the reader swipes. The largest is last.\n\n' +
+'HOW THESE SLIDES ARE BUILT — this is the part that gets it wrong most often:\n' +
+'- Every slide is ONE LINE. A "title" and nothing else. No body text on any slide; leave "body" empty.\n' +
+'- A line is 4 to 10 words. It is set in heavy caps across the bottom of a photograph, so at twelve words it stops being readable and starts being a paragraph.\n' +
+'- Each line advances the story by exactly one step. Read end to end, the lines alone should tell the whole thing.\n' +
+'- Plain and flat. No adjectives doing work the fact should do, no "you won\'t believe", no emoji, no exclamation marks.\n' +
+'- Numbers land hardest bare: "IT SOLD FOR $19,500" beats any sentence about how much it sold for.\n\n' +
 
-'STRUCTURE:\n' +
-'- Slide 1 is the cover: the headline only, 5 to 10 words. ' + angle.cover + '\n' +
-'- Also give the cover a "badge": one or two words in caps for the red flag above the headline. TRENDING, RARE FIND, GRAILS, SEALED. Not the same word every time.\n' +
-'- Slides 2 to ' + (items + 1) + ' are one item each. ' + items + ' of them, no more.\n' +
-'- Each item slide carries: "body", the item named the way a collector would name it — year, set or colourway, and grade or condition, over 2 or 3 short lines; "bought" and "value" as above; and "gained". Leave "title" empty on item slides: the name goes in "body", which is what the white boxes are set from.\n' +
+'THE COVER:\n' +
+'- Slide 1 is the headline only, 5 to 10 words. ' + angle.cover + '\n' +
+'- Make it the whole hook in one breath. The reference posts read like: "SOMEONE SOLD A VINTAGE TEE ON EBAY THEN SAW THE NAME JOHN MAYER".\n' +
+'- Do not open with a number unless the post genuinely counts things.\n\n' +
+
+'THE REST:\n' +
+(list
+ ? '- Slides 2 to ' + (items + 1) + ' carry one point each, ' + items + ' of them. Slide ' + (items + 2) + ' closes.\n'
+ : '- Slide 2 sets the scene in one line. The middle slides run the story in order. One of them is the turn — the moment it stops being an ordinary find.\n') +
 '- ' + angle.close + '\n' +
-'- No body prose on the item slides. The name and the two numbers are the whole slide.\n\n' +
+'- Where the story belongs to somebody who posted it, name them on the closing slide or in the caption.\n\n' +
 
-'THE SWIPE LINE — return it as "swipe": one short line under the cover headline, under 10 words, teasing the biggest number without giving it. Specific to this post.\n\n' +
+'WHAT MUST BE TRUE:\n' +
+'- Every price, date, grade and name must be one a reader could look up. No invented figures — that is the one mistake this account cannot survive.\n' +
+'- If you are not confident of a number, write the line without it.\n' +
+'- Where a valuation rests on one sale rather than a market, say so on the slide.\n\n' +
 
-'IMAGES — "scene" describes a photograph and nothing else, and never asks for words, numbers, logos, packaging text, price tags or grading labels, because the layout puts all of that on top.\n' +
-'- The cover: the subject of the post shot like a poster — the object or the player, dramatic rim light, deep blacks, something in motion or mid-celebration behind it.\n' +
-'- Each item slide: that item photographed as the hero, close and lit hard, against a darkened background with depth. A sneaker on a plinth, a card held up to the light, a boxed toy on a shelf in a dim room.\n' +
-'- Vary the framing and the setting slide to slide. Do not photograph six objects on the same table.\n' +
-'- Leave the upper left and the right-hand side of the frame calm in tone: the captions and the figures sit there.\n' +
-'Style is ' + (p.imagery || 'high-contrast product photograph') + '.\n\n' +
+'THE SWIPE LINE — return it as "swipe": one short line, under 10 words, teasing the turn without giving it.\n\n' +
+
+'IMAGES — "scene" describes a photograph and nothing else, and never asks for words, numbers, logos, packaging text, price tags or grading labels, because the caption is laid over the top.\n' +
+'- Shot like a magazine cover: the subject large and hard-lit, the surroundings falling away into black. There is a heavy gradient across the bottom of every frame, so keep the lower third simple and dark.\n' +
+'- The cover especially: the single most arresting image in the post — the object or the person, close, dramatically lit.\n' +
+'- Vary the framing slide to slide. Never photograph the same object on the same surface twice.\n' +
+'Style is ' + (p.imagery || 'dramatic editorial photograph') + '.\n\n' +
 
 'CAPTION for Instagram:\n' +
-'- Three short paragraphs separated by blank lines. The first lands the biggest number, the second gives the context, the third asks the reader whether they ever owned one.\n' +
-'- If any item comes from somebody\'s posted find, credit them in the caption.\n' +
+'- Three short paragraphs separated by blank lines: the hook, the detail, then a question the comments can answer.\n' +
+'- Credit the original finder or poster if the story is theirs.\n' +
 '- Then one line of 3 to 5 hashtags, most niche first.\n\n' +
 
 'Return ONLY JSON:\n' +
 '{"subject":"short canonical name for this post","swipe":"...",' +
-'"slides":[{"kind":"hook","title":"...","badge":"TRENDING","scene":"..."},' +
-'{"kind":"slide","title":"","body":"1997 Topps Chrome Refractor PSA 10","bought":"$340","value":"$19,500","gained":"$19,160","scene":"..."}],' +
+'"slides":[{"kind":"hook","title":"...","scene":"..."},{"kind":"slide","title":"...","body":"","scene":"..."}],' +
 '"caption":"para1\\n\\npara2\\n\\npara3\\n\\n#niche #mid #broad"}'
   );
 }
@@ -5243,7 +5276,7 @@ const mapDeckSlides = (arr, deck, label) => (Array.isArray(arr) ? arr : []).map(
 async function writeFactDeck(deck){
   const cat = deck.cat, byHook = !!deck.byHook, byAngle = !!deck.angle;
   const prompt = byAngle
-    ? (deck.kind === 'values' ? valuesDeckPrompt(cat, deck) : pickupDeckPrompt(cat, deck))
+    ? (catCfg(cat).angles === 'thrifting' ? thriftDeckPrompt(cat, deck) : pickupDeckPrompt(cat, deck))
     : byHook
     ? factHookDeckPrompt(cat, deck.hook, deck.n - 1, deck.tone, deck.cta)
     : factDeckPrompt(cat, {subject:deck.subject, claim:deck.hook}, deck.n, deck.tone);
@@ -5266,7 +5299,6 @@ async function writeFactDeck(deck){
     if(cover) cover.swipe = deck.swipe;
     // a headline that counts has to deliver its count, the same as a hook deck does
     if(deck.kind === 'list') deck.slides = trimToPromise(deck.hook, deck.slides, 1);   // the closing ask is allowed
-    if(deck.kind === 'values') deck.slides = trimToPromise(deck.hook, deck.slides, 0);
   }
   if(byHook){
     // the headline promises a count, so the deck delivers exactly that many
@@ -5367,9 +5399,7 @@ async function runFacts(opts){
       newDecks = ideas.map((idea,i)=>({id:uid(), hook:idea.hook, subject:idea.subject, cat,
         angle:idea.angle, kind:idea.kind, tone:tones[i],
         // a list headline sets its own length; a story runs to whatever the run asked for
-        n: idea.kind === 'list' ? (hookItemCount(idea.hook) ? hookItemCount(idea.hook) + 2 : slides)
-         : idea.kind === 'values' ? (hookItemCount(idea.hook) ? hookItemCount(idea.hook) + 1 : slides)
-         : slides,
+        n: idea.kind === 'list' ? (hookItemCount(idea.hook) ? hookItemCount(idea.hook) + 2 : slides) : slides,
         collection: conf.collection || '',
         slides:[], caption:'', status:'queued', error:''}));
     } else if(byHook){

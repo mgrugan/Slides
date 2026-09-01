@@ -206,7 +206,7 @@ const r = await p.evaluate(async ()=>{
     const f = castBlock(deck.slides[1], false);
     return !/Tini Younger/.test(f) && /platinum blonde/.test(f) && /do not infer or use any name/.test(f);
   })();
-  out.briefAsksForTheRealName = /"real" is the person's full public name/.test(
+  out.briefAsksForTheRealName = /"real" is the person's FULL public name/.test(
     obsessionDeckPrompt('Obsession', {subject:'x', hook:'y', n:7, person:'Tini Younger'}));
 
   // --- the brief

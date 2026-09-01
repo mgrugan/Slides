@@ -81,6 +81,54 @@ const r = await p.evaluate(async ()=>{
     return top[0] > 150;
   })();
 
+  /* The face. Archivo Black was too wide — the same headline came out two lines rather
+     than four and stopped reading as this account. Anton is the narrow one, and it is
+     carried in the page rather than fetched, so a slow or blocked Google Fonts cannot
+     silently swap a wide grotesque back in. */
+  out.setInAnton = S.profile.font_family === 'Anton' && S.profile.body_font_family === 'Anton';
+  out.antonIsCarried = BUILTIN_FONTS.has('Anton') && fontAvailable('Anton');
+  out.antonIsNarrow = (()=>{
+    const g = document.createElement('canvas').getContext('2d');
+    g.font = '400 100px Anton';       const a = g.measureText('SOMEONE SOLD A VINTAGE').width;
+    g.font = '900 100px Archivo';     const c = g.measureText('SOMEONE SOLD A VINTAGE').width;
+    return a < c * 0.85;
+  })();
+  /* Line spacing. The account stacks these almost touching; 1.02 put a band of air
+     between every line. It cannot go arbitrarily tight either — Anton's caps are tall
+     against its em, and below about 0.94 they collide. */
+  out.linesStackClose = S.profile.title_line_em <= 0.98 && S.profile.title_line_em >= 0.94;
+  out.headlineLinesDoNotTouch = (()=>{
+    const g = document.createElement('canvas').getContext('2d');
+    const size = S.profile.title_size_pct * H;
+    g.font = fontStr(S.profile, size);
+    const m = g.measureText('SOMEONE');
+    const cap = (m.actualBoundingBoxAscent || size*0.72) + (m.actualBoundingBoxDescent || 0);
+    return size * S.profile.title_line_em > cap + 4;      // a real gap, not an overlap
+  })();
+  /* The cover's red is a glow added over a near-black gradient, not a maroon tint mixed
+     into it: bright at the bottom edge and gone by halfway up the caption. */
+  out.glowIsBrightestAtTheFoot = (()=>{
+    /* Measured as what the glow ADDS, not as absolute brightness: the gradient is dark
+       at the foot and thin higher up, so comparing raw pixels compares the scrim. */
+    const off = JSON.parse(JSON.stringify(S.profile)); off.glow_pct = 0;
+    const c2 = document.createElement('canvas'); renderSlide(deck.slides[0], c2, off, 1);
+    const add = y => px(cover, W*0.5, y)[0] - px(c2, W*0.5, y)[0];
+    const foot = add(H - 4), mid = add(H - Math.round(H*0.30));
+    return foot > 30 && foot > mid + 15;
+  })();
+  out.glowSpansTheWidth = (()=>{               // a wash across the foot, not a smudge in the middle
+    const edge = px(cover, W*0.10, H - 8), mid = px(cover, W*0.5, H - 8);
+    return edge[0] > 55 && edge[0] < mid[0];
+  })();
+  out.glowStaysOffTheSlides = S.profile.glow_on_all === false;
+  /* The slides keep their picture: the gradient there only has to hold one line at the
+     foot, and a scrim over half the frame was throwing the photograph away. */
+  out.slideKeepsItsPicture = S.profile.scrim_pct <= 0.34 && S.profile.hook_scrim_pct > S.profile.scrim_pct;
+  out.pictureShowsAtMidHeight = px(item, W*0.5, H*0.55)[0] > 120;
+  /* Big and centred even when a line comes up short — the fit-to-column step-down that
+     the dating style uses is exactly wrong here. */
+  out.doesNotShrinkToFill = S.profile.fit_column === false && S.profile.balance_wrap === true;
+
   // --- no leftovers from the dashboard build
   out.noWhiteBoxes = !scan(item, W*0.04, W*0.96, H*0.02, H*0.70, white);
   out.statsOff = S.profile.stat_boxes === false;
@@ -113,6 +161,10 @@ const want = {
   itemHasNoBadge:true, itemHasNoHandle:true, itemCaptionIsWhite:true,
   gradientCarriesTheCaption:true, coverFootIsRed:true, gradientTopIsClear:true,
   noWhiteBoxes:true, statsOff:true, noGreenFigure:true,
+  setInAnton:true, antonIsCarried:true, antonIsNarrow:true,
+  linesStackClose:true, headlineLinesDoNotTouch:true,
+  glowIsBrightestAtTheFoot:true, glowSpansTheWidth:true, glowStaysOffTheSlides:true,
+  slideKeepsItsPicture:true, pictureShowsAtMidHeight:true, doesNotShrinkToFill:true,
   angleCount:8, angleKinds:'list,story', anglesDocumented:true, pillarsCovered:true,
   promptOneLinePerSlide:true, promptCapsLineLength:true, promptDemandsRealFigures:true,
   promptWantsCredit:true, promptKeepsFootClear:true, promptNoTextInImages:true,

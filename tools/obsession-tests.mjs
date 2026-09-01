@@ -193,24 +193,28 @@ const r = await p.evaluate(async ()=>{
   })();
 
   // --- the likeness, carried without a name
+  /* The likeness is carried by the NAME, with the description behind it. Describing a
+     real person and withholding their name returns a plausible stranger, and on a page
+     whose whole premise is "you know who this is" that wastes the post. */
+  deck.cast[0].real = 'Tini Younger';
   const cb = castBlock(deck.slides[1]);
-  out.castOmitsTheName = !/Tini/.test(cb);
+  out.castNamesThePerson = /This is Tini Younger\./.test(cb);
   out.castCarriesTheLook = /platinum blonde/.test(cb);
-  out.castForbidsInferringAName = /do not infer or use any name/.test(cb);
   out.castStillInsistsOnSameness = /MUST LOOK IDENTICAL IN EVERY FRAME/.test(cb);
-  out.namedModeStillWorks = (()=>{                   // the other accounts are unaffected
-    const was = S.profile.cast_unnamed; S.profile.cast_unnamed = false;
-    const named = castBlock(deck.slides[1]);
-    S.profile.cast_unnamed = was;
-    return /Tini — a woman in her mid twenties/.test(named);
+  out.namedFirstIsOn = S.profile.cast_named_first === true;
+  out.describedFallbackExists = (()=>{               // used only when the model declines
+    const f = castBlock(deck.slides[1], false);
+    return !/Tini Younger/.test(f) && /platinum blonde/.test(f) && /do not infer or use any name/.test(f);
   })();
+  out.briefAsksForTheRealName = /"real" is the person's full public name/.test(
+    obsessionDeckPrompt('Obsession', {subject:'x', hook:'y', n:7, person:'Tini Younger'}));
 
   // --- the brief
   const dp = obsessionDeckPrompt('Obsession', {subject:'x', hook:'y', n:7,
     person:'Tini Younger', day:'2026-09-01', source:'@tiniyounger / IG'});
   out.briefDemandsALongLook = /40 to 70 words/.test(dp) && /apparent age, build/.test(dp);
-  out.briefSaysWhyTheNameIsWithheld = /refused/.test(dp) && /blank slide/.test(dp);
-  out.briefBansNamesInScene = /NEVER put a real person's name/.test(dp);
+  out.briefSaysWhenTheNameIsDropped = /the one occasion the name is declined/.test(dp);
+  out.briefBansBrandsInScene = /never by a company, show or brand name/.test(dp);
   out.briefExplainsTheMarkers = /Wrap the phrase that carries the slide in asterisks/.test(dp);
   out.briefLimitsTheMarking = /One or two marked phrases per slide/.test(dp);
   out.briefWantsParagraphs = /separated by blank lines/.test(dp);
@@ -254,9 +258,9 @@ const want = {
   layerIsOnForThisStyle:true, darkFrameIsLeftAlone:true, thumbnailsSkipTheLayer:true,
   altAlignOn:true, coverIsExempt:true, firstSlideSetsLeft:true, secondSlideSetsRight:true,
   andItActuallyDraws:true,
-  castOmitsTheName:true, castCarriesTheLook:true, castForbidsInferringAName:true,
-  castStillInsistsOnSameness:true, namedModeStillWorks:true,
-  briefDemandsALongLook:true, briefSaysWhyTheNameIsWithheld:true, briefBansNamesInScene:true,
+  castNamesThePerson:true, castCarriesTheLook:true, castStillInsistsOnSameness:true,
+  namedFirstIsOn:true, describedFallbackExists:true, briefAsksForTheRealName:true,
+  briefDemandsALongLook:true, briefSaysWhenTheNameIsDropped:true, briefBansBrandsInScene:true,
   briefExplainsTheMarkers:true, briefLimitsTheMarking:true, briefWantsParagraphs:true,
   briefBansInvention:true, briefCarriesTheDay:true, briefCreditsTheSource:true,
   dispatchReachesObsession:true,

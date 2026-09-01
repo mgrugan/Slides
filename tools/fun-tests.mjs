@@ -186,8 +186,12 @@ const r = await p.evaluate(async ()=>{
                                    person:'A creator', day:'2026-09-01', source:'@someone / IG'});
   out.briefIsOneLinePerSlide = /Every slide is ONE LINE/.test(fp) && /leave "body" empty/.test(fp);
   out.briefDemandsALongLook = /40 to 70 words/.test(fp) && /apparent age, build/.test(fp);
-  out.briefBansNamesInScene = /NEVER put a real person's name/.test(fp);
-  out.briefSaysWhyTheNameIsWithheld = /refused/.test(fp) && /blank slide/.test(fp);
+  /* The brief used to withhold the person's name from the picture entirely. It no
+     longer does — that produced a plausible stranger instead of a likeness. What it
+     still bans in "scene" is BRAND names, which are a different problem: the person
+     comes through the cast entry, and a platform or show name in the scene is what
+     draws a logo the caption then sits on top of. */
+  out.briefBansBrandsInScene = /never by a brand, platform or show name/.test(fp);
   out.briefBansRumour = /Never state an allegation, a rumour or an unconfirmed claim as fact/.test(fp);
   out.briefBansPileOns = /No pile-ons/.test(fp);
   out.briefProtectsMinors = /anyone under 18/.test(fp);
@@ -206,7 +210,58 @@ const r = await p.evaluate(async ()=>{
     return /THE HEADLINE PROMISES 7\b/.test(c) && /Deliver exactly 7 points/.test(c);
   })();
   out.dispatchReachesFun = !!ANGLE_PROMPTS['fun'];
-  out.castTravelsUnnamed = S.profile.cast_unnamed === true;
+
+  /* The likeness. A 60-word description of a streamer returns a plausible stranger —
+     the reader is supposed to know them on sight and does not, which wastes the post.
+     So the real name leads and the description rides behind it, and the frame is only
+     asked without the name when the model has actually declined. */
+  const castDeck = {id:'cd', cat:'fun', angle:'blewup', kind:'story', tone:'colour', slides:[]};
+  castDeck.cast = [{name:'Speed', real:'IShowSpeed',
+    look:'a young man in his early twenties, slim build, dark brown skin, short black hair in a low fade, ' +
+         'wide expressive eyes, broad smile, wearing a red football shirt'}];
+  const castSlide = {id:'cs', kind:'slide', title:'T', body:'',
+                     scene:'Speed on a stage under hard light', cast:['Speed'], tone:'colour', _deck:castDeck};
+  castDeck.slides = [castSlide];
+  out.namesThePerson = /This is IShowSpeed\./.test(imagePrompt(castSlide, false));
+  out.keepsTheLookBehindTheName = /low fade/.test(imagePrompt(castSlide, false));
+  out.fallbackDropsTheName = (()=>{
+    const f = imagePrompt(castSlide, false, false);
+    return !/IShowSpeed/.test(f) && /low fade/.test(f);
+  })();
+  out.namedFirstIsOn = S.profile.cast_named_first === true && !S.profile.cast_unnamed;
+  out.briefAsksForTheRealName = /"real" is the person's full public name/.test(fp);
+  out.briefKeepsScenesReported = /Only ever put them in a situation that is actually reported/.test(fp);
+  /* And the frame is only illustrating a story, so a refusal has to be visible rather
+     than silently downgrading the face. genImage retries without the name and logs it. */
+  out.refusalFallsBackAndSaysSo = await (async ()=>{
+    const prompts = [];
+    const realCall = window.callModel;
+    let n = 0;
+    window.callModel = async ({parts}) => {
+      prompts.push(parts[0].text);
+      n++;
+      if(n === 1) return {text:'I cannot generate that.', images:[]};   // the model declines
+      // saturated, or the colour-tone guard fires its own retry and the count is off
+      const c = document.createElement('canvas'); c.width = 16; c.height = 20;
+      const x = c.getContext('2d'); x.fillStyle = '#c0392b'; x.fillRect(0,0,16,20);
+      x.fillStyle = '#2980b9'; x.fillRect(0,0,8,20);
+      return {text:'', images:[c.toDataURL('image/jpeg')]};
+    };
+    const logs = [];
+    const realLog = window.log; window.log = (m, k) => logs.push(String(m));
+    try{ await genImage(castSlide, false); }
+    finally { window.callModel = realCall; window.log = realLog; }
+    return prompts.length === 2 &&
+           /This is IShowSpeed\./.test(prompts[0]) &&      // asked by name first
+           !/IShowSpeed/.test(prompts[1]) &&                // then without it
+           logs.some(m => /will not be a likeness/.test(m));
+  })();
+  /* The facts pages are a different case and were left alone: there an image is
+     presented as documentation of an event, so a generated face is a fabricated
+     record. That rule must not have been dragged along by this change. */
+  out.factsPagesStillRefuseTheFace =
+    /do NOT describe the face of the specific real named individual/
+      .test(factDeckPrompt('History', {subject:'x', claim:'y'}, 6, 'mono'));
   return out;
 });
 await b.close();
@@ -221,11 +276,14 @@ const want = {
   handleDraws:true, markDrawsBesideIt:true, markIsLeftOfTheText:true,
   lockupIsCoverOnly:true, noLogoNoCrash:true,
   categoryWired:true, scanDealsTheAngles:true, obsessionStillHasOneShape:true,
-  briefIsOneLinePerSlide:true, briefDemandsALongLook:true, briefBansNamesInScene:true,
-  briefSaysWhyTheNameIsWithheld:true, briefBansRumour:true, briefBansPileOns:true,
+  briefIsOneLinePerSlide:true, briefDemandsALongLook:true, briefBansBrandsInScene:true,
+  briefBansRumour:true, briefBansPileOns:true,
   briefProtectsMinors:true, briefCarriesTheDay:true, countingBriefStatesTheNumber:true,
   briefAsksForRealSkin:true, everyFrameAsksForRealSkin:true,
-  dispatchReachesFun:true, castTravelsUnnamed:true
+  dispatchReachesFun:true,
+  namesThePerson:true, keepsTheLookBehindTheName:true, fallbackDropsTheName:true,
+  namedFirstIsOn:true, briefAsksForTheRealName:true, briefKeepsScenesReported:true,
+  refusalFallsBackAndSaysSo:true, factsPagesStillRefuseTheFace:true
 };
 let bad = 0;
 for(const [k,v] of Object.entries(want)){

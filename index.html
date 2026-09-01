@@ -1292,6 +1292,11 @@ const PRESETS = [
        says, so it is the same width on every post. */
     wordmark:'OBSESSION', wordmark_size_pct:0.10, wordmark_width_pct:0.88,
     wordmark_top_pct:0.025, wordmark_tracking_em:-0.025, wordmark_color:'#FFFFFF',
+    /* The word sits behind the subject: it is drawn, then the frame's own bright
+       pixels are keyed back over it. lo/hi are where the key ramps — below lo the
+       letters win, above hi the picture does. */
+    wordmark_behind:true, wordmark_layer_lo:0.34, wordmark_layer_hi:0.58,
+    wordmark_layer_from:0.42, wordmark_layer_feather_em:0.35, wordmark_layer_alpha:1,
     // the circle starts under the wordmark rather than in the corner behind it
     inset_pct:0.34, inset_pad_pct:0.055, inset_top_pct:0.135,
     /* The cover is a photograph with the accent glowing behind it; the slides are type
@@ -1855,6 +1860,8 @@ const LOOK_KEYS = ['font_family','body_font_family','font_weight','body_weight',
   'balance_wrap','fit_column','ragged_max','badge_from_angle','badge_bg','badge_color','badge_text','badge_fixed',
   'accent_color','alt_align','cast_unnamed','wordmark','wordmark_size_pct','wordmark_width_pct',
   'inset_pct','inset_pad_pct','inset_top_pct','keep_breaks',
+  'wordmark_behind','wordmark_layer_lo','wordmark_layer_hi','wordmark_layer_from',
+  'wordmark_layer_feather_em','wordmark_layer_alpha',
   'wordmark_top_pct','wordmark_tracking_em','wordmark_color',
   'hook_scrim_pct','hook_scrim_color','glow_pct','glow_wide_pct','glow_color','glow_alpha','glow_on_all'];
 function refreshBuiltinProfile(){
@@ -2388,7 +2395,57 @@ function drawWordmark(ctx, W, H, p){
   const y = H * (p.wordmark_top_pct ?? 0.035) + size * 0.78;
   ctx.fillText(t, W/2, y);
   ctx.restore();
-  return y;
+  return {baseline: y, size};
+}
+/* The word sits BEHIND the subject. There is no cut-out to work from — the photograph
+   arrives as one flat bitmap — so the subject is keyed out of it by brightness and
+   painted back over the letters: the head and shoulders cross in front of the word and
+   the dark surround behind it does not.
+
+   A luminance key is a heuristic, and it is the right one here only because this
+   style's image brief already demands the subject be large in frame and lit hard
+   against a surround that falls away into shadow. That is exactly the condition the key
+   needs. On a frame that comes back evenly lit it does much less, which is the correct
+   failure: the word simply stays in front, as it did before, rather than tearing.
+
+   Only the band the word occupies is touched, and only at full scale — this reads and
+   rewrites pixels, and a row thumbnail cannot show the effect anyway. */
+function layerSubjectOverWordmark(ctx, img, W, H, p, mark){
+  if(!img || !img.complete || !img.naturalWidth || !mark) return;
+  const feather = mark.size * (p.wordmark_layer_feather_em ?? 0.35);
+  const y0 = Math.max(0, Math.floor(mark.baseline - mark.size * 0.82 - feather));
+  const y1 = Math.min(H, Math.ceil(mark.baseline + feather));
+  const bh = y1 - y0;
+  if(bh <= 0) return;
+  const off = document.createElement('canvas');
+  off.width = W; off.height = bh;
+  const o = off.getContext('2d', {willReadFrequently:true});
+  // the same crop and cover-fit the base frame used, shifted up so the band lines up
+  const cr = img._crop || {sx:0, sy:0, sw:img.naturalWidth, sh:img.naturalHeight};
+  const sc = Math.max(W/cr.sw, H/cr.sh), dw = cr.sw*sc, dh = cr.sh*sc;
+  o.drawImage(img, cr.sx, cr.sy, cr.sw, cr.sh, (W-dw)/2, (H-dh)/2 - y0, dw, dh);
+  const d = o.getImageData(0, 0, W, bh);
+  const px = d.data;
+  const lo = p.wordmark_layer_lo ?? 0.38, hi = p.wordmark_layer_hi ?? 0.62;
+  /* A vertical ramp on top of the brightness key. The subject crosses the FOOT of the
+     letters — that is what the effect looks like, and it is what stops a blown-out
+     background from quietly deleting the whole word. Above `from` the letters always
+     win, below it the picture is allowed to. */
+  const from = p.wordmark_layer_from ?? 0.42;
+  const ss = t => (t < 0 ? 0 : t > 1 ? 1 : t*t*(3 - 2*t));
+  for(let y = 0; y < bh; y++){
+    const ramp = ss((y/bh - from) / Math.max(1e-6, 1 - from));
+    for(let x = 0; x < W; x++){
+      const i = (y*W + x)*4;
+      const l = (px[i]*0.299 + px[i+1]*0.587 + px[i+2]*0.114) / 255;
+      px[i+3] = Math.round(255 * ss((l - lo) / Math.max(1e-6, hi - lo)) * ramp);
+    }
+  }
+  o.putImageData(d, 0, 0);
+  ctx.save();
+  ctx.globalAlpha = p.wordmark_layer_alpha ?? 1;
+  ctx.drawImage(off, 0, y0);
+  ctx.restore();
 }
 /* One line, drawn word by word so a marked phrase can take the accent colour. The x
    of each word comes from measuring the prefix of the finished line rather than from
@@ -3006,7 +3063,11 @@ function renderSlide(slide, canvas, p, scale){
     drawScrim(ctx, W, H, p, isHook ? (p.hook_scrim_color || p.scrim_color) : p.scrim_color,
               isHook ? (p.hook_scrim_pct ?? p.scrim_pct) : p.scrim_pct);
     if(isHook || p.glow_on_all) drawGlow(ctx, W, H, p);
-    if(isHook && p.wordmark) drawWordmark(ctx, W, H, p);
+    if(isHook && p.wordmark){
+      const mark = drawWordmark(ctx, W, H, p);
+      // then the subject back over it, so the word reads as being behind them
+      if(p.wordmark_behind && scale >= 0.5) layerSubjectOverWordmark(ctx, img, W, H, p, mark);
+    }
     // under the type, not over it: painted after the caption it would wash the last line
     if(footerReserve(slide, p, W, H)) drawFooterScrim(ctx, W, H, p);
     // Below a quarter scale the circle is a handful of pixels in a row thumbnail, and

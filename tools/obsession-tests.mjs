@@ -110,6 +110,75 @@ const r = await p.evaluate(async ()=>{
      0.045 offset the two overlapped and neither read. */
   out.insetClearsTheWordmark = S.profile.inset_top_pct * H > S.profile.wordmark_size_pct * H;
 
+  /* The word sits behind the subject. There is no cut-out to work from, so the frame's
+     own bright pixels are keyed back over the letters — which means this has to be
+     checked against a frame shaped like the ones this style asks for: a lit subject
+     reaching up into the band, against a surround that falls away. */
+  const lit = () => {
+    const cv = document.createElement('canvas'); cv.width = W; cv.height = H;
+    const x = cv.getContext('2d');
+    const g = x.createRadialGradient(W*0.5, H*0.45, 40, W*0.5, H*0.55, W*0.85);
+    g.addColorStop(0, '#a8431a'); g.addColorStop(1, '#140603');
+    x.fillStyle = g; x.fillRect(0, 0, W, H);
+    x.fillStyle = '#e8c9a0'; x.beginPath(); x.ellipse(W*0.5, H*0.30, W*0.17, H*0.16, 0, 0, 7); x.fill();
+    x.fillStyle = '#f2ddbe'; x.beginPath(); x.ellipse(W*0.5, H*0.155, W*0.13, H*0.055, 0, 0, 7); x.fill();
+    return cv.toDataURL('image/jpeg');
+  };
+  const litCover = await new Promise(res=>{
+    const im = new Image();
+    im.onload = ()=>{
+      measureCrop(im); IMG_CACHE['lit'] = im;
+      const s = Object.assign({}, deck.slides[0], {id:'lit'});
+      const on  = document.createElement('canvas'); renderSlide(s, on, S.profile, 1);
+      const flatProf = Object.assign(JSON.parse(JSON.stringify(S.profile)), {wordmark_behind:false});
+      const off = document.createElement('canvas'); renderSlide(s, off, flatProf, 1);
+      res({on, off});
+    };
+    im.src = lit();
+  });
+  /* Measured against the word's real geometry rather than guessed fractions of the
+     frame: the wordmark is sized to fill the measure, so how tall it ends up depends on
+     how long the word is and how wide the face is. */
+  const mark = (()=>{
+    const cv = document.createElement('canvas'); cv.width = W; cv.height = H;
+    return drawWordmark(cv.getContext('2d'), W, H, S.profile);
+  })();
+  const capTop = mark.baseline - mark.size * 0.72;
+  const band = {top: capTop, mid: capTop + (mark.baseline - capTop) * 0.62, bot: mark.baseline};
+  const midWhite  = c => count(c, W*0.40, W*0.60, band.mid, band.bot, white);
+  const topWhite  = c => count(c, W*0.40, W*0.60, band.top, band.top + mark.size*0.10, white);
+  const edgeWhite = c => count(c, W*0.06, W*0.24, band.top, band.bot, white);
+  out.subjectCrossesTheWord = midWhite(litCover.on) < midWhite(litCover.off) * 0.7;
+  out.wordIsStillThereAtTheEdges = edgeWhite(litCover.on) > edgeWhite(litCover.off) * 0.9;
+  /* The tops of the letters are never occluded, so a blown-out frame cannot quietly
+     delete the whole word. Note this one is carried mostly by the band's headroom
+     rather than by the ramp — it is the invariant, not the mechanism. */
+  out.topsOfLettersSurvive = topWhite(litCover.on) >= topWhite(litCover.off) * 0.95;
+  /* The ramp that keeps the effect at the foot of the letters is NOT pinned in pixels.
+     Every attempt to isolate it measured something else: a subject-shaped frame cannot
+     tell the ramp apart from the subject simply being wider lower down, and on a
+     uniformly bright frame the occlusion is partial, so it shifts the colour of a
+     letter without ever flipping a threshold. What is pinned is the invariant either
+     side of it — the word survives (topsOfLettersSurvive) and the subject does cross it
+     (subjectCrossesTheWord) — plus the field itself, so it cannot be quietly dropped. */
+  out.footRampIsSet = S.profile.wordmark_layer_from > 0.25 && S.profile.wordmark_layer_from < 0.6;
+  out.layerIsOnForThisStyle = S.profile.wordmark_behind === true;
+  /* And the graceful failure: a frame with nothing bright in the band is left alone,
+     rather than the key tearing holes in the word. */
+  out.darkFrameIsLeftAlone = (()=>{
+    const before = count(cover, W*0.06, W*0.94, band.top, band.bot, white);
+    const flatProf = Object.assign(JSON.parse(JSON.stringify(S.profile)), {wordmark_behind:false});
+    const c = document.createElement('canvas'); renderSlide(deck.slides[0], c, flatProf, 1);
+    return before > 0 &&
+           Math.abs(before - count(c, W*0.06, W*0.94, band.top, band.bot, white)) < before * 0.05;
+  })();
+  // a row thumbnail cannot show it and would pay for the pixel read anyway
+  out.thumbnailsSkipTheLayer = (()=>{
+    const c = document.createElement('canvas');
+    renderSlide(Object.assign({}, deck.slides[0], {id:'lit'}), c, S.profile, 0.25);
+    return c.width === Math.round(W*0.25);
+  })();
+
   // --- the column flips down the deck
   out.altAlignOn = S.profile.alt_align === true;
   out.coverIsExempt = altAlign(S.profile, deck.slides[0], true) === null;
@@ -180,6 +249,9 @@ const want = {
   breaksArePreserved:true, styleKeepsBreaks:true,
   wordmarkIsSet:true, wordmarkDrawsOnCover:true, wordmarkNotOnSlides:true,
   wordmarkFitsTheFrame:true, insetClearsTheWordmark:true,
+  subjectCrossesTheWord:true, wordIsStillThereAtTheEdges:true, topsOfLettersSurvive:true,
+  footRampIsSet:true,
+  layerIsOnForThisStyle:true, darkFrameIsLeftAlone:true, thumbnailsSkipTheLayer:true,
   altAlignOn:true, coverIsExempt:true, firstSlideSetsLeft:true, secondSlideSetsRight:true,
   andItActuallyDraws:true,
   castOmitsTheName:true, castCarriesTheLook:true, castForbidsInferringAName:true,

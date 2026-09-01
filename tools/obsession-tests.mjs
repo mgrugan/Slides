@@ -198,7 +198,8 @@ const r = await p.evaluate(async ()=>{
      whose whole premise is "you know who this is" that wastes the post. */
   deck.cast[0].real = 'Tini Younger';
   const cb = castBlock(deck.slides[1]);
-  out.castNamesThePerson = /This is Tini Younger\./.test(cb);
+  out.castNamesThePerson = /IDENTICAL LOOKALIKE of Tini Younger/.test(cb) &&
+                          /The face must be identical to the real Tini Younger/.test(cb);
   out.castCarriesTheLook = /platinum blonde/.test(cb);
   out.castStillInsistsOnSameness = /MUST LOOK IDENTICAL IN EVERY FRAME/.test(cb);
   out.namedFirstIsOn = S.profile.cast_named_first === true;

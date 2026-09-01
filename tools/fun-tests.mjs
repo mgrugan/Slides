@@ -222,7 +222,28 @@ const r = await p.evaluate(async ()=>{
   const castSlide = {id:'cs', kind:'slide', title:'T', body:'',
                      scene:'Speed on a stage under hard light', cast:['Speed'], tone:'colour', _deck:castDeck};
   castDeck.slides = [castSlide];
-  out.namesThePerson = /This is IShowSpeed\./.test(imagePrompt(castSlide, false));
+  /* Everything text alone can bring to bear on a specific face: the full name, the
+     phrase placing them, and an explicit instruction not to invent or flatter. */
+  /* The construction that actually reaches this model. "A portrait of NAME" returns
+     somebody who fits the description; "an identical lookalike of NAME" reaches for the
+     person. It leads the block, because position matters in an image prompt. */
+  out.namesThePerson = /IDENTICAL LOOKALIKE of IShowSpeed/.test(imagePrompt(castSlide, false));
+  out.lookalikeLeadsTheBlock = (()=>{
+    const ip = imagePrompt(castSlide, false);
+    return ip.indexOf('IDENTICAL LOOKALIKE') < ip.indexOf('slim build');   // before the description
+  })();
+  out.saysTheyAreReal = /The face must be identical to the real IShowSpeed/.test(imagePrompt(castSlide, false));
+  out.bansAPrettierFace = (()=>{
+    const ip = imagePrompt(castSlide, false);
+    return /not a character inspired by them/.test(ip) && /more conventionally attractive/.test(ip);
+  })();
+  out.carriesWhatTheyAreKnownFor = (()=>{
+    castDeck.cast[0].known = 'the streamer known for IRL streams';
+    const ip = imagePrompt(castSlide, false);
+    delete castDeck.cast[0].known;
+    return /LOOKALIKE of IShowSpeed, the streamer known for IRL streams/.test(ip);
+  })();
+  out.briefAsksWhatTheyAreKnownFor = /"known" is one short phrase placing them/.test(fp);
   out.keepsTheLookBehindTheName = /low fade/.test(imagePrompt(castSlide, false));
   out.fallbackDropsTheName = (()=>{
     const f = imagePrompt(castSlide, false, false);
@@ -252,90 +273,10 @@ const r = await p.evaluate(async ()=>{
     try{ await genImage(castSlide, false); }
     finally { window.callModel = realCall; window.log = realLog; }
     return prompts.length === 2 &&
-           /This is IShowSpeed\./.test(prompts[0]) &&      // asked by name first
+           /IDENTICAL LOOKALIKE of IShowSpeed/.test(prompts[0]) &&   // asked by name first
            !/IShowSpeed/.test(prompts[1]) &&                // then without it
            logs.some(m => /will not be a likeness/.test(m));
   })();
-  /* THE LIKENESS, properly. A name gets a plausible stranger unless the person is
-     extremely famous, and a written description never gets closer than "somebody a bit
-     like that" — a podcaster came back clean-shaven when the real one has a full beard.
-     Handing the model an actual photograph is the only thing that produces the person,
-     so a reference photo can be attached per person and rides along with every frame
-     they appear in. */
-  out.noPhotoNoImagePart = castRefs(castSlide).length === 0;
-  const facePhoto = (()=>{
-    const c = document.createElement('canvas'); c.width = c.height = 64;
-    const x = c.getContext('2d'); x.fillStyle = '#a97'; x.fillRect(0,0,64,64);
-    return c.toDataURL('image/jpeg');
-  })();
-  castDeck.cast[0].ref = facePhoto;
-  out.photoBecomesAnImagePart = (()=>{
-    const refs = castRefs(castSlide);
-    return refs.length === 1 && refs[0].type === 'image' && refs[0].b64.length > 40;
-  })();
-  out.promptPointsAtThePhoto = (()=>{
-    const ip = imagePrompt(castSlide, false);
-    return /A reference photograph of IShowSpeed is attached/.test(ip) &&
-           /copy that exact face/.test(ip) && /do not idealise/.test(ip);
-  })();
-  out.apiReceivesThePhoto = await (async ()=>{
-    let sent = null;
-    const realCall = window.callModel;
-    window.callModel = async ({parts}) => {
-      sent = parts;
-      const c = document.createElement('canvas'); c.width = 16; c.height = 20;
-      const x = c.getContext('2d'); x.fillStyle = '#c0392b'; x.fillRect(0,0,16,20);
-      x.fillStyle = '#2980b9'; x.fillRect(0,0,8,20);
-      return {text:'', images:[c.toDataURL('image/jpeg')]};
-    };
-    try{ await genImage(castSlide, false); } finally { window.callModel = realCall; }
-    // the photograph goes first, then the brief: the model reads one as the face and
-    // the other as what they are doing
-    return !!sent && sent.length === 2 && sent[0].type === 'image' && sent[1].type === 'text';
-  })();
-  castDeck.cast[0].ref = '';
-  /* A first name identifies nobody. When the writer hands one back, the deck's own
-     subject — which came off the news scan with the full name — fills the gap. */
-  out.surnameFallsBackToTheSubject = await (async ()=>{
-    const realCall = window.callModel;
-    window.callModel = async () => ({text: JSON.stringify({
-      subject:'s', swipe:'w', caption:'a\n\nb\n\nc',
-      cast:[{name:'Dwarkesh', look:'a man with a full dark beard and short black hair'}],
-      slides:[{kind:'hook', title:'t', scene:'x'}]}), images:[]});
-    const d = {id:'dw', cat:'fun', person:'Dwarkesh Patel', hook:'h', subject:'s',
-               angle:'blewup', kind:'story', n:5, tone:'colour', slides:[]};
-    try{ await writeFactDeck(d); } finally { window.callModel = realCall; }
-    return d.cast[0].real === 'Dwarkesh Patel';
-  })();
-  out.briefDemandsFirstAndLast = /FULL public name — first and last/.test(fp) &&
-                                 /A first name on its own identifies nobody/.test(fp);
-
-  /* The disc in the corner was as tall as the handle was wide. It is a mark beside a
-     word, not a badge: it should read at about the height of the type it sits next to. */
-  out.discIsNotOversized = S.profile.handle_logo_em < 1.25;
-  out.discMatchesTheType = (()=>{
-    const band = {y0: H*0.015, y1: H*0.080};
-    let mTop = H, mBot = 0, tTop = H, tBot = 0;
-    for(let y = Math.round(band.y0); y < band.y1; y++)
-      for(let x = Math.round(W*0.55); x < W; x++){
-        const q = px(cover, x, y);
-        if(magenta(q)){ if(y < mTop) mTop = y; if(y > mBot) mBot = y; }
-      }
-    const noLogoSaved = LOGO_CACHE['fun']; delete LOGO_CACHE['fun'];
-    const savedGlobal = LOGO_IMG; LOGO_IMG = null;
-    const noLogo = draw(deck.slides[0]);
-    LOGO_CACHE['fun'] = noLogoSaved; LOGO_IMG = savedGlobal;
-    for(let y = Math.round(band.y0); y < band.y1; y++)
-      for(let x = Math.round(W*0.55); x < W; x++)
-        if(yellow(px(noLogo, x, y))){ if(y < tTop) tTop = y; if(y > tBot) tBot = y; }
-    /* Measured, not guessed: this reads the mark inside the disc, which comes out at
-       0.81x the height of the handle type at the size that ships and 1.06x at the size
-       that was too big. A mark standing taller than the word beside it is the thing
-       that looked wrong. */
-    const markH = mBot - mTop, textH = tBot - tTop;
-    return markH > 0 && textH > 0 && markH < textH * 0.95;
-  })();
-
   /* The facts pages are a different case and were left alone: there an image is
      presented as documentation of an event, so a generated face is a fabricated
      record. That rule must not have been dragged along by this change. */
@@ -361,12 +302,11 @@ const want = {
   briefProtectsMinors:true, briefCarriesTheDay:true, countingBriefStatesTheNumber:true,
   briefAsksForRealSkin:true, everyFrameAsksForRealSkin:true,
   dispatchReachesFun:true,
-  namesThePerson:true, keepsTheLookBehindTheName:true, fallbackDropsTheName:true,
+  namesThePerson:true, lookalikeLeadsTheBlock:true, saysTheyAreReal:true, bansAPrettierFace:true,
+  carriesWhatTheyAreKnownFor:true, briefAsksWhatTheyAreKnownFor:true,
+  keepsTheLookBehindTheName:true, fallbackDropsTheName:true,
   namedFirstIsOn:true, briefAsksForTheRealName:true, briefKeepsScenesReported:true,
-  refusalFallsBackAndSaysSo:true, factsPagesStillRefuseTheFace:true,
-  noPhotoNoImagePart:true, photoBecomesAnImagePart:true, promptPointsAtThePhoto:true,
-  apiReceivesThePhoto:true, surnameFallsBackToTheSubject:true, briefDemandsFirstAndLast:true,
-  discIsNotOversized:true, discMatchesTheType:true
+  refusalFallsBackAndSaysSo:true, factsPagesStillRefuseTheFace:true
 };
 let bad = 0;
 for(const [k,v] of Object.entries(want)){

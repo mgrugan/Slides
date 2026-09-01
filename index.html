@@ -473,26 +473,6 @@ details summary:hover{color:var(--fg)}
       </div>
       <div class="hintline">Each category brings its own style and its own logo · subjects already covered are never repeated</div>
 
-      <!-- Reference faces. A name gets a plausible stranger and a description gets
-           somebody vaguely similar; the only thing that reliably produces a specific
-           real person is a photograph of them handed to the model alongside the brief.
-           One per person per deck, attached here, reused on every frame they are in. -->
-      <div id="castPanel" class="panel hide" style="margin-top:10px">
-        <div class="row" style="margin-bottom:8px">
-          <strong style="font-size:13px">Reference faces</strong>
-          <span class="tiny muted" id="castNote"></span>
-          <div class="spacer"></div>
-          <button id="castClose" class="btn sm quiet">Done</button>
-        </div>
-        <div class="tiny muted" style="margin-bottom:8px">
-          Attach a real photograph of each person. Every frame they appear in is generated
-          from it, so the face matches. Without one the model works from the name and the
-          description, which will not look like them.
-        </div>
-        <div id="castList" class="pf"></div>
-        <input type="file" id="castFile" accept="image/*" class="hide">
-      </div>
-
       <div id="factHookPanel" class="panel hide" style="margin-top:10px">
         <div class="row" style="margin-bottom:8px"><strong style="font-size:13px" id="factHookTitle">Hooks for review</strong>
           <span class="tiny muted" id="factHookNote"></span></div>
@@ -4105,35 +4085,37 @@ function castBlock(slide, withNames){
   if(!mode)
     return head + 'Render them from these descriptions exactly, and do not infer or use any name for them: ' +
            inFrame.map(c => c.look).join(' | ') + ' ';
+  /* Everything that can be done from text alone to land a specific real face: the full
+     name, then the thing that name is attached to — which is what lets the model tell
+     one Patel from another — then the description, which carries whatever the name did
+     not. Stated as a photograph of a documented person rather than as a character, and
+     with the drift words ruled out, because "cinematic portrait of X" is an invitation
+     to invent a better-looking X.
+
+     This raises the hit rate. It does not make it certain, and for somebody who is not
+     a household name it will not: a text-to-image model has no reliable internal
+     picture of a face it saw a few hundred times in training, and no wording reaches
+     one that is not there. */
   return head + inFrame.map(c => {
     const who = String(c.real || '').trim() || c.name;
-    /* With a reference photograph attached, the name and the description stop being the
-       identity and become the label on it: the face comes from the picture. This is the
-       only thing that reliably produces a specific real person — a name alone gets a
-       plausible stranger unless they are extremely famous, and a description never gets
-       closer than "somebody a bit like that". */
-    return c.ref
-      ? 'A reference photograph of ' + who + ' is attached. The person in the new image IS ' + who + ': ' +
-        'copy that exact face — the bone structure, the nose, the eyes and brows, the hairline, the beard or ' +
-        'its absence, the skin tone and texture. Do not stylise it, do not idealise it, do not make them ' +
-        'younger, thinner or more symmetrical. Only the pose, the lighting and the setting change. ' + c.look
-      : 'This is ' + who + '. ' + c.look;
+    const ctx = String(c.known || '').trim();
+    /* "An identical lookalike of NAME" leads, because it is the construction that gets
+       this model to reach for the actual person rather than a character loosely fitting
+       the description — the client found it by hand and it works where "a portrait of
+       NAME" does not. The phrase placing them follows, which is what separates one
+       Patel from another, then the instruction not to flatter, then the description
+       carrying whatever the name did not.
+
+       This raises the hit rate a long way. It is still not a guarantee for somebody who
+       is not a household name: no wording reaches a face the model does not hold. */
+    return 'Create an image of an IDENTICAL LOOKALIKE of ' + who +
+      (ctx ? ', ' + ctx : '') + '. The face must be identical to the real ' + who +
+      ' as they appear in photographs — the real bone structure, the real nose and jaw, the real hairline, ' +
+      'the beard exactly as they wear it or clean-shaven if that is how they are, the real skin tone and ' +
+      'texture. Not an interpretation, not a character inspired by them, not a different person who fits the ' +
+      'description. Do not make them younger, slimmer, more symmetrical or more conventionally attractive ' +
+      'than they are. ' + c.look;
   }).join(' ') + ' ';
-}
-/* The reference photographs for the people in one frame, ready to be sent alongside the
-   prompt. Empty for a deck nobody has attached one to, which is every deck until
-   somebody does. */
-function castRefs(slide){
-  const deck = slide && slide._deck;
-  const cast = (deck && Array.isArray(deck.cast) ? deck.cast : []).filter(c => c && c.ref);
-  if(!cast.length) return [];
-  const named = new Set((slide.cast || []).map(n => String(n).toLowerCase().trim()));
-  const scene = String(slide.scene || '').toLowerCase();
-  return cast.filter(c => named.has(c.name.toLowerCase()) || scene.includes(c.name.toLowerCase()))
-             .map(c => {
-               const m = /^data:([^;]+);base64,(.*)$/.exec(c.ref);
-               return m ? {type:'image', mime:m[1], b64:m[2]} : null;
-             }).filter(Boolean);
 }
 function imagePrompt(slide, insist, named){
   const p = S.profile;
@@ -4257,11 +4239,8 @@ async function genImage(slide, single, attempt, toneTry, noNames){
   setStatus(slide,'generating');
   const named = !!S.profile.cast_named_first && !noNames;
   try{
-    /* Reference photographs first, then the brief: the model reads the pictures as what
-       the person looks like and the text as what they are doing. */
-    const refs = noNames ? [] : castRefs(slide);
     const r = await callModel({model: cfg().imageModel,
-      parts: refs.concat([{type:'text', text: imagePrompt(slide, toneTry > 0, named)}]),
+      parts:[{type:'text', text: imagePrompt(slide, toneTry > 0, named)}],
       wantImage:true, aspect:S.profile.aspect_ratio});
     spend('images');
     if(!r.images.length){
@@ -4949,8 +4928,6 @@ function renderBatchRow(deck){
   const row = document.querySelector('[data-deck="'+deck.id+'"]');
   if(!row || i < 0) return;
   const imgs = deck.slides.filter(s=>s.img).length;
-  const cast = Array.isArray(deck.cast) ? deck.cast : [];
-  const withRef = cast.filter(c=>c.ref).length;
   const state = (deck.angle ? deck.angle + ' · ' : '') +
     (deck.status === 'failed' ? deck.error || 'failed'
     : deck.status === 'writing' ? 'writing…'
@@ -4961,86 +4938,16 @@ function renderBatchRow(deck){
     '<div style="min-width:0"><div class="nm" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+
       String(i+1).padStart(2,'0')+' · '+deck.hook+'</div><div class="ar">'+state+'</div></div>'+
     '<div class="acts" style="opacity:1">'+
-      (cast.length ? '<button data-a="faces" title="Attach a real photograph of each person, so the '+
-        'generated frames look like them">Faces '+withRef+'/'+cast.length+'</button>' : '')+
       '<button data-a="open" title="Open in the editor">Open</button>'+
       '<button data-a="zip" title="Download this deck">'+svg(ICON.dl)+'ZIP</button>'+
     '</div>';
   const cv = row.querySelector('canvas');
   if(deck.slides.length) renderSlide(deck.slides[0], cv, S.profile, 0.07);   // thumbnail-sized render
   else { cv.width = 54; cv.height = 96; }
-  const faces = row.querySelector('[data-a=faces]');
-  if(faces) faces.onclick = e => { e.stopPropagation(); openCastPanel(deck); };
   row.querySelector('[data-a=open]').onclick = e => { e.stopPropagation(); openBatchDeck(i); };
   row.querySelector('[data-a=zip]').onclick = e => { e.stopPropagation(); downloadDecks([deck]); };
   row.onclick = () => openBatchDeck(i);
 }
-/* ---------------------------------------------------------------------------
-   Reference faces. A name alone gets a plausible stranger unless the person is
-   extremely famous; a written description never gets closer than "somebody a bit like
-   that". Handing the model an actual photograph is the only thing that produces the
-   person, so this is where one is attached — once per person, reused on every frame
-   they appear in.
-   -------------------------------------------------------------------------- */
-/* Names and descriptions come back from a model and go into innerHTML, so they are
-   escaped rather than trusted. */
-const esc = t => String(t == null ? '' : t)
-  .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-let CAST_DECK = null;
-function openCastPanel(deck){
-  CAST_DECK = deck;
-  renderCastPanel();
-  const p = $('castPanel');
-  if(p){ p.classList.remove('hide'); p.scrollIntoView({block:'nearest', behavior:'smooth'}); }
-}
-function renderCastPanel(){
-  const list = $('castList');
-  if(!list || !CAST_DECK) return;
-  const cast = Array.isArray(CAST_DECK.cast) ? CAST_DECK.cast : [];
-  $('castNote').textContent = CAST_DECK.hook ? String(CAST_DECK.hook).slice(0, 60) : '';
-  list.innerHTML = cast.map((c, i) =>
-    '<div class="row" style="align-items:center;gap:10px;margin-bottom:8px">'+
-      (c.ref
-        ? '<img src="'+c.ref+'" style="width:44px;height:44px;border-radius:8px;object-fit:cover;flex:0 0 auto">'
-        : '<div style="width:44px;height:44px;border-radius:8px;flex:0 0 auto;'+
-          'background:var(--raised);display:flex;align-items:center;justify-content:center;'+
-          'color:var(--faint);font-size:11px">none</div>')+
-      '<div style="min-width:0;flex:1">'+
-        '<div class="nm" style="font-size:13px">'+esc(c.real || c.name)+'</div>'+
-        '<div class="ar tiny muted" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+
-          esc(String(c.look||'').slice(0, 90))+'</div>'+
-      '</div>'+
-      '<button class="btn sm quiet" data-pick="'+i+'">'+(c.ref ? 'Replace' : 'Attach photo')+'</button>'+
-      (c.ref ? '<button class="btn sm quiet" data-clear="'+i+'">Clear</button>' : '')+
-    '</div>').join('') || '<div class="tiny muted">This deck has no cast.</div>';
-  list.querySelectorAll('[data-pick]').forEach(b => b.onclick = () => pickCastRef(+b.dataset.pick));
-  list.querySelectorAll('[data-clear]').forEach(b => b.onclick = () => {
-    CAST_DECK.cast[+b.dataset.clear].ref = '';
-    renderCastPanel(); renderBatchRow(CAST_DECK); autosave();
-  });
-}
-function pickCastRef(i){
-  const f = $('castFile');
-  if(!f || !CAST_DECK) return;
-  f.onchange = async e => {
-    const file = e.target.files[0];
-    e.target.value = '';
-    if(!file || !CAST_DECK) return;
-    const raw = await new Promise(res=>{ const r = new FileReader(); r.onload = ()=>res(r.result); r.readAsDataURL(file); });
-    /* Held at 768px: a face reference does not need more than that, and the whole thing
-       goes into the saved project and into every image request for the deck. */
-    CAST_DECK.cast[i].ref = await makeThumb(raw, 768, 'image/jpeg');
-    renderCastPanel(); renderBatchRow(CAST_DECK); autosave();
-    log('reference photo attached for ' + (CAST_DECK.cast[i].real || CAST_DECK.cast[i].name), 'o');
-  };
-  f.click();
-}
-
-function bindCastPanel(){
-  const c = $('castClose');
-  if(c) c.onclick = () => { $('castPanel').classList.add('hide'); CAST_DECK = null; };
-}
-
 /* the editor only ever holds one deck: park the current one, load the chosen one */
 function stashEditorDeck(){
   if(S.openBatch < 0 || !S.batch[S.openBatch]) return;
@@ -6197,7 +6104,8 @@ function funDeckPrompt(cat, deck){
 
 'CAST — return it as "cast", and treat it as the most important field in the reply.\n' +
 '- One entry for each person who appears in more than one frame. At most three.\n' +
-'- "real" is the person\'s FULL public name — first and last, or the full handle they are known by: "Dwarkesh Patel", "IShowSpeed", "MrBeast". A first name on its own identifies nobody and produces a stranger. This one field is what makes the picture look like them, so never abbreviate it and never leave it blank for somebody publicly known.\n' +
+'- "real" is the person\'s FULL public name — first and last, or the full handle they are known by: "Dwarkesh Patel", "IShowSpeed", "MrBeast". A first name on its own identifies nobody and produces a stranger. Never abbreviate it and never leave it blank for somebody publicly known.\n' +
+'- "known" is one short phrase placing them: "the host of the Dwarkesh Podcast", "the streamer known for FIFA and IRL streams". The image model finds a face far more reliably when the name arrives with the thing that name is attached to.\n' +
 '- "look" is a PHYSICAL DESCRIPTION ONLY, 40 to 70 words. It rides behind the name and holds the likeness steady from frame to frame, and it is the whole picture on the one occasion the name is declined.\n' +
 '- Specific enough that two frames come back as the same face: apparent age, build, skin tone, face shape, eye colour, nose and jaw, hair colour and exact length and how it is worn, facial hair, glasses, tattoos, piercings, and the clothes they are in throughout.\n' +
 '- Real skin, and say so: note the texture the face actually has — pores, lines, freckles, uneven tone, a scar, whatever is there. Left alone the image model returns a smoothed, poreless face, and on a page about real people that reads as fake immediately.\n' +
@@ -6215,7 +6123,7 @@ function funDeckPrompt(cat, deck){
 
 'Return ONLY JSON:\n' +
 '{"subject":"short canonical name for this post","swipe":"...",' +
-'"cast":[{"name":"short name as used in the scenes","real":"full public name","look":"40-70 words, physical only"}],' +
+'"cast":[{"name":"short name as used in the scenes","real":"full public name","known":"one short phrase placing them","look":"40-70 words, physical only"}],' +
 '"slides":[{"kind":"hook","title":"...","scene":"..."},{"kind":"slide","title":"...","body":"","scene":"..."}],' +
 '"caption":"para1\\n\\npara2\\n\\npara3\\n\\n#niche #mid #broad"}'
   );
@@ -6260,7 +6168,8 @@ function obsessionDeckPrompt(cat, deck){
 
 'CAST — return it as "cast", and treat this as the most important field in the reply.\n' +
 '- One entry for the person at the centre, plus anyone else who appears in more than one frame. At most three.\n' +
-'- "real" is the person\'s FULL public name — first and last, or the full handle they are known by: "Dwarkesh Patel", "IShowSpeed", "MrBeast". A first name on its own identifies nobody and produces a stranger. This one field is what makes the picture look like them, so never abbreviate it and never leave it blank for somebody publicly known.\n' +
+'- "real" is the person\'s FULL public name — first and last, or the full handle they are known by: "Dwarkesh Patel", "IShowSpeed", "MrBeast". A first name on its own identifies nobody and produces a stranger. Never abbreviate it and never leave it blank for somebody publicly known.\n' +
+'- "known" is one short phrase placing them: "the host of the Dwarkesh Podcast", "the streamer known for FIFA and IRL streams". The image model finds a face far more reliably when the name arrives with the thing that name is attached to.\n' +
 '- "look" is a PHYSICAL DESCRIPTION ONLY, 40 to 70 words. It rides behind the name and holds the likeness steady from frame to frame, and it is the whole picture on the one occasion the name is declined.\n' +
 '- It must be specific enough that two different frames come back as the same face: apparent age, build and height, skin tone, face shape, eye colour, eyebrows, nose and jaw, hair colour and exact length and how it is worn, facial hair, glasses, visible tattoos or piercings, and the clothing they are in throughout.\n' +
 '- Real skin, and say so: note the texture the face actually has — pores, lines, freckles, uneven tone, a scar, whatever is there. Left alone the image model returns a smoothed, poreless face, and on a page about real people that reads as fake immediately.\n' +
@@ -6280,7 +6189,7 @@ function obsessionDeckPrompt(cat, deck){
 
 'Return ONLY JSON:\n' +
 '{"subject":"short canonical name for this post","swipe":"...",' +
-'"cast":[{"name":"short name as used in the scenes","real":"full public name","look":"40-70 words, physical only"}],' +
+'"cast":[{"name":"short name as used in the scenes","real":"full public name","known":"one short phrase placing them","look":"40-70 words, physical only"}],' +
 '"slides":[{"kind":"hook","title":"the headline with *the turn marked*","scene":"..."},' +
 '{"kind":"slide","title":"","body":"para\\n\\npara\\n\\npara","scene":"..."}],' +
 '"caption":"para1\\n\\npara2\\n\\npara3\\n\\n#niche #mid #broad"}'
@@ -6626,12 +6535,12 @@ async function writeFactDeck(deck){
     // the promise under the headline is the deck's, and the cover is what draws it
     deck.cast = (Array.isArray(j.cast) ? j.cast : []).slice(0, 4)
       .map(c => ({name: String((c && c.name) || '').trim().slice(0, 60),
-                  /* the full public name. A first name identifies nobody, and the writer
-                     hands one back often enough that the deck's own subject is a better
-                     answer than an abbreviation. */
+                  /* The full public name. A first name identifies nobody, and the writer
+                     hands one back often enough that the deck's own subject — which came
+                     off the news scan complete — is the better answer. */
                   real: String((c && c.real) || '').trim().slice(0, 80) ||
-                        (deck.person && deck.cast_one !== false ? String(deck.person).slice(0, 80) : ''),
-                  ref: '',                       // a real photograph, attached by hand
+                        String(deck.person || '').trim().slice(0, 80),
+                  known: String((c && c.known) || '').trim().slice(0, 120),
                   look: String((c && c.look) || '').trim().slice(0, 400)}))
       .filter(c => c.name && c.look);
     const fallback = (angleIn(catCfg(cat).angles, deck.angle) || {}).swipe || '';
@@ -7378,7 +7287,6 @@ function init(){
     openPrompt($('factCat').value, false);
     $('factNewCat').focus();
   };
-  bindCastPanel();
   $('factLogoPick').onclick = () => $('factLogoFile').click();
   $('factLogoFile').onchange = e => {
     const f = e.target.files[0]; if(!f) return;

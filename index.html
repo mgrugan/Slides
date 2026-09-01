@@ -1253,6 +1253,71 @@ const PRESETS = [
     library_collection:'iDisney',
     structure:'cover states the hook in one line, then each slide advances it by one short line',
     voice:'short, flat and declarative — one line a slide, and the films do the work'
+  },
+
+  /* ---------------------------------------------------------------------------
+     The news account. Unlike the other three this one is not one line over a picture:
+     the cover carries the account's word across the top and a headline at the foot,
+     and the slides are paragraphs of type on near-black with the photograph cut in at
+     one side. Two things it needs that nothing else here did — phrases printed in a
+     second colour inside a sentence, and a column that flips side every slide so a
+     run of long paragraphs does not read as one wall.
+     -------------------------------------------------------------------------- */
+  {
+    name:'Obsession', builtin:true,
+    aspect_ratio:'4:5',
+    imagery:'dramatic-editorial-portrait',
+    v: 1,
+    image_prompt_suffix:'editorial portrait photograph, one person large in frame, hard directional light '+
+      'against a darker surround, rich saturated colour, shallow depth of field, shot like a magazine feature '+
+      'rather than a snapshot.',
+    image_prompt_suffix_colour:'editorial portrait photograph, one person large in frame, hard directional '+
+      'light against a darker surround, rich saturated colour, shallow depth of field, shot like a magazine '+
+      'feature rather than a snapshot.',
+    colour_suffix:'Rich saturated colour, strong highlights against a near-black surround.',
+    mono_suffix:'Black and white only, deep contrast, no colour anywhere in the frame.',
+    caption_treatment:'documentary',
+    portrait_inset:true, auto_inset:true,        // the circle top right of the cover
+    divider:false, brand_bar:false, cover_swipe:false,
+    logo_on_all:false, shot_ladder:false, subject_context:false,
+    font_family:'Anton', font_weight:400, font_fallback:'Archivo',
+    /* The slides are paragraphs, so they are set in the text face rather than the
+       poster one, in sentence case — a wall of Anton caps at this length is unreadable. */
+    body_font_family:'Archivo', body_weight:800, body_fallback:'Inter', italic:false,
+    uppercase:true, body_uppercase:false, letter_spacing_em:-0.005,
+    text_color:'#FFFFFF', stroke_color:'#000000', stroke_width:0, text_shadow:0.25, shadow_color:'#000000',
+    /* The second colour. Everything the writer wraps in asterisks prints in it. */
+    accent_color:'#F4511E',
+    /* The word across the top of every cover, sized to fill the measure whatever it
+       says, so it is the same width on every post. */
+    wordmark:'OBSESSION', wordmark_size_pct:0.10, wordmark_width_pct:0.88,
+    wordmark_top_pct:0.025, wordmark_tracking_em:-0.025, wordmark_color:'#FFFFFF',
+    // the circle starts under the wordmark rather than in the corner behind it
+    inset_pct:0.34, inset_pad_pct:0.055, inset_top_pct:0.135,
+    /* The cover is a photograph with the accent glowing behind it; the slides are type
+       on near-black with the picture cut in at one side. */
+    scrim_pct:0.30, hook_scrim_pct:0.46, scrim_alpha:0.94,
+    scrim_color:'#000000', hook_scrim_color:'#0A0403',
+    glow_pct:0.42, glow_wide_pct:0.72, glow_color:'#F4511E', glow_alpha:0.55, glow_on_all:false,
+    bottom_pad_pct:0.055,
+    title_size_pct:0.048, body_size_pct:0.034, title_gap_em:0.6,
+    title_line_em:0.96, body_line_em:1.24,
+    max_width_pct:0.86, body_width_pct:0.80,
+    balance_wrap:true, fit_column:false, min_fit_scale:0.70,
+    keep_breaks:true,          // the writer's paragraph breaks are the rhythm of the slide
+    text_align:'left',
+    /* left, right, left down the deck — the cover is exempt and always sets left */
+    alt_align:true,
+    /* The people are real and recognisable, which is the exact case an image model
+       refuses by name, so the cast description travels without one. */
+    cast_unnamed:true,
+    badge_fixed:false, badge_from_angle:false,
+    handle_text:'', handle_on_all:false,
+    stat_boxes:false, auto_number:false,
+    brand_logo_ring:true, brand_ring_pct:0.030,
+    library_collection:'Obsession',
+    structure:'the cover states the turn, then each slide is two to five short paragraphs carrying the story in order',
+    voice:'plain, warm and astonished — short sentences, real figures, and never a word of hype'
   }
 ];
 
@@ -1788,6 +1853,9 @@ const LOOK_KEYS = ['font_family','body_font_family','font_weight','body_weight',
   'swipe_italic','swipe_weight','swipe_size_pct','swipe_lift_pct','swipe_color',
   'cover_rule_fade','cover_rule_pad_pct','cover_mark_pct','min_fit_scale',
   'balance_wrap','fit_column','ragged_max','badge_from_angle','badge_bg','badge_color','badge_text','badge_fixed',
+  'accent_color','alt_align','cast_unnamed','wordmark','wordmark_size_pct','wordmark_width_pct',
+  'inset_pct','inset_pad_pct','inset_top_pct','keep_breaks',
+  'wordmark_top_pct','wordmark_tracking_em','wordmark_color',
   'hook_scrim_pct','hook_scrim_color','glow_pct','glow_wide_pct','glow_color','glow_alpha','glow_on_all'];
 function refreshBuiltinProfile(){
   const m = /^preset:(\d+)$/.exec(S.styleKey || '');
@@ -1860,6 +1928,11 @@ function bodyGenerateContent(model, parts, opts){
   if(opts.wantImage && opts.imageCfg){
     b.generationConfig = {responseModalities:['TEXT','IMAGE'], imageConfig:{aspectRatio:opts.aspect}};
   }
+  /* Google Search grounding. A news page cannot run on what the model remembers — the
+     training cutoff is months behind the day being posted about, and asked for "today"
+     without this it will confidently invent a plausible story. With it the model reads
+     the web and the answers carry citations. */
+  if(opts.search) b.tools = [{google_search:{}}];
   return b;
 }
 /* base64 magic prefixes — how to tell an image from prose without being told */
@@ -1982,7 +2055,7 @@ function quotaInfo(e){
   return {is429, zero, wait: m ? Math.ceil(parseFloat(m[1])) : 25};
 }
 /* wantImage: ask for an image back. Returns {text, images[]} */
-async function callModel({model, parts, wantImage=false, aspect='9:16'}){
+async function callModel({model, parts, wantImage=false, aspect='9:16', search=false}){
   const c = cfg();
   if(!c.key){ openDrawer('drawerSettings'); $('apiKey').focus(); throw new Error('Add your Gemini API key in Settings.'); }
   let order = c.shape === 'auto' ? ['interactions','generateContent'] : [c.shape];
@@ -1991,7 +2064,7 @@ async function callModel({model, parts, wantImage=false, aspect='9:16'}){
   await GATE;                                   // respect any active rate-limit hold
   for(let i=0;i<order.length;i++){
     const shape = order[i];
-    const opts = {wantImage, aspect, imageCfg: $('sendImageCfg').checked && !NO_IMG_CFG.has(shape)};
+    const opts = {wantImage, aspect, search, imageCfg: $('sendImageCfg').checked && !NO_IMG_CFG.has(shape)};
     try{
       const res = await rawCall(shape, model, parts, opts);
       if(c.shape === 'auto' && AUTO_SHAPE !== shape){
@@ -2155,9 +2228,40 @@ function fontStr(p, size, weight, fam){
   return (p.italic ? 'italic ' : '') + (weight || p.font_weight || 800) + ' ' + Math.round(size) +
          'px "' + (fam || p.font_family || 'Inter') + '", ' + fontTail(p);
 }
-function wrap(ctx, text, maxW){
+/* The news page highlights phrases inside a sentence in its accent colour. The writer
+   marks them with asterisks — *like this* — and everything downstream works on the
+   marker-free text with a parallel flag per word, so wrapping is byte-identical to the
+   plain case and only the drawing differs. Splitting the markers off here, once, is
+   what keeps a highlight that wraps across a line break from losing its state. */
+const ACCENT_MARK = /\*/g;
+function parseAccent(text){
+  const words = String(text||'').split(/(\s+)/);
+  const plain = [], flags = [];
+  let on = false;
+  for(const chunk of words){
+    if(/^\s*$/.test(chunk)){ plain.push(chunk); continue; }
+    let w = chunk, opens = false, closes = false;
+    if(w.startsWith('*')){ opens = true; w = w.slice(1); }
+    if(w.endsWith('*')){ closes = true; w = w.slice(0, -1); }
+    // punctuation can sit outside the closing marker: "her own.*" and "*her own*."
+    if(!closes && /\*[^\w]*$/.test(w)){ closes = true; w = w.replace(/\*/g, ''); }
+    flags.push(on || opens || closes);
+    if(opens) on = true;
+    if(closes) on = false;
+    plain.push(w);
+  }
+  return {text: plain.join(''), flags};
+}
+/* `keepBreaks` emits an empty line where the writer left a blank one. A blank line is
+   drawn as nothing and advances by a full line, which is exactly what a paragraph break
+   looks like — so no height arithmetic changes and the block measures as it always did.
+   Off by default: styles whose bodies are a sentence or two have nothing to gain and
+   would start reflowing. */
+function wrap(ctx, text, maxW, keepBreaks){
   const out = [];
-  for(const para of String(text||'').split(/\n+/)){
+  const paras = String(text||'').split(keepBreaks ? /\n{2,}/ : /\n+/);
+  for(const para of paras){
+    if(keepBreaks && out.length) out.push('');
     const words = para.split(/\s+/).filter(Boolean);
     if(!words.length) continue;
     let line = words[0];
@@ -2178,9 +2282,11 @@ function wrap(ctx, text, maxW){
    line is how a paragraph ends, not raggedness.
    Widths come from prefix sums over the words. Canvas letter-spacing is added per
    character, so word widths stay additive and one measure per word is enough. */
-function wrapBalanced(ctx, text, maxW){
+function wrapBalanced(ctx, text, maxW, keepBreaks){
   const out = [];
-  for(const para of String(text||'').split(/\n+/)){
+  const paras = String(text||'').split(keepBreaks ? /\n{2,}/ : /\n+/);
+  for(const para of paras){
+    if(keepBreaks && out.length) out.push('');
     const words = para.split(/\s+/).filter(Boolean);
     if(!words.length) continue;
     const n = words.length;
@@ -2224,6 +2330,7 @@ function wrapBalanced(ctx, text, maxW){
 const ORPHAN = 0.30;
 function orphanCost(fill){ return fill < ORPHAN ? ORPHAN - fill : 0; }
 function raggedness(ctx, lines, maxW){
+  lines = lines.filter(Boolean);          // a paragraph break is not a short line
   if(lines.length < 2) return 0;
   let sum = 0;
   for(let i=0;i<lines.length-1;i++) sum += Math.max(0, (maxW - ctx.measureText(lines[i]).width)/maxW);
@@ -2250,7 +2357,57 @@ function anchorX(p, W, isHook){
   const a = alignFor(p, isHook);
   return a === 'left' ? m : a === 'right' ? W-m : W/2;
 }
-function drawLines(ctx, lines, p, size, x, y, W, H, weight, fam, lineEm){
+/* The news page sets its slides left, right, left — a page of long paragraphs all
+   ragged down the same edge reads as one wall, and flipping the column is what makes
+   a swipe feel like it moved. The cover is exempt; it always sets left. */
+function altAlign(p, slide, isHook){
+  if(!p.alt_align || isHook) return null;
+  const list = (slide._deck && slide._deck.slides) || [];
+  const i = Math.max(0, list.indexOf(slide));
+  return i % 2 ? 'left' : 'right';      // index 0 is the cover, so the first slide sets left
+}
+/* The word across the top of every cover — the thing the account is named for. Drawn
+   at whatever size fills the measure, so it is the same width on every post however
+   long the word is. */
+function drawWordmark(ctx, W, H, p){
+  const t = String(p.wordmark || '').trim();
+  if(!t) return 0;
+  const maxW = W * (p.wordmark_width_pct ?? 0.90);
+  let size = H * (p.wordmark_size_pct ?? 0.10);
+  ctx.save();
+  ctx.font = fontStr(p, size, p.wordmark_weight || p.font_weight, p.wordmark_font_family || p.font_family);
+  if('letterSpacing' in ctx) ctx.letterSpacing = ((p.wordmark_tracking_em ?? -0.02) * size).toFixed(2) + 'px';
+  const w = ctx.measureText(t).width;
+  if(w > 0 && Math.abs(w - maxW) > 1){                  // one correction, then it fits the measure
+    size *= maxW / w;
+    ctx.font = fontStr(p, size, p.wordmark_weight || p.font_weight, p.wordmark_font_family || p.font_family);
+    if('letterSpacing' in ctx) ctx.letterSpacing = ((p.wordmark_tracking_em ?? -0.02) * size).toFixed(2) + 'px';
+  }
+  ctx.textAlign = 'center'; ctx.textBaseline = 'alphabetic';
+  ctx.fillStyle = p.wordmark_color || p.text_color || '#fff';
+  const y = H * (p.wordmark_top_pct ?? 0.035) + size * 0.78;
+  ctx.fillText(t, W/2, y);
+  ctx.restore();
+  return y;
+}
+/* One line, drawn word by word so a marked phrase can take the accent colour. The x
+   of each word comes from measuring the prefix of the finished line rather than from
+   summing word widths, so a centred or right-aligned line lands exactly where the
+   same line drawn in one call would — summing drifts once letter-spacing is on. */
+function drawAccentLine(ctx, ln, p, x, cy, take, paint){
+  const words = ln.split(' ');
+  const full = ctx.measureText(ln).width;
+  const left = ctx.textAlign === 'left' ? x : ctx.textAlign === 'right' ? x - full : x - full/2;
+  const was = ctx.textAlign;
+  ctx.textAlign = 'left';
+  for(let i = 0; i < words.length; i++){
+    const before = words.slice(0, i).join(' ') + (i ? ' ' : '');
+    paint(words[i], left + (i ? ctx.measureText(before).width : 0), cy,
+          take() ? (p.accent_color || p.text_color) : (p.text_color || '#fff'));
+  }
+  ctx.textAlign = was;
+}
+function drawLines(ctx, lines, p, size, x, y, W, H, weight, fam, lineEm, flags){
   // renderSlide has already worked out which treatment this slide gets — the cover may
   // differ from the body — so take its answer rather than recomputing a different one
   const treat = p._treat || p.caption_treatment || 'outlined';
@@ -2271,7 +2428,13 @@ function drawLines(ctx, lines, p, size, x, y, W, H, weight, fam, lineEm){
     ctx.shadowOffsetY = on ? size*(light ? 0 : 0.05) : 0;   // a halo is centred, a shadow falls
   };
   let cy = y + lh/2;
+  /* Flags arrive word-ordered for the whole block, so the cursor walks them as the
+     lines are drawn — which is how a highlight that wraps keeps its colour on both
+     halves without the line breaks having to be known in advance. */
+  let fi = 0;
+  const next = () => (flags ? !!flags[fi++] : false);
   for(const ln of lines){
+    if(!ln){ cy += lh; continue; }        // a paragraph break: space, and no words to colour
     if(treat === 'label-boxes'){
       const w = ctx.measureText(ln).width, padX = size*0.34, padY = size*0.20;
       const bw = w + padX*2, bh = size*1.02 + padY*2;
@@ -2292,15 +2455,21 @@ function drawLines(ctx, lines, p, size, x, y, W, H, weight, fam, lineEm){
         setShadow(true);
         if(treat === 'outlined' && lw > 0){ ctx.lineWidth = lw; ctx.strokeStyle = p.stroke_color || '#000'; ctx.strokeText(ln, x, cy); }
         ctx.fillStyle = p.text_color || '#fff';
-        ctx.fillText(ln, x, cy);
+        ctx.fillText(ln, x, cy);       // a glow behind the type, so it is drawn flat and not per word
         setShadow(false);
       }
       if(treat === 'outlined' && lw > 0){
         ctx.lineWidth = lw; ctx.strokeStyle = p.stroke_color || '#000';
         ctx.strokeText(ln, x, cy);
       }
-      ctx.fillStyle = p.text_color || '#fff';
-      ctx.fillText(ln, x, cy);
+      if(flags){
+        drawAccentLine(ctx, ln, p, x, cy, next, (w, wx, wy, col) => {
+          ctx.fillStyle = col; ctx.fillText(w, wx, wy);
+        });
+      } else {
+        ctx.fillStyle = p.text_color || '#fff';
+        ctx.fillText(ln, x, cy);
+      }
     }
     cy += lh;
   }
@@ -2442,7 +2611,11 @@ function drawCornerLogo(ctx, W, H, p, mark){
    the ring came out thin and uneven. */
 function drawInset(ctx, img, W, H, p){
   if(!img || !img.complete || !img.naturalWidth) return;
-  const d = W*0.40, r = d/2, cx = W - r - W*0.06, cy = r + H*0.045;
+  /* The circle normally sits in the top corner. On a style that prints a word across
+     the top of the cover it has to start below it, or the two overlap and neither
+     reads — so the offset is a field rather than a constant. */
+  const d = W*(p.inset_pct ?? 0.40), r = d/2, cx = W - r - W*(p.inset_pad_pct ?? 0.06),
+        cy = r + H*(p.inset_top_pct ?? 0.045);
   ctx.save();
   ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI*2); ctx.closePath();
   ctx.clip();
@@ -2833,6 +3006,7 @@ function renderSlide(slide, canvas, p, scale){
     drawScrim(ctx, W, H, p, isHook ? (p.hook_scrim_color || p.scrim_color) : p.scrim_color,
               isHook ? (p.hook_scrim_pct ?? p.scrim_pct) : p.scrim_pct);
     if(isHook || p.glow_on_all) drawGlow(ctx, W, H, p);
+    if(isHook && p.wordmark) drawWordmark(ctx, W, H, p);
     // under the type, not over it: painted after the caption it would wash the last line
     if(footerReserve(slide, p, W, H)) drawFooterScrim(ctx, W, H, p);
     // Below a quarter scale the circle is a handful of pixels in a row thumbnail, and
@@ -2841,9 +3015,11 @@ function renderSlide(slide, canvas, p, scale){
       drawInset(ctx, insetImageFor(slide, p), W, H, p);
   }
 
-  const x = anchorX(p, W, isHook);
+  const alt = altAlign(p, slide, isHook);
+  const x = alt ? (alt === 'left' ? W*(p.edge_pct ?? 0.07) : W - W*(p.edge_pct ?? 0.07))
+                : anchorX(p, W, isHook);
   const drawP = Object.assign(Object.create(Object.getPrototypeOf(p) || Object.prototype), p,
-                              {_align: alignFor(p, isHook), _treat: treat});
+                              {_align: altAlign(p, slide, isHook) || alignFor(p, isHook), _treat: treat});
 
   const bWeight = p.body_weight || p.font_weight;
   const bFam = p.body_font_family || p.font_family;
@@ -2864,7 +3040,8 @@ function renderSlide(slide, canvas, p, scale){
     const tMaxW = W*(p.max_width_pct ?? 0.86) - box;
     ctx.font = fontStr(p, tSize);
     if('letterSpacing' in ctx) ctx.letterSpacing = ((p.letter_spacing_em||0)*tSize).toFixed(2)+'px';
-    const tLines = breaker(ctx, cased(displayTitle(slide, p)), tMaxW);
+    const tAcc = p.accent_color ? parseAccent(cased(displayTitle(slide, p))) : null;
+    const tLines = breaker(ctx, tAcc ? tAcc.text : cased(displayTitle(slide, p)), tMaxW);
     const tRagged = raggedness(ctx, tLines, tMaxW);
     ctx.font = fontStr(p, bSize, bWeight, bFam);
     /* The same tracking drawLines will draw the body with. Wrapping it at zero and
@@ -2872,9 +3049,13 @@ function renderSlide(slide, canvas, p, scale){
        while the body was small and the column had slack, and a line running off the
        right edge as soon as the type was enlarged. */
     if('letterSpacing' in ctx) ctx.letterSpacing = ((p.letter_spacing_em||0)*bSize).toFixed(2)+'px';
-    const bLines = isHook ? [] : breaker(ctx, casedBody(slide.body), W*(p.body_width_pct ?? p.max_width_pct ?? 0.86) - box);
+    const bAcc = p.accent_color ? parseAccent(casedBody(slide.body)) : null;
+    const bLines = isHook ? [] : breaker(ctx, bAcc ? bAcc.text : casedBody(slide.body),
+                                         W*(p.body_width_pct ?? p.max_width_pct ?? 0.86) - box,
+                                         p.keep_breaks);
     const gap = bLines.length ? bSize*(p.title_gap_em ?? 0.7) : 0;
     return {tSize, bSize, tLines, bLines, gap, tRagged,
+            tFlags: tAcc && tAcc.flags, bFlags: bAcc && bAcc.flags,
             totalH: blockHeight(tSize, tLines.length, treat, tLine) + gap +
                     blockHeight(bSize, bLines.length, treat, bLine)};
   };
@@ -2915,7 +3096,7 @@ function renderSlide(slide, canvas, p, scale){
       L = bestL;
     }
   }
-  const {tSize, bSize, tLines, bLines, gap, totalH} = L;
+  const {tSize, bSize, tLines, bLines, gap, totalH, tFlags, bFlags} = L;
 
   let top;
   if(doc){
@@ -2926,8 +3107,8 @@ function renderSlide(slide, canvas, p, scale){
   }
   top = clamp(top, H*0.01, H - totalH - H*0.02);
 
-  const used = drawLines(ctx, tLines, drawP, tSize, x, top, W, H, null, null, tLine);
-  if(bLines.length) drawLines(ctx, bLines, drawP, bSize, x, top + used + gap, W, H, bWeight, bFam, bLine);
+  const used = drawLines(ctx, tLines, drawP, tSize, x, top, W, H, null, null, tLine, tFlags);
+  if(bLines.length) drawLines(ctx, bLines, drawP, bSize, x, top + used + gap, W, H, bWeight, bFam, bLine, bFlags);
   const badgeText = p.badge_fixed ? (p.badge_text || '')
                   : (slide.badge || (p.badge_from_angle ? angleBadge(slide) : ''));
   if(isHook && p.badge_on_cover !== false && badgeText)
@@ -3720,9 +3901,19 @@ function castBlock(slide){
   // list still gets continuity, which matters more than the list being tidy
   const inFrame = cast.filter(c => named.has(c.name.toLowerCase()) || scene.includes(c.name.toLowerCase()));
   if(!inFrame.length) return '';
-  return 'THE PEOPLE IN THIS PICTURE ARE THE SAME PEOPLE AS IN THE REST OF THE SET AND MUST LOOK IDENTICAL IN '+
-    'EVERY FRAME — the same face, age, hair, build and clothing, changed only where the story changes them. ' +
-    inFrame.map(c => c.name + ' — ' + c.look).join(' ') + ' ';
+  /* Two ways to hand the same people to the image model. Normally the name helps: it
+     anchors the description and costs nothing. For a page about real, recognisable
+     people it is the opposite — a named public figure is refused or quietly degraded,
+     and a refused frame is a blank slide — so the description goes in alone and does
+     all the work. It has to be detailed enough to be the same person twice, which is
+     why the brief asks for a long one. */
+  const anon = S.profile && S.profile.cast_unnamed;
+  const head = 'THE PEOPLE IN THIS PICTURE ARE THE SAME PEOPLE AS IN THE REST OF THE SET AND MUST LOOK IDENTICAL IN '+
+    'EVERY FRAME — the same face, age, hair, build and clothing, changed only where the story changes them. ';
+  return head + (anon
+    ? 'Render them from these descriptions exactly, and do not infer or use any name for them: ' +
+      inFrame.map(c => c.look).join(' | ')
+    : inFrame.map(c => c.name + ' — ' + c.look).join(' ')) + ' ';
 }
 function imagePrompt(slide, insist){
   const p = S.profile;
@@ -4684,13 +4875,36 @@ const FACT_DEFAULTS = {
     style: 'iDisney',
     collection: 'iDisney',
     tone: 'colour'
+  },
+  /* The news page. Same review-panel and ledger machinery as the other rotating
+     accounts, but the subjects are not dealt from a rotation — they are searched for,
+     one day at a time. Put a date in the focus box (2026-09-01) to scan from that day
+     backwards instead of from today. */
+  'Obsession': {
+    prompt: 'Viral human-interest stories about one named person, for a large general audience. The shape is '+
+      'always the same and it is the whole account: somebody was doing one thing — struggling, unknown, working '+
+      'an ordinary job — and is now doing another, and the distance between the two is the post. '+
+      'Creators who blew up, people whose side project became their living, someone who gave something away, an '+
+      'unlikely second act, a stranger who changed somebody\'s year. '+
+      'Every figure must be real and reported. Warm rather than cynical, astonished rather than sneering, and '+
+      'the subject always ends the carousel better off for being in it. Never a tragedy, a scandal, a court '+
+      'case, party politics, an illness or a death; never a private individual who did not put it in public '+
+      'themselves; never anyone under 18.',
+    mode: 'angles',
+    angles: 'obsession',
+    news: true,
+    news_days: 3,
+    style: 'Obsession',
+    collection: 'Obsession',
+    tone: 'colour'
   }
 };
 /* Category values were plain prompt strings and most still are. A few carry a little
    configuration instead, so both shapes have to read the same way everywhere. */
 function catCfg(name){
   const v = FACT_CATS[name];
-  const base = {prompt:'', mode:'subjects', cta:'', collection:'', angles:'', style:'', tone:''};
+  const base = {prompt:'', mode:'subjects', cta:'', collection:'', angles:'', style:'', tone:'',
+                news:false, news_days:3};
   if(v && typeof v === 'object') return Object.assign(base, v);
   return Object.assign(base, {prompt: String(v||'')});
 }
@@ -5115,6 +5329,20 @@ const ANGLE_SETS = {
      of them reading as one. Each angle carries the word that goes in the flag on
      the cover, because on this page the flag names the kind of post rather than
      always saying the same thing. */
+  /* The news page does not rotate — every post is the same shape, and what varies is
+     the day it came off the wire. One angle, so the review panel and the ledger have
+     something to resolve against. */
+  obsession: [
+    {key:'news', kind:'story', badge:'OBSESSION',
+     label:'today\'s story, about one person',
+     brief:'One person who was doing one thing and is now doing another, reported in the last few days. The '+
+       'distance between the two is the whole post. Real figures, real dates, a named source, and a subject who '+
+       'is better off for the attention rather than worse.',
+     cover:'States the turn in one breath — what they were, then what they are now.',
+     close:'The last slide lands where the story leaves them, and asks the reader something.',
+     swipe:'And it started with one video.'}
+  ],
+
   idisney: [
     {key:'versus', kind:'list', badge:'VERSUS',
      label:'who actually wins',
@@ -5200,7 +5428,8 @@ const ANGLE_SETS = {
 };
 /* Which brief writes a deck for which rotation. Anything not listed gets the dating
    page's, which is the general one. */
-const ANGLE_PROMPTS = {thrifting: (c,d)=>thriftDeckPrompt(c,d), idisney: (c,d)=>disneyDeckPrompt(c,d)};
+const ANGLE_PROMPTS = {thrifting: (c,d)=>thriftDeckPrompt(c,d), idisney: (c,d)=>disneyDeckPrompt(c,d),
+                       obsession: (c,d)=>obsessionDeckPrompt(c,d)};
 const angleSet = name => ANGLE_SETS[name] || [];
 const angleIn = (name, key) => angleSet(name).find(a => a.key === key) || null;
 /* The word in the flag on the cover. Most styles carry a fixed one; a page whose posts
@@ -5227,6 +5456,84 @@ function dealAngles(setName, n){
   for(let i = 0; i < n; i++) out.push(list[(at + i) % list.length]);
   localStorage.setItem(key, String((at + n) % list.length));
   for(let i = out.length-1; i > 0; i--){ const j = Math.floor(Math.random()*(i+1)); [out[i],out[j]] = [out[j],out[i]]; }
+  return out;
+}
+
+/* ---------------------------------------------------------------------------
+   The news scan. A page that posts today's story cannot be written from what the model
+   remembers: the training cutoff is months behind the day being posted about, and asked
+   for "this week" without the web it invents something plausible sourced to nothing. So
+   this call is grounded — the model searches and reads — and it asks for ONE NAMED DAY
+   at a time rather than "recently", because a fixed window is what makes a run
+   reproducible and what stops today's run colliding with yesterday's.
+   -------------------------------------------------------------------------- */
+const DAY_MS = 86400000;
+const isoDay = d => new Date(d).toISOString().slice(0, 10);
+const prettyDay = d => new Date(d + 'T12:00:00Z').toLocaleDateString('en-GB',
+  {weekday:'long', day:'numeric', month:'long', year:'numeric', timeZone:'UTC'});
+/* The days a run covers, newest first. Ten posts over three days is three searches. */
+function scanDays(n, from){
+  const start = from ? new Date(from + 'T12:00:00Z').getTime() : Date.now();
+  const out = [];
+  for(let i = 0; i < Math.max(1, n); i++) out.push(isoDay(start - i*DAY_MS));
+  return out;
+}
+async function scanNewsDay(cat, day, want, avoid){
+  const sys =
+'You are finding stories for a viral human-interest account. Search the web — do not answer from memory.\n\n' +
+'THE DAY: ' + prettyDay(day) + ' (' + day + '). Find stories published, breaking, or being widely shared ON OR ' +
+'WITHIN ABOUT 48 HOURS OF THAT DAY. Nothing older unless it resurfaced then and you can say so.\n\n' +
+'THE ACCOUNT:\n' + catPrompt(cat) + '\n\n' +
+'WHAT COUNTS:\n' +
+'- One named person at the centre of it, who a reader could look up. This account is about people, not topics.\n' +
+'- A turn: they were doing one thing and now they are doing another, and the distance between the two is the post.\n' +
+'- Real, checkable numbers — followers, views, sales, sums, dates.\n' +
+'- Warm or astonishing. Never a tragedy, a scandal or a court case, and nothing that leaves the subject worse off for being posted about.\n\n' +
+'WHAT DOES NOT COUNT:\n' +
+'- Anything the search does not support. An invented viral story is the one thing this account cannot survive — return fewer rather than filling the list.\n' +
+'- Party politics, active criminal proceedings, deaths, illness, private individuals who did not put it in public themselves, anyone under 18.\n' +
+(avoid && avoid.length
+ ? '\nALREADY POSTED — do not choose these or anything close to them:\n' + avoid.map(x=>'  · '+x).join('\n') + '\n'
+ : '') +
+'\nReturn ONLY a JSON array of up to ' + want + ' objects:\n' +
+'[{"subject":"short canonical name for this post — the person and the thing",' +
+'"claim":"the cover headline, under 16 words, the turn stated plainly",' +
+'"person":"the full name of the person at the centre",' +
+'"source":"the outlet or account it came from",' +
+'"date":"' + day + '"}]';
+  const r = await callModel({model: cfg().textModel, parts:[{type:'text', text:sys}], search:true});
+  S.lastRaw = r.text;
+  let j = extractJSON(r.text, true);
+  if(!Array.isArray(j) && j && typeof j === 'object') j = Object.values(j).find(v=>Array.isArray(v)) || [];
+  return (j||[]).map(o => o && typeof o === 'object' ? {
+    subject: String(o.subject||'').trim(),
+    claim:   String(o.claim||'').trim(),
+    person:  String(o.person||'').trim(),
+    source:  String(o.source||'').trim(),
+    day
+  } : null).filter(o => o && o.subject && o.claim);
+}
+/* A run's worth of stories spread over the last few days, so a batch is not ten posts
+   about one afternoon. The ledger is sent up front as a do-not-repeat list and checked
+   again on the way back, because the model is told, not bound. */
+async function scanNews(cat, n, days, from){
+  const seen = LEDGER.filter(e => e.cat === cat).slice(-120).map(e => e.subject);
+  const list = scanDays(days || 3, from);
+  const per = Math.ceil(n / list.length) + 1;
+  const out = [];
+  for(const day of list){
+    if(out.length >= n) break;
+    let got = [];
+    try{ got = await scanNewsDay(cat, day, per, seen.concat(out.map(o=>o.subject))); }
+    catch(e){ log('news scan for ' + day + ' failed: ' + apiError(e), 'w'); continue; }
+    for(const idea of got){
+      if(out.length >= n) break;
+      if(ledgerHas(idea.subject) || out.some(o => sameSubject(o.subject, idea.subject))) continue;
+      out.push(idea);
+    }
+    log('scanned ' + day + ' — ' + got.length + ' found, ' + out.length + '/' + n + ' kept', 'o');
+  }
+  if(!out.length) log('the news scan found nothing usable — check the key has Search grounding enabled', 'w');
   return out;
 }
 
@@ -5335,8 +5642,14 @@ function parseIdeaLines(setName, text){
       : (kinds.has('story') ? 'story' : [...kinds][0] || 'list');
     const kind = tagged ? tagged.kind : guess;
     const was = known(hook);
+    /* A news idea carries who it is about, where it came from and the day it ran. The
+       brief needs all three, and an approved line that comes back unedited must not
+       arrive stripped of them. */
     return {angle: tagged ? tagged.key : was ? was.angle : first(kind), kind, hook,
-            subject: was ? was.subject : hook};
+            subject: was ? was.subject : hook,
+            person: was ? (was.person || '') : '',
+            source: was ? (was.source || '') : '',
+            day:    was ? (was.day || '') : ''};
   }).filter(x=>x.hook);
 }
 
@@ -5401,6 +5714,69 @@ function thriftDeckPrompt(cat, deck){
 'Return ONLY JSON:\n' +
 '{"subject":"short canonical name for this post","swipe":"...",' +
 '"slides":[{"kind":"hook","title":"...","scene":"..."},{"kind":"slide","title":"...","body":"","scene":"..."}],' +
+'"caption":"para1\\n\\npara2\\n\\npara3\\n\\n#niche #mid #broad"}'
+  );
+}
+
+/* The news page. Long paragraphs rather than one line a slide, phrases marked for the
+   accent colour inside them, and a cast block that has to carry a real person's
+   likeness across seven frames using nothing but a description — because the person is
+   real and recognisable, which is exactly the case an image model refuses by name. */
+function obsessionDeckPrompt(cat, deck){
+  const p = S.profile;
+  const who = deck.person || 'the person at the centre of it';
+  const when = deck.day ? ' It was reported around ' + prettyDay(deck.day) + '.' : '';
+  return (
+'Write a ' + deck.n + '-slide story carousel for a viral human-interest account.\n\n' +
+'THE STORY: ' + deck.subject + '\n' +
+'THE COVER HEADLINE, verbatim or lightly tightened: "' + deck.hook + '"\n' +
+'THE PERSON: ' + who + '.' + when + '\n' +
+(deck.source ? 'SOURCE: ' + deck.source + '\n' : '') + '\n' +
+'THE ACCOUNT:\n' + catPrompt(cat) + '\n\n' +
+
+'WHAT MUST BE TRUE — the whole account rests on this:\n' +
+'- Every figure, date, name and quote must be real and reported. Never invent a number to make a slide land.\n' +
+'- If you are unsure of a figure, write the sentence without it. "Millions of views" beats a wrong number.\n' +
+'- Say what is known. Never speculate about what someone felt, earned or intended unless they said so.\n' +
+'- Nothing that leaves the subject worse off for being posted about.\n\n' +
+
+'HOW THESE SLIDES ARE BUILT:\n' +
+'- Slide 1 is the cover: the headline only, no body. It states the turn — what they were doing, and what they are doing now.\n' +
+'- Every slide after it is a "body" of 2 to 5 SHORT paragraphs, separated by blank lines. Leave "title" empty on those.\n' +
+'- A paragraph is one or two plain sentences. Short. The story is carried by what happened, in order, not by writing.\n' +
+'- Read end to end the slides are one continuous story, and each one ends on something that makes the next worth swiping to.\n' +
+'- Present tense for the turn, past for the history. No hype words, no emoji, no exclamation marks, no "you won\'t believe".\n\n' +
+
+'THE ACCENT — this page prints some phrases in a second colour:\n' +
+'- Wrap the phrase that carries the slide in asterisks, *like this*. Nothing else in the reply uses asterisks.\n' +
+'- One or two marked phrases per slide, never more: it is emphasis, and everything emphasised is nothing emphasised.\n' +
+'- Mark the figure, the name of the thing, or the line that turns it — "*14 million views*", "*a home of her own*". Never mark a whole paragraph.\n' +
+'- On the cover, mark the second half of the headline: the "now" of it.\n\n' +
+
+'THE SWIPE LINE — return it as "swipe": one short line that sits under the cover headline, under 12 words.\n\n' +
+
+'CAST — return it as "cast", and treat this as the most important field in the reply.\n' +
+'- One entry for the person at the centre, plus anyone else who appears in more than one frame. At most three.\n' +
+'- "look" is a PHYSICAL DESCRIPTION ONLY, 40 to 70 words, and it is the only thing the picture is built from — the name is never sent to the image model, because a named real person gets the frame refused and a refused frame is a blank slide.\n' +
+'- It must be specific enough that two different frames come back as the same face: apparent age, build and height, skin tone, face shape, eye colour, eyebrows, nose and jaw, hair colour and exact length and how it is worn, facial hair, glasses, visible tattoos or piercings, and the clothing they are in throughout.\n' +
+'- Describe them as they look NOW, in the photographs from this story, not from ten years ago.\n' +
+'- Write it flat and factual, the way a casting brief reads. No admiration, no "striking", no "beautiful".\n' +
+'- Every "scene" that includes a person must name them in "cast" so the description follows them into the frame.\n\n' +
+
+'IMAGES — "scene" describes a photograph and nothing else, and never asks for words, letters, numbers or logos.\n' +
+'- NEVER put a real person\'s name, or the name of a company, show or brand, inside "scene". Refer to them by their cast name only — "Tini in a home kitchen at night" — and the description does the rest.\n' +
+'- One person large in the frame, lit hard against a darker surround, shot like a magazine portrait. The story is a person, so the pictures are of a person.\n' +
+'- Vary it slide to slide: the moment described, the place, the framing. Never the same shot twice.\n' +
+'Style is ' + (p.imagery || 'dramatic editorial portrait') + '.\n\n' +
+
+'CAPTION for Instagram: three short paragraphs separated by blank lines, then one line of 3 to 5 hashtags.\n' +
+(deck.source ? 'Credit ' + deck.source + ' in the caption.\n' : '') + '\n' +
+
+'Return ONLY JSON:\n' +
+'{"subject":"short canonical name for this post","swipe":"...",' +
+'"cast":[{"name":"first name as used in the scenes","look":"40-70 words, physical only"}],' +
+'"slides":[{"kind":"hook","title":"the headline with *the turn marked*","scene":"..."},' +
+'{"kind":"slide","title":"","body":"para\\n\\npara\\n\\npara","scene":"..."}],' +
 '"caption":"para1\\n\\npara2\\n\\npara3\\n\\n#niche #mid #broad"}'
   );
 }
@@ -5820,9 +6196,16 @@ async function runFacts(opts){
        the planned headlines go out for review, tagged with the angle each will be
        written as, and nothing is written or generated until they come back. */
     if(byAngle && !opts.ideas){
-      const dealt = dealAngles(conf.angles, n);
-      const ideas = await pickAngleIdeas(cat, seed, dealt);
-      if(!ideas.length) throw new Error('no fresh post ideas came back — try a focus, or clear some covered subjects');
+      /* A news page's ideas come off the web a day at a time rather than out of the
+         rotation — same review panel, same ledger, same everything downstream, only the
+         source of the subjects differs. */
+      const ideas = conf.news
+        ? (await scanNews(cat, n, +conf.news_days || 3, seed && /^\d{4}-\d\d-\d\d$/.test(seed.trim()) ? seed.trim() : ''))
+            .map(o => Object.assign({angle:'news', kind:'story', hook:o.claim}, o))
+        : await pickAngleIdeas(cat, seed, dealAngles(conf.angles, n));
+      if(!ideas.length) throw new Error(conf.news
+        ? 'the news scan came back empty — check the day, the focus, or that the key has Search grounding'
+        : 'no fresh post ideas came back — try a focus, or clear some covered subjects');
       if(ideas.length < n) log('asked for '+n+' posts and found '+ideas.length+' that have not been done before','w');
       PLANNED = ideas;
       $('factHookText').value = ideaLines(ideas);
@@ -5855,6 +6238,7 @@ async function runFacts(opts){
       const tones = conf.tone ? ideas.map(()=>conf.tone) : deckTones(ideas.length);
       newDecks = ideas.map((idea,i)=>({id:uid(), hook:idea.hook, subject:idea.subject, cat,
         angle:idea.angle, kind:idea.kind, tone:tones[i],
+        person:idea.person||'', source:idea.source||'', day:idea.day||'',
         /* A counting headline sets its own length — points, plus the cover and the
            closing slide. That is true of a story angle headlined with a number too,
            and reading it only for list angles left the deck's own length disagreeing

@@ -448,6 +448,68 @@ const r = await p.evaluate(async ()=>{
     return true;
   })();
 
+  /* The wrap. A greedy break packs each line full and lets the rest fall short, which
+     on long words gave one line at 99% of the measure between lines at 53% and 43%.
+     Least-ragged breaking plus a step down in size where the words still will not
+     regroup: the client's own "5 PRACTICAL AGREEMENTS..." cover. */
+  const headLines = title => {
+    const s = {id:'wr', kind:'hook', title, scene:'x', tone:'colour', swipe:'x', _deck:deck};
+    IMG_CACHE['wr'] = IMG_CACHE['s1'];
+    const c = document.createElement('canvas');
+    const seen = [];
+    const real = window.drawLines;
+    window.drawLines = function(ctx, lines, p, size, ...rest){       // catch what actually got drawn
+      if(!seen.length) seen.push({lines:lines.slice(), size});
+      return real.apply(this, [ctx, lines, p, size, ...rest]);
+    };
+    try{ renderSlide(s, c, S.profile, 1); } finally { window.drawLines = real; }
+    const g = c.getContext('2d');
+    g.font = fontStr(S.profile, seen[0].size);
+    if('letterSpacing' in g) g.letterSpacing = ((S.profile.letter_spacing_em||0)*seen[0].size).toFixed(2)+'px';
+    const col = W * S.profile.max_width_pct;
+    return {lines: seen[0].lines, size: seen[0].size,
+            fills: seen[0].lines.map(l=>g.measureText(l).width/col)};
+  };
+  out.raggedHeadlineRegroups = (()=>{
+    const r = headLines('5 PRACTICAL AGREEMENTS POLYAMOROUS COUPLES USE TO HANDLE JEALOUSY');
+    // three lines, and every one of them close to full — not five at half
+    return r.lines.length <= 3 && r.fills.every(f => f > 0.85);
+  })();
+  out.goodHeadlineKeepsFullSize = (()=>{                   // and a headline that already fits is untouched
+    const r = headLines('THEY MET TWICE, FORTY YEARS APART');
+    return Math.abs(r.size - S.profile.title_size_pct * H) < 0.5;
+  })();
+  out.noStrandedLastWord = (()=>{                          // never "SHE SAID YES ON THE THIRD / TRY"
+    const r = headLines('SHE SAID YES ON THE THIRD TRY');
+    return r.lines.length === 1 || r.fills[r.fills.length-1] > 0.30;
+  })();
+  out.balancedBeatsGreedy = (()=>{
+    const g = document.createElement('canvas').getContext('2d');
+    const size = S.profile.title_size_pct * H;
+    g.font = fontStr(S.profile, size);
+    if('letterSpacing' in g) g.letterSpacing = ((S.profile.letter_spacing_em||0)*size).toFixed(2)+'px';
+    const col = W * S.profile.max_width_pct;
+    const t = 'THE THREE THINGS THEY BOTH SAID THEY WOULD NEVER DO AGAIN';
+    return raggedness(g, wrapBalanced(g, t, col), col) <= raggedness(g, wrap(g, t, col), col);
+  })();
+
+  /* The mark on the cover. A deck written from the batch box carries no category, and
+     the mark used to be looked up by that category alone — so it vanished on exactly
+     the decks this style is used for. It now falls back to the style's collection. */
+  out.logoDrawsWithoutDeckCat = (()=>{
+    const bare = {id:'nc', hook:'H', angle:'saga', kind:'story', tone:'colour', slides:[]};
+    const s = {id:'nc1', kind:'hook', title:'THEY MET TWICE, FORTY YEARS APART',
+               scene:'x', tone:'colour', swipe:'x', _deck:bare};
+    bare.slides = [s];
+    IMG_CACHE['nc1'] = IMG_CACHE['s1'];
+    const c = document.createElement('canvas'); renderSlide(s, c, S.profile, 1);
+    let ink = 0;                                    // the disc sits at the left of the cover footer
+    for(let y = H - 150; y < H - 30; y++)
+      for(let x = Math.round(W*0.045); x < Math.round(W*0.16); x++)
+        if(magenta(px(c, x, y))) ink++;             // the stand-in mark this suite draws
+    return ink > 500;
+  })();
+
   // --- the cast: the same people, frame to frame, and named figures who look like themselves
   const cast = [{name:'Ada', look:'a woman of about thirty, dark cropped hair, sharp jaw, navy wool coat'},
                 {name:'Tom', look:'a broad man of fifty, grey beard, heavy glasses, brown corduroy jacket'}];
@@ -548,6 +610,8 @@ const want = {
   typeIsHalfAgain:true, fitFloorHoldsOldSize:true, swipeNotScaled:true,
   coverInkIsHalfAgain:true, longHeadlineClearsCircle:true, bodyStaysInColumn:true,
   headlineStacksTight:true, bodyClearsDescenders:true,
+  raggedHeadlineRegroups:true, goodHeadlineKeepsFullSize:true, noStrandedLastWord:true,
+  balancedBeatsGreedy:true, logoDrawsWithoutDeckCat:true,
   castOnNamed:true, castBothNamed:true, castNoneWhenEmpty:true, castFromScene:true, castInsists:true,
   noCastNoBlock:true, castSurvivesSave:true,
   asksForCast:true, asksForDrama:true, bansStock:true, capsBodyLength:true, noFacelessRule:true,

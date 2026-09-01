@@ -1026,7 +1026,7 @@ const PRESETS = [
     name:'Pickuplines', builtin:true,
     aspect_ratio:'4:5',
     imagery:'cinematic-dramatic-photograph',
-    v: 10,                                       // bump to push the look into projects already saved
+    v: 11,                                       // bump to push the look into projects already saved
     image_prompt_suffix:'cinematic film still from a character drama, 35mm, dramatic directional light with deep '+
       'shadows and strong highlights, shallow depth of field, rich saturated colour, a real human face carrying '+
       'real emotion at the height of the moment, tension in the body, lived-in specific location, shot like a scene '+
@@ -1080,6 +1080,11 @@ const PRESETS = [
        not fit under the circle at that size steps down, but no further than the
        size it was set at before — 1 / 1.5 of it. */
     min_fit_scale:0.667,
+    /* Break the headline least-ragged rather than first-fit, and where the words are
+       long enough that every line still breaks early, set them a step smaller so they
+       regroup and fill the measure. Lines that fill read larger than larger type in
+       half-empty lines does. */
+    balance_wrap:true, fit_column:true, ragged_max:0.12,
     max_width_pct:0.90, body_width_pct:0.90,
     divider:false,                              // the account row replaces the rule-and-mark
     portrait_inset:true, auto_inset:true,       // the cover's circle, cut from the deck's own frames
@@ -1699,7 +1704,8 @@ const LOOK_KEYS = ['font_family','body_font_family','font_weight','body_weight',
   'brand_name','brand_handle','brand_verified',
   'cover_swipe','swipe_fixed','swipe_line','swipe_font_family','swipe_font_fallback',
   'swipe_italic','swipe_weight','swipe_size_pct','swipe_lift_pct','swipe_color',
-  'cover_rule_fade','cover_rule_pad_pct','cover_mark_pct','min_fit_scale'];
+  'cover_rule_fade','cover_rule_pad_pct','cover_mark_pct','min_fit_scale',
+  'balance_wrap','fit_column','ragged_max'];
 function refreshBuiltinProfile(){
   const m = /^preset:(\d+)$/.exec(S.styleKey || '');
   const preset = m && PRESETS[+m[1]];
@@ -2081,6 +2087,66 @@ function wrap(ctx, text, maxW){
   }
   return out;
 }
+/* Greedy wrapping packs each line as full as it will go and lets the leftovers fall
+   where they may, which on a short column of large caps produces one line at 99% of
+   the measure between lines at 53% and 43%. This breaks the same words into the same
+   number of lines, but chooses the breaks that leave every line as near the measure as
+   possible — least-ragged rather than first-fit. The last line is exempt: a short last
+   line is how a paragraph ends, not raggedness.
+   Widths come from prefix sums over the words. Canvas letter-spacing is added per
+   character, so word widths stay additive and one measure per word is enough. */
+function wrapBalanced(ctx, text, maxW){
+  const out = [];
+  for(const para of String(text||'').split(/\n+/)){
+    const words = para.split(/\s+/).filter(Boolean);
+    if(!words.length) continue;
+    const n = words.length;
+    const wordW = words.map(w=>ctx.measureText(w).width);
+    const spaceW = ctx.measureText(' ').width;
+    // width of words[i..j-1] set as one line
+    const pre = [0]; for(let i=0;i<n;i++) pre.push(pre[i] + wordW[i]);
+    const lineW = (i,j) => pre[j] - pre[i] + spaceW*(j-i-1);
+    /* best[i] = the least-ragged way to set words[i..n-1]. Cost is the squared
+       shortfall, so one badly short line is worse than two slightly short ones —
+       which is the whole point. A line wider than the measure is not an option
+       unless it is a single word that cannot be broken at all. */
+    const best = new Array(n+1).fill(null);
+    best[n] = {cost:0, next:-1};
+    for(let i=n-1;i>=0;i--){
+      for(let j=i+1;j<=n;j++){
+        const w = lineW(i,j);
+        if(w > maxW && j > i+1) break;              // adding another word only makes it worse
+        const last = j === n;
+        const short = last ? 0 : (maxW - w)/maxW;
+        // a stranded last word costs too, so the breaker pulls one down to join it
+        const cost = short*short + (last && i > 0 ? orphanCost(w/maxW) : 0) +
+                     (best[j] ? best[j].cost : Infinity);
+        if(!best[i] || cost < best[i].cost) best[i] = {cost, next:j};
+        if(w > maxW) break;                          // an unbreakable single word: take it and stop
+      }
+    }
+    for(let i=0;i<n && best[i];){
+      const j = best[i].next;
+      out.push(words.slice(i,j).join(' '));
+      i = j;
+    }
+  }
+  return out;
+}
+/* How well a set of lines fills its measure. 0 is perfect. The last line is mostly
+   exempt — a short last line is how a block of type ends — but a last line that is one
+   stranded word is its own fault, and worse than the lines above being slightly short:
+   without this, "SHE SAID YES ON THE THIRD / TRY" scores better than setting the whole
+   thing on one full line. */
+const ORPHAN = 0.30;
+function orphanCost(fill){ return fill < ORPHAN ? ORPHAN - fill : 0; }
+function raggedness(ctx, lines, maxW){
+  if(lines.length < 2) return 0;
+  let sum = 0;
+  for(let i=0;i<lines.length-1;i++) sum += Math.max(0, (maxW - ctx.measureText(lines[i]).width)/maxW);
+  return sum / (lines.length - 1) +
+         orphanCost(ctx.measureText(lines[lines.length-1]).width / maxW);
+}
 function roundRect(ctx,x,y,w,h,r){
   r = Math.min(r, h/2, w/2);
   ctx.beginPath();
@@ -2225,7 +2291,12 @@ function showCatLogo(){
   if(clear) clear.disabled = !data;
 }
 function logoFor(slide){
-  const cat = slide && slide._deck && slide._deck.cat;
+  /* A deck written from the batch box carries no category — only the ones dealt from a
+     category do — so a mark saved under "Pickuplines" was invisible on exactly the
+     decks the Pickuplines style was being used for, and the cover came out with a bare
+     rule and no logo. Fall back to the collection the style itself names, which is the
+     category in all but name, before falling back to the one global mark. */
+  const cat = (slide && slide._deck && slide._deck.cat) || currentCollection();
   const own = cat && LOGO_CACHE[cat];
   const img = (own && own.complete && own.naturalWidth) ? own : LOGO_IMG;
   return (img && img.complete && img.naturalWidth) ? img : null;
@@ -2677,37 +2748,59 @@ function renderSlide(slide, canvas, p, scale){
     const tSize = (p.title_size_pct||0.05) * H * (isHook && !doc ? 1.4 : 1) * f;
     const bSize = (p.body_size_pct||0.033) * H * f;
     const box = treat === 'label-boxes' ? tSize*0.7 : 0;
+    const breaker = p.balance_wrap ? wrapBalanced : wrap;
+    const tMaxW = W*(p.max_width_pct ?? 0.86) - box;
     ctx.font = fontStr(p, tSize);
     if('letterSpacing' in ctx) ctx.letterSpacing = ((p.letter_spacing_em||0)*tSize).toFixed(2)+'px';
-    const tLines = wrap(ctx, cased(displayTitle(slide, p)), W*(p.max_width_pct ?? 0.86) - box);
+    const tLines = breaker(ctx, cased(displayTitle(slide, p)), tMaxW);
+    const tRagged = raggedness(ctx, tLines, tMaxW);
     ctx.font = fontStr(p, bSize, bWeight, bFam);
     /* The same tracking drawLines will draw the body with. Wrapping it at zero and
        drawing it tracked measured one paragraph and printed a wider one — invisible
        while the body was small and the column had slack, and a line running off the
        right edge as soon as the type was enlarged. */
     if('letterSpacing' in ctx) ctx.letterSpacing = ((p.letter_spacing_em||0)*bSize).toFixed(2)+'px';
-    const bLines = isHook ? [] : wrap(ctx, casedBody(slide.body), W*(p.body_width_pct ?? p.max_width_pct ?? 0.86) - box);
+    const bLines = isHook ? [] : breaker(ctx, casedBody(slide.body), W*(p.body_width_pct ?? p.max_width_pct ?? 0.86) - box);
     const gap = bLines.length ? bSize*(p.title_gap_em ?? 0.7) : 0;
-    return {tSize, bSize, tLines, bLines, gap,
+    return {tSize, bSize, tLines, bLines, gap, tRagged,
             totalH: blockHeight(tSize, tLines.length, treat, tLine) + gap +
                     blockHeight(bSize, bLines.length, treat, bLine)};
   };
 
   const footH = doc ? footerReserve(slide, p, W, H) : 0;
+  const floor = p.min_fit_scale ?? 0.66;
   let L = layout(1);
-  /* The caption is set at one size, but the frame only has so much room: below the
-     cover's circle, or below the top edge on a body slide. An overlong headline used
-     to be pushed up into the circle by the clamp further down; instead the type steps
-     down until the block fits, and never past the size it would have been set at
-     before the style was enlarged. */
   if(doc){
+    /* The caption is set at one size, but the frame only has so much room: below the
+       cover's circle, or below the top edge on a body slide. An overlong headline used
+       to be pushed up into the circle by the clamp further down; instead the type steps
+       down until the block fits, and never past the size it would have been set at
+       before the style was enlarged. */
     const ceiling = (isHook && (p.portrait_inset || p.auto_inset))
       ? H*0.045 + W*0.40 + H*0.022                  // the inset's own top offset, its diameter, and air
       : H*0.05;
     const room = H - H*(p.bottom_pad_pct ?? 0.055) - footH - ceiling;
-    for(let f = 1; L.totalH > room && f > (p.min_fit_scale ?? 0.66); ){
-      f = Math.max(p.min_fit_scale ?? 0.66, f - 0.04);
+    for(let f = 1; L.totalH > room && f > floor; ){
+      f = Math.max(floor, f - 0.04);
       L = layout(f);
+    }
+    /* Then the other way a headline goes wrong, which is not about height at all. Set
+       one size regardless of the words, and copy with long words in it breaks early on
+       every line: "5 PRACTICAL / AGREEMENTS / POLYAMOROUS COUPLES / USE TO HANDLE /
+       JEALOUSY" — one line at 99% of the measure and four at half of it. Nothing there
+       overflows, so the loop above never fires. A little less type per line is all it
+       takes for the words to regroup and every line to fill, which reads larger than
+       the larger size did. So: take the biggest size whose lines actually fill the
+       column, stepping down only as far as the same floor. */
+    if(p.fit_column && L.tRagged > (p.ragged_max ?? 0.12)){
+      let bestL = L;
+      for(let f = 1 - 0.03; f >= floor - 1e-9; f -= 0.03){
+        const cand = layout(f);
+        if(cand.totalH > room) continue;                  // never trade raggedness for a collision
+        if(cand.tRagged < bestL.tRagged) bestL = cand;
+        if(cand.tRagged <= (p.ragged_max ?? 0.12)) { bestL = cand; break; }
+      }
+      L = bestL;
     }
   }
   const {tSize, bSize, tLines, bLines, gap, totalH} = L;

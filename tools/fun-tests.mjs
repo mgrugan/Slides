@@ -148,6 +148,38 @@ const r = await p.evaluate(async ()=>{
     }
     return markRight > 0 && textX < W && markRight < textX;
   })();
+  /* The mark FILLS its circle. It used to be inset inside a filled plate, which read as
+     a thick border with the logo lost in the middle of it — the plate showed as a ring
+     16% of the diameter wide the whole way round, and a dark mark inside it was barely
+     visible. It is now drawn by the same drawAvatar every other mark in the app uses:
+     the logo covering the circle, a thin stroked ring if the style carries one, and the
+     plate behind it at exactly the same diameter so a mark with transparent corners
+     still reads over a photograph. */
+  const markSpan = c => {
+    let top = H, bot = 0;
+    for(let y = Math.round(H*0.008); y < H*0.10; y++)
+      for(let x = Math.round(W*0.55); x < W; x++)
+        if(magenta(px(c, x, y))){ if(y < top) top = y; if(y > bot) bot = y; }
+    return bot > top ? bot - top : 0;
+  };
+  out.markFillsItsCircle = (()=>{
+    const d = S.profile.handle_size_pct * H * S.profile.handle_logo_em;
+    return markSpan(cover) >= d * 0.85;             // the inset version reached only 0.68
+  })();
+  out.markIsNotOversized = (()=>{                   // and still sized to the type beside it
+    const saved = LOGO_CACHE['fun']; delete LOGO_CACHE['fun'];
+    const g = LOGO_IMG; LOGO_IMG = null;
+    const noLogo = draw(deck.slides[0]);
+    LOGO_CACHE['fun'] = saved; LOGO_IMG = g;
+    let tTop = H, tBot = 0;
+    for(let y = Math.round(H*0.008); y < H*0.10; y++)
+      for(let x = Math.round(W*0.55); x < W; x++)
+        if(yellow(px(noLogo, x, y))){ if(y < tTop) tTop = y; if(y > tBot) tBot = y; }
+    return tBot > tTop && markSpan(cover) < (tBot - tTop) * 1.35;
+  })();
+  out.markUsesTheSharedAvatar = S.profile.brand_logo_ring === true &&
+                                S.profile.handle_logo_inset === undefined &&
+                                S.profile.handle_logo_disc === undefined;
   out.lockupIsCoverOnly = !scan(item, W*0.60, W, handleBand.y0, handleBand.y1, magenta);
   out.noLogoNoCrash = (()=>{                        // most accounts never set one
     const saved = LOGO_CACHE['fun']; delete LOGO_CACHE['fun'];
@@ -295,6 +327,7 @@ const want = {
   badgeFollowsTheAngle:true, everyAngleHasABadge:true, angleCount:8, angleKinds:'list,story',
   anglesDocumented:true,
   handleDraws:true, markDrawsBesideIt:true, markIsLeftOfTheText:true,
+  markFillsItsCircle:true, markIsNotOversized:true, markUsesTheSharedAvatar:true,
   lockupIsCoverOnly:true, noLogoNoCrash:true,
   categoryWired:true, scanDealsTheAngles:true, obsessionStillHasOneShape:true,
   briefIsOneLinePerSlide:true, briefDemandsALongLook:true, briefBansBrandsInScene:true,

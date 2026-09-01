@@ -1257,7 +1257,8 @@ const PRESETS = [
     handle_tracking_em:0.03, handle_top_pct:0.032, handle_pad_pct:0.050, handle_on_all:false,
     handle_color:'#FBC91C',
     handle_logo:true, handle_logo_em:1.12, handle_logo_gap_em:0.38,
-    handle_logo_disc:true, handle_logo_bg:'#FBC91C', handle_logo_inset:0.16,
+    handle_logo_bg:'#FBC91C',
+    brand_logo_ring:true, brand_ring_pct:0.06, brand_ring_color:'#FBC91C',
     /* Named, for the same reason as the news page: the reader has to recognise them. */
     cast_named_first:true,
     stat_boxes:false, auto_number:false,
@@ -1932,7 +1933,7 @@ const LOOK_KEYS = ['font_family','body_font_family','font_weight','body_weight',
   'balance_wrap','fit_column','ragged_max','badge_from_angle','badge_bg','badge_color','badge_text','badge_fixed',
   'accent_color','alt_align','cast_unnamed','cast_named_first','wordmark','wordmark_size_pct','wordmark_width_pct',
   'inset_pct','inset_pad_pct','inset_top_pct','keep_breaks',
-  'handle_logo','handle_logo_em','handle_logo_gap_em','handle_logo_disc','handle_logo_bg','handle_logo_inset',
+  'handle_logo','handle_logo_em','handle_logo_gap_em','handle_logo_bg','brand_ring_color',
   'handle_text','handle_color','handle_size_pct','handle_top_pct','handle_pad_pct',
   'wordmark_behind','wordmark_layer_lo','wordmark_layer_hi','wordmark_layer_from',
   'wordmark_layer_feather_em','wordmark_layer_alpha',
@@ -2682,19 +2683,22 @@ function drawHandle(ctx, W, H, p, mark){
      transparent corners still holds against a photograph, and it is skipped silently
      when no logo is set, which is the state most accounts are in. */
   if(mark && p.handle_logo){
-    const d = size * (p.handle_logo_em ?? 1.55);
-    const gap = size * (p.handle_logo_gap_em ?? 0.45);
-    const x = right - ctx.measureText(t.toUpperCase()).width - gap - d;
+    const d = size * (p.handle_logo_em ?? 1.12);
+    const gap = size * (p.handle_logo_gap_em ?? 0.38);
+    const cx = right - ctx.measureText(t.toUpperCase()).width - gap - d/2;
     const cy = top + size * 0.52;                 // the handle's own middle, not its top
-    if(p.handle_logo_disc){
-      ctx.beginPath(); ctx.arc(x + d/2, cy, d/2, 0, Math.PI*2);
-      ctx.fillStyle = p.handle_logo_bg || p.handle_color || '#fff';
+    /* A plate behind it only where the style asks for one, because a mark with
+       transparent corners vanishes into a photograph without it. It is the SAME circle
+       as the mark, not a larger one — insetting the mark inside a filled disc is what
+       made the ring look like a thick border with the logo lost in the middle of it. */
+    if(p.handle_logo_bg){
+      ctx.beginPath(); ctx.arc(cx, cy, d/2, 0, Math.PI*2);
+      ctx.fillStyle = p.handle_logo_bg;
       ctx.fill();
-      const inset = d * (p.handle_logo_inset ?? 0.16);
-      ctx.drawImage(mark, x + inset, cy - d/2 + inset, d - inset*2, d - inset*2);
-    } else {
-      ctx.drawImage(mark, x, cy - d/2, d, d);
     }
+    // and then the same avatar every other mark in the app is drawn with: the logo
+    // filling the circle, with a thin stroked ring if the style carries one
+    drawAvatar(ctx, mark, cx, cy, d/2, p);
   }
   ctx.restore();
 }

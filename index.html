@@ -1197,6 +1197,62 @@ const PRESETS = [
     library_collection:'Thrifting',
     structure:'cover states the hook in one line, then each slide advances it by one short line',
     voice:'short, flat and declarative — one line a slide, no adjectives doing work the fact should do'
+  },
+
+  /* ---------------------------------------------------------------------------
+     The Disney account, built on the thrifting frame because the format is the same
+     one: a picture, a gradient off the bottom, one line of heavy caps over it. Two
+     things differ. The cover's colour is the brand blue rather than red — the glow
+     carries it, exactly as the red one does, over a near-black navy gradient rather
+     than a maroon tint. And the flag names the kind of post, because this page runs
+     matchups, quote posts and film history and one fixed word cannot cover them.
+     -------------------------------------------------------------------------- */
+  {
+    name:'iDisney', builtin:true,
+    aspect_ratio:'4:5',
+    imagery:'dramatic-cinematic-still',
+    v: 1,
+    image_prompt_suffix:'dramatic cinematic still, hard directional light against deep shadow, the subject large '+
+      'in frame and sharply lit, rich saturated colour, background falling away into darkness, shot like a '+
+      'teaser poster rather than a publicity photograph.',
+    image_prompt_suffix_colour:'dramatic cinematic still, hard directional light against deep shadow, the subject '+
+      'large in frame and sharply lit, rich saturated colour, background falling away into darkness, shot like a '+
+      'teaser poster rather than a publicity photograph.',
+    colour_suffix:'Rich saturated colour, strong highlights against near-black surroundings.',
+    mono_suffix:'Black and white only, deep contrast, no colour anywhere in the frame.',
+    caption_treatment:'documentary',
+    portrait_inset:false, auto_inset:false, divider:false, brand_bar:false, cover_swipe:false,
+    logo_on_all:false, shot_ladder:false, subject_context:false,
+    font_family:'Anton', font_weight:400, body_font_family:'Anton', body_weight:400, italic:false,
+    font_fallback:'Archivo',
+    uppercase:true, body_uppercase:true, letter_spacing_em:-0.005,
+    text_color:'#FFFFFF', stroke_color:'#000000', stroke_width:0, text_shadow:0.30, shadow_color:'#000000',
+    label_bg:'#FFFFFF',
+    /* Near-black navy under the caption so white type holds, and the brand blue comes
+       in as the glow over it. Tinting the gradient itself to #113CCF instead makes a
+       flat blue band and takes the contrast out from under the words. */
+    scrim_pct:0.34, hook_scrim_pct:0.56, scrim_alpha:0.94,
+    scrim_color:'#000000', hook_scrim_color:'#050B1F',
+    glow_pct:0.45, glow_wide_pct:0.70, glow_color:'#113CCF', glow_alpha:0.78, glow_on_all:false,
+    bottom_pad_pct:0.062,
+    title_size_pct:0.064, body_size_pct:0.064, title_gap_em:0.5,
+    title_line_em:0.96, body_line_em:0.96,
+    max_width_pct:0.78, body_width_pct:0.78,
+    balance_wrap:true, fit_column:false, min_fit_scale:0.72,
+    text_align:'center',
+    /* The flag says what kind of post this is — VERSUS, THE LINE, SCRAPPED — and the
+       word comes from the angle rather than from the writer, so it cannot come back
+       as a synonym of itself. */
+    badge_fixed:false, badge_from_angle:true, badge_bg:'#113CCF', badge_color:'#FFFFFF',
+    badge_size_pct:0.026, badge_gap_em:0.62, badge_weight:400, badge_tracking_em:0.06,
+    badge_radius_em:0.14,
+    handle_text:'@idisney', handle_size_pct:0.023, handle_weight:400,
+    handle_tracking_em:0.03, handle_top_pct:0.030, handle_pad_pct:0.045, handle_on_all:false,
+    stat_boxes:false,
+    auto_number:false,
+    library_collection:'iDisney',
+    structure:'cover states the hook in one line, then each slide advances it by one short line',
+    voice:'short, flat and declarative — one line a slide, and the films do the work'
   }
 ];
 
@@ -1731,7 +1787,7 @@ const LOOK_KEYS = ['font_family','body_font_family','font_weight','body_weight',
   'cover_swipe','swipe_fixed','swipe_line','swipe_font_family','swipe_font_fallback',
   'swipe_italic','swipe_weight','swipe_size_pct','swipe_lift_pct','swipe_color',
   'cover_rule_fade','cover_rule_pad_pct','cover_mark_pct','min_fit_scale',
-  'balance_wrap','fit_column','ragged_max',
+  'balance_wrap','fit_column','ragged_max','badge_from_angle','badge_bg','badge_color','badge_text','badge_fixed',
   'hook_scrim_pct','hook_scrim_color','glow_pct','glow_wide_pct','glow_color','glow_alpha','glow_on_all'];
 function refreshBuiltinProfile(){
   const m = /^preset:(\d+)$/.exec(S.styleKey || '');
@@ -2872,7 +2928,8 @@ function renderSlide(slide, canvas, p, scale){
 
   const used = drawLines(ctx, tLines, drawP, tSize, x, top, W, H, null, null, tLine);
   if(bLines.length) drawLines(ctx, bLines, drawP, bSize, x, top + used + gap, W, H, bWeight, bFam, bLine);
-  const badgeText = p.badge_fixed ? (p.badge_text || '') : slide.badge;
+  const badgeText = p.badge_fixed ? (p.badge_text || '')
+                  : (slide.badge || (p.badge_from_angle ? angleBadge(slide) : ''));
   if(isHook && p.badge_on_cover !== false && badgeText)
     drawBadge(ctx, W, H, p, badgeText, top - tSize * (p.badge_gap_em ?? 0.85));
   if(p.handle_text && (isHook || p.handle_on_all)) drawHandle(ctx, W, H, p);
@@ -4595,6 +4652,26 @@ const FACT_DEFAULTS = {
     style: 'Thrifting',
     collection: 'Thrifting',
     tone: 'colour'
+  },
+  /* The Disney account. Same rotating shape as the other two client pages, but the
+     flag on the cover names the kind of post rather than always reading TRENDING,
+     because "VERSUS" and "THE ORIGINAL" are doing work that one fixed word cannot. */
+  'iDisney': {
+    prompt: 'Disney, Pixar, Marvel, Star Wars and the parks, for an audience who grew up on all of it and still '+
+      'argue about it. The page runs on three things and the rotation decides which: an argument the comments '+
+      'can take a side in; a moment or a line recalled precisely enough that the reader feels it again; and '+
+      'genuinely researched film history — what was cut, who recorded what, what was built and buried, what the '+
+      'source material actually said. '+
+      'Everything must be checkable: a scene a reader could pause, a line as it was actually said, a production '+
+      'story that was actually reported. Never invent a quote, a cut scene or a piece of trivia — this audience '+
+      'knows the films better than the writer does and will say so. Warm and knowing, never sneering at anyone '+
+      'for loving something, no spoiler-baiting, and nothing about the private lives of living people beyond '+
+      'what they have said about the work themselves.',
+    mode: 'angles',
+    angles: 'idisney',
+    style: 'iDisney',
+    collection: 'iDisney',
+    tone: 'colour'
   }
 };
 /* Category values were plain prompt strings and most still are. A few carry a little
@@ -5018,10 +5095,111 @@ const ANGLE_SETS = {
      cover:'Promises a count of places or tactics, and says what they are for.',
      close:'The last slide is the one most people never try.',
      swipe:'Number 2 is where most of the good stuff is.'}
+  ],
+
+  /* The Disney account. The page is not one thing: a matchup argument, a list of
+     moments sorted by how they made you feel, and a genuinely researched piece of
+     film history are three different posts, and the rotation is what stops a month
+     of them reading as one. Each angle carries the word that goes in the flag on
+     the cover, because on this page the flag names the kind of post rather than
+     always saying the same thing. */
+  idisney: [
+    {key:'versus', kind:'list', badge:'VERSUS',
+     label:'who actually wins',
+     brief:'Head-to-head matchups between characters from across these films, argued rather than asserted. Each '+
+       'point is one pairing and a verdict, and the verdict is settled on what the films actually show — a '+
+       'feat somebody performed on screen, a power that was established, a fight that already happened. Not '+
+       'comic-book power scaling, not "he has plot armour". Pick pairings where the obvious answer is wrong, '+
+       'because a matchup everybody agrees on is not an argument and the comments are the whole point.',
+     cover:'Names the two sides and promises a count of them, so the reader already has an opinion by slide 1.',
+     close:'The last slide is the pairing the comments will not accept.',
+     swipe:'Number 4 is the one people argue about.'},
+
+    {key:'channel', kind:'list', badge:'THE FEELS',
+     label:'the moments sorted by what they did to you',
+     brief:'Moments from the channel era and the animated films, grouped by a single feeling the post names on '+
+       'the cover — devastating, unhinged, comfort, the ones that hit differently now you are older. Each point '+
+       'is ONE specific moment: the episode or the scene, what happens in it, and the one detail that makes it '+
+       'land. Never a general "this show was great". The reader has to be able to picture the exact frame.',
+     cover:'Names the feeling and the count. The feeling is the whole promise.',
+     close:'The last slide is the one that still gets people.',
+     swipe:'Number 6 is the one nobody was ready for.'},
+
+    {key:'quotes', kind:'list', badge:'THE LINE',
+     label:'lines that were heavier than the scene let on',
+     brief:'Lines of dialogue that carry far more than the moment needed them to. Give the line exactly as it '+
+       'was said, who says it, and then the reading — what it is really about, what the character knows when '+
+       'they say it, or what it means differently once you know how their story ends. The line does the work; '+
+       'the explanation is one sentence and never explains the joke. Never invent or paraphrase a quote.',
+     cover:'Promises a count and the register — the lines that hurt, the ones nobody caught.',
+     close:'The last slide is the line that reframes the whole character.',
+     swipe:'The last one changes the whole film.'},
+
+    {key:'hidden', kind:'list', badge:'HIDDEN',
+     label:'the details in the frame nobody caught',
+     brief:'Background details, foreshadowing and cross-references that are genuinely in the finished frames: '+
+       'an object on a shelf, a name on a door, a piece of animation that pays off an hour later. Every point '+
+       'must be checkable by pausing the film — say the scene and roughly where in it. No fan theories here and '+
+       'nothing that only exists in a listicle somebody else invented; if it is disputed, it does not go in.',
+     cover:'Names the film or the studio and promises a count of details.',
+     close:'The last slide is the one that changes how the ending reads.',
+     swipe:'Number 3 is in the first five minutes.'},
+
+    {key:'cut', kind:'story', badge:'SCRAPPED',
+     label:'the version that never shipped',
+     brief:'One film, and the version of it that was made and then abandoned: a cut character, a scrapped '+
+       'ending, a whole story reel thrown out and restarted, a song recorded and dropped. Documented production '+
+       'history only — things covered in art books, DVD features, published interviews and press at the time. '+
+       'The turn is the moment somebody decided, and the story is what it cost to change course.',
+     cover:'States the abandoned version as a fact, so the reader needs to know it is true.',
+     close:'The last slide is what the finished film became instead.',
+     swipe:'The original ending was much worse.'},
+
+    {key:'voices', kind:'story', badge:'IN THE BOOTH',
+     label:'what was happening when they recorded it',
+     brief:'The story behind a performance: who was cast and why, what they were going through when they '+
+       'recorded it, a take that was kept because it was real, an actor who was never told what the scene was '+
+       'for. Published interviews and documented accounts only. These are the stories where the reader hears '+
+       'the line differently forever afterwards, which is the entire reason the post works.',
+     cover:'Names the performance and hints that something was going on behind it.',
+     close:'The last slide is the take that ended up in the film.',
+     swipe:'They kept the take where he broke.'},
+
+    {key:'parks', kind:'story', badge:'THE PARKS',
+     label:'what was built, and what was buried',
+     brief:'The parks as history: a ride that was designed and never opened, an attraction closed and painted '+
+       'over, a whole land planned and cancelled, something still standing behind a wall. Documented — permits, '+
+       'company statements, imagineer interviews, contemporary reporting. Say where it was and what stands there '+
+       'now, because the fact that people walk past it is what makes it land.',
+     cover:'States the thing that was built or buried, plainly, with the place.',
+     close:'The last slide says what is on the site today.',
+     swipe:'Most of it is still down there.'},
+
+    {key:'origins', kind:'story', badge:'THE ORIGINAL',
+     label:'the story before it was softened',
+     brief:'The source a film was adapted from, and how much was changed: the earlier folk tale, the novel, the '+
+       'historical record. Name the source and its date, say what actually happens in it, and say plainly what '+
+       'the adaptation kept and what it dropped. Grim where the source is grim, but reported rather than '+
+       'wallowed in, and never gory for its own sake — the point is the distance travelled.',
+     cover:'Names the film and promises the version underneath it.',
+     close:'The last slide is the single biggest thing they changed.',
+     swipe:'The original ending is not for children.'}
   ]
 };
+/* Which brief writes a deck for which rotation. Anything not listed gets the dating
+   page's, which is the general one. */
+const ANGLE_PROMPTS = {thrifting: (c,d)=>thriftDeckPrompt(c,d), idisney: (c,d)=>disneyDeckPrompt(c,d)};
 const angleSet = name => ANGLE_SETS[name] || [];
 const angleIn = (name, key) => angleSet(name).find(a => a.key === key) || null;
+/* The word in the flag on the cover. Most styles carry a fixed one; a page whose posts
+   are several different kinds of thing names the kind instead, and it comes from the
+   angle rather than from the writer so it cannot come back as a synonym. */
+function angleBadge(slide){
+  const deck = slide && slide._deck;
+  if(!deck || !deck.angle) return '';
+  const a = angleIn(catCfg(deck.cat || '').angles, deck.angle);
+  return (a && a.badge) || '';
+}
 
 /* Deal a run across the rotation, continuing from where the last run stopped, then
    shuffle so the batch list is not eight decks of one angle followed by eight of the
@@ -5200,6 +5378,73 @@ function thriftDeckPrompt(cat, deck){
 'CAPTION for Instagram:\n' +
 '- Three short paragraphs separated by blank lines: the hook, the detail, then a question the comments can answer.\n' +
 '- Credit the original finder or poster if the story is theirs.\n' +
+'- Then one line of 3 to 5 hashtags, most niche first.\n\n' +
+
+'Return ONLY JSON:\n' +
+'{"subject":"short canonical name for this post","swipe":"...",' +
+'"slides":[{"kind":"hook","title":"...","scene":"..."},{"kind":"slide","title":"...","body":"","scene":"..."}],' +
+'"caption":"para1\\n\\npara2\\n\\npara3\\n\\n#niche #mid #broad"}'
+  );
+}
+
+/* The Disney page. Same one-line-a-slide shape as thrifting, and two things that are
+   its own: the flag on the cover names the kind of post, and the "scene" field is never
+   allowed to name a character or a film. That second rule is mechanical rather than
+   editorial — image models refuse or quietly degrade on named trademarked characters,
+   and a refused frame is a blank slide, so the picture is specified by description and
+   the caption over it says whatever it likes. */
+function disneyDeckPrompt(cat, deck){
+  const p = S.profile;
+  const angle = angleIn(catCfg(cat).angles, deck.angle) || {label:'', brief:'', cover:'', close:''};
+  const list = angle.kind === 'list';
+  const items = list ? Math.max(3, deck.n - 2) : 0;
+  return (
+'Write a ' + deck.n + '-slide carousel for a Disney, Pixar, Marvel and Star Wars fan account.\n\n' +
+'THE POST: ' + deck.subject + '\n' +
+'THE COVER HEADLINE, verbatim or lightly tightened: "' + deck.hook + '"\n\n' +
+'THE ACCOUNT:\n' + catPrompt(cat) + '\n\n' +
+'THIS POST\'S ANGLE — ' + angle.label.toUpperCase() + ':\n' + angle.brief + '\n\n' +
+
+'HOW THESE SLIDES ARE BUILT:\n' +
+'- Every slide is ONE LINE. A "title" and nothing else. No body text on any slide; leave "body" empty.\n' +
+'- A line is 4 to 10 words, set in heavy caps across the bottom of a picture. At twelve words it stops being readable.\n' +
+'- Each line advances the post by exactly one step. Read end to end, the lines alone should carry the whole thing.\n' +
+'- Plain and flat. No "you won\'t believe", no emoji, no exclamation marks, no hype adjectives.\n' +
+(angle.key === 'quotes'
+ ? '- On a quote slide the line IS the quote, in double quotation marks, exactly as it was said. Never paraphrase one.\n'
+ : '') +
+(angle.key === 'versus'
+ ? '- On a matchup slide the line names both sides and the winner. The reason goes in the caption, not on the frame.\n'
+ : '') + '\n' +
+
+'THE COVER:\n' +
+'- Slide 1 is the headline only, 5 to 10 words. ' + angle.cover + '\n' +
+'- The whole hook in one breath.\n\n' +
+
+'THE REST:\n' +
+(list
+ ? '- Slides 2 to ' + (items + 1) + ' carry one point each, ' + items + ' of them. Slide ' + (items + 2) + ' closes.\n'
+ : '- Slide 2 sets it up in one line. The middle slides run it in order, and one of them is the turn.\n') +
+'- ' + angle.close + '\n\n' +
+
+'WHAT MUST BE TRUE — this audience knows the films better than you do:\n' +
+'- Every scene, line, date and production story must be real and checkable. Never invent a quote, a cut scene or a detail.\n' +
+'- If you are not confident it is in the finished film or in a published account, leave it out.\n' +
+'- A fan theory is only allowed if the slide says it is one.\n\n' +
+
+'THE SWIPE LINE — return it as "swipe": one short line, under 10 words, teasing the payoff without giving it.\n\n' +
+
+'IMAGES — and read this part twice, because it is where these posts fail.\n' +
+'- "scene" describes a picture and nothing else. It never asks for words, letters, numbers or logos: the caption is laid over the top.\n' +
+'- NEVER name a character, actor, film, studio or franchise inside "scene". Not once. Describe what is in the shot instead — build, costume, colours, posture, light, setting.\n' +
+'- Write it the way a costume designer would brief a photographer: "a towering, heavily muscled figure with deep green skin and torn purple trousers, fists clenched, standing in the rubble of a street at dusk" is a scene. The name of that character is not, and naming it gets the frame refused and the slide comes out blank.\n' +
+'- Everything the reader needs to recognise who it is has to be in the description: the silhouette, the palette, the one prop that gives it away.\n' +
+'- Cinematic and dramatic: the subject large in frame, hard directional light, the surroundings falling into shadow. There is a heavy gradient across the bottom of every frame, so keep the lower third simple and dark.\n' +
+'- Vary the framing slide to slide. The cover is the most arresting image in the post.\n' +
+'Style is ' + (p.imagery || 'dramatic cinematic still') + '.\n\n' +
+
+'CAPTION for Instagram:\n' +
+'- Three short paragraphs separated by blank lines: the hook, the detail, then a question the comments can argue about.\n' +
 '- Then one line of 3 to 5 hashtags, most niche first.\n\n' +
 
 'Return ONLY JSON:\n' +
@@ -5462,7 +5707,7 @@ const mapDeckSlides = (arr, deck, label) => (Array.isArray(arr) ? arr : []).map(
 async function writeFactDeck(deck){
   const cat = deck.cat, byHook = !!deck.byHook, byAngle = !!deck.angle;
   const prompt = byAngle
-    ? (catCfg(cat).angles === 'thrifting' ? thriftDeckPrompt(cat, deck) : pickupDeckPrompt(cat, deck))
+    ? (ANGLE_PROMPTS[catCfg(cat).angles] || pickupDeckPrompt)(cat, deck)
     : byHook
     ? factHookDeckPrompt(cat, deck.hook, deck.n - 1, deck.tone, deck.cta)
     : factDeckPrompt(cat, {subject:deck.subject, claim:deck.hook}, deck.n, deck.tone);

@@ -99,12 +99,32 @@ const r = await p.evaluate(async ()=>{
      nearly fill it — which is what a headline does on their artboard. Stated as a
      number instead, this check passes happily while the headline is a quarter too
      large, which is exactly what happened. */
+  /* Half again as large, on the client's instruction, on the headline and the body
+     alike — and a long headline is allowed to step back down but never past the size
+     it was set at before, which is what the floor says. */
+  const TYPE_SCALE = 1.5, BASE_TITLE = 0.052, BASE_BODY = 0.030;
+  const near = (a, b) => Math.abs(a - b) < 1e-6;
+  out.typeIsHalfAgain = near(S.profile.title_size_pct, BASE_TITLE * TYPE_SCALE) &&
+                        near(S.profile.body_size_pct,  BASE_BODY  * TYPE_SCALE);
+  out.fitFloorHoldsOldSize = (()=>{                 // lands on the old size, and never under it
+    const floor = S.profile.title_size_pct * S.profile.min_fit_scale;
+    return floor >= BASE_TITLE && floor < BASE_TITLE * 1.01;
+  })();
+  /* The swipe line is measured against the frame, not the headline, so it is the one
+     piece of type that does NOT come along — swipeMatchesRef below still holds it to
+     its share of the frame's width. */
+  out.swipeNotScaled = S.profile.swipe_size_pct < 0.02;
+
   /* The client's own cover, set the way they set it: four lines, filling the column.
      A single short line was too loose a target — several sizes satisfy it — and it is
-     how the headline ended up a quarter too large more than once. */
+     how the headline ended up a quarter too large more than once.
+     Measured at the artboard-derived base rather than at the size that ships, because
+     the client has since asked for the type half again as large: the multiplier is
+     checked on its own below, and this keeps checking that the thing it multiplies
+     has not drifted. */
   out.refHeadlineBreaks = (()=>{
     const g = document.createElement('canvas').getContext('2d');
-    const size = S.profile.title_size_pct * H;
+    const size = S.profile.title_size_pct / TYPE_SCALE * H;
     g.font = fontStr(S.profile, size);
     // tracking too: renderSlide applies it, so measuring without it measures a
     // headline the app never draws — and the wrap is exactly what is under test
@@ -360,6 +380,68 @@ const r = await p.evaluate(async ()=>{
   out.bodyReadsBigger = widthAt(S.profile) > widthAt(wasThin) * 1.25;
   out.bodyAsksForWeight = /500/.test(fontStr(S.profile, 40, S.profile.body_weight, S.profile.body_font_family));
 
+  /* The ask was for larger type, so it is checked in pixels and not only in the
+     preset: one short headline, one line either way, and the ink it leaves is half
+     again as tall as the same headline at the size the style used to be set at. */
+  const coverInkHeight = prof => {
+    const s = {id:'ih', kind:'hook', title:'YES', scene:'x', tone:'colour', swipe:'x', _deck:deck};
+    IMG_CACHE['ih'] = IMG_CACHE['s1'];
+    const c = document.createElement('canvas'); renderSlide(s, c, prof, 1);
+    const d = c.getContext('2d').getImageData(0, 0, W, H).data;
+    let hi = -1, lo = -1;                            // white caption ink, left of the mark, above the rule
+    for(let y = Math.round(H*0.55); y < ruleY - cfm.lift - cfm.line*2; y++)
+      for(let x = Math.round(W*0.05); x < W*0.45; x++){
+        const i = (y*W + x)*4;
+        if(d[i] > 245 && d[i+1] > 245 && d[i+2] > 245){ if(hi < 0) hi = y; lo = y; break; }
+      }
+    return lo - hi;
+  };
+  out.coverInkIsHalfAgain = (()=>{
+    const was = JSON.parse(JSON.stringify(S.profile));
+    was.title_size_pct = BASE_TITLE; was.body_size_pct = BASE_BODY;
+    const now = coverInkHeight(S.profile), before = coverInkHeight(was);
+    return before > 20 && now / before > 1.42 && now / before < 1.58;
+  })();
+  /* And the one thing the larger type could break: a headline long enough that its
+     block would be pushed up into the circle. It steps down instead, so no caption
+     ink lands inside the disc. */
+  out.longHeadlineClearsCircle = (()=>{
+    const long = 'UNDERSTANDING WHY EVERY RELATIONSHIP CONVERSATION BECOMES ANOTHER ' +
+                 'COMPLETELY UNNECESSARY MISUNDERSTANDING BETWEEN OTHERWISE REASONABLE';
+    const s = {id:'lh', kind:'hook', title:long, scene:'x', tone:'colour', swipe:'x', _deck:deck};
+    IMG_CACHE['lh'] = IMG_CACHE['s1'];
+    const c = document.createElement('canvas'); renderSlide(s, c, S.profile, 1);
+    const d = c.getContext('2d').getImageData(0, 0, W, H).data;
+    const r0 = W*0.20, cx = W - r0 - W*0.06, cy = r0 + H*0.045;
+    for(let y = 0; y < Math.round(cy + r0); y++)
+      for(let x = Math.round(cx - r0); x < Math.min(W, cx + r0); x++){
+        const dx = x - cx, dy = y - cy;
+        if(dx*dx + dy*dy > (r0 - 8)*(r0 - 8)) continue;   // inside the disc, clear of its own ring
+        const i = (y*W + x)*4;
+        if(d[i] > 245 && d[i+1] > 245 && d[i+2] > 245) return false;
+      }
+    return true;
+  })();
+
+  /* Wrap and draw have to agree about tracking. drawLines tracks the body; the wrap
+     used to measure it untracked, so a paragraph was measured narrow and printed wide
+     and the last word on a full line ran off the right edge. */
+  out.bodyStaysInColumn = (()=>{
+    const s = {id:'bc', kind:'slide', title:'NO ONE KNEW',
+               body:'She kept the letter in a drawer for nine years and never once mentioned it.',
+               scene:'x', tone:'colour', _deck:deck};
+    IMG_CACHE['bc'] = IMG_CACHE['s2'];
+    const c = document.createElement('canvas'); renderSlide(s, c, S.profile, 1);
+    const d = c.getContext('2d').getImageData(0, 0, W, H).data;
+    const edge = W*(S.profile.edge_pct ?? 0.07) + W*(S.profile.body_width_pct ?? S.profile.max_width_pct);
+    for(let y = Math.round(H*0.55); y < H - Math.round(footerReserve(s, S.profile, W, H)); y++)
+      for(let x = Math.ceil(edge); x < W; x++){
+        const i = (y*W + x)*4;
+        if(d[i] > 245 && d[i+1] > 245 && d[i+2] > 245) return false;
+      }
+    return true;
+  })();
+
   // --- the cast: the same people, frame to frame, and named figures who look like themselves
   const cast = [{name:'Ada', look:'a woman of about thirty, dark cropped hair, sharp jaw, navy wool coat'},
                 {name:'Tom', look:'a broad man of fifty, grey beard, heavy glasses, brown corduroy jacket'}];
@@ -457,6 +539,8 @@ const want = {
   listKeepsCloser:true, listTrimsExtra:true, listPromptCounts:true, promptsAskSwipe:true,
   promptsGuard:true, promptsDiffer:true, promptNoText:true,
   bodyMatchesSwipeWeight:true, headlineHasAir:true, bodyIsBig:true, bodyReadsBigger:true, bodyAsksForWeight:true,
+  typeIsHalfAgain:true, fitFloorHoldsOldSize:true, swipeNotScaled:true,
+  coverInkIsHalfAgain:true, longHeadlineClearsCircle:true, bodyStaysInColumn:true,
   castOnNamed:true, castBothNamed:true, castNoneWhenEmpty:true, castFromScene:true, castInsists:true,
   noCastNoBlock:true, castSurvivesSave:true,
   asksForCast:true, asksForDrama:true, bansStock:true, capsBodyLength:true, noFacelessRule:true,

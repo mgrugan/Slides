@@ -1026,7 +1026,7 @@ const PRESETS = [
     name:'Pickuplines', builtin:true,
     aspect_ratio:'4:5',
     imagery:'cinematic-dramatic-photograph',
-    v: 8,                                       // bump to push the look into projects already saved
+    v: 9,                                       // bump to push the look into projects already saved
     image_prompt_suffix:'cinematic film still from a character drama, 35mm, dramatic directional light with deep '+
       'shadows and strong highlights, shallow depth of field, rich saturated colour, a real human face carrying '+
       'real emotion at the height of the moment, tension in the body, lived-in specific location, shot like a scene '+
@@ -1063,12 +1063,17 @@ const PRESETS = [
     // of type and that footer — deliberately small, so the block sits up against the
     // mark rather than floating above it.
     bottom_pad_pct:0.004, brand_gap_pct:0.010,
-    /* Sizes converted off the client's own artboard, which is about 1836px across —
-       and the size is then set so their own reference line, "TOM BRADY LAUNCHES", just
-       fits the text column and breaks where it breaks for them. It rises when the face
-       narrows and falls when it widens, so it is derived from the width of the cut in
-       use rather than carried over from the last one. */
-    title_size_pct:0.052, body_size_pct:0.030, title_gap_em:0.60, title_line_em:0.98, body_line_em:1.14,
+    /* Sizes were converted off the client's own artboard, which is about 1836px across,
+       and set so their own reference cover broke where it broke for them. The client
+       has since asked for the type half again as large, so both are that derived size
+       times 1.5 — the headline 0.052 and the body 0.030. The swipe line under the
+       cover headline is deliberately NOT scaled: it is measured against the artboard
+       as a share of the frame's width, not of the headline. */
+    title_size_pct:0.078, body_size_pct:0.045, title_gap_em:0.60, title_line_em:0.98, body_line_em:1.14,
+    /* The client asked for the type half again as large. A long headline that will
+       not fit under the circle at that size steps down, but no further than the
+       size it was set at before — 1 / 1.5 of it. */
+    min_fit_scale:0.667,
     max_width_pct:0.90, body_width_pct:0.90,
     divider:false,                              // the account row replaces the rule-and-mark
     portrait_inset:true, auto_inset:true,       // the cover's circle, cut from the deck's own frames
@@ -1688,7 +1693,7 @@ const LOOK_KEYS = ['font_family','body_font_family','font_weight','body_weight',
   'brand_name','brand_handle','brand_verified',
   'cover_swipe','swipe_fixed','swipe_line','swipe_font_family','swipe_font_fallback',
   'swipe_italic','swipe_weight','swipe_size_pct','swipe_lift_pct','swipe_color',
-  'cover_rule_fade','cover_rule_pad_pct','cover_mark_pct'];
+  'cover_rule_fade','cover_rule_pad_pct','cover_mark_pct','min_fit_scale'];
 function refreshBuiltinProfile(){
   const m = /^preset:(\d+)$/.exec(S.styleKey || '');
   const preset = m && PRESETS[+m[1]];
@@ -2647,11 +2652,6 @@ function renderSlide(slide, canvas, p, scale){
       drawInset(ctx, insetImageFor(slide, p), W, H, p);
   }
 
-  const tSize = (p.title_size_pct||0.05) * H * (isHook && !doc ? 1.4 : 1);
-  const bSize = (p.body_size_pct||0.033) * H;
-  const box = treat === 'label-boxes' ? tSize*0.7 : 0;
-  const maxW = W*(p.max_width_pct ?? 0.86) - box;
-  const bMaxW = W*(p.body_width_pct ?? p.max_width_pct ?? 0.86) - box;
   const x = anchorX(p, W, isHook);
   const drawP = Object.assign(Object.create(Object.getPrototypeOf(p) || Object.prototype), p,
                               {_align: alignFor(p, isHook), _treat: treat});
@@ -2663,19 +2663,50 @@ function renderSlide(slide, canvas, p, scale){
   // and a style that never says so keeps the single one it always had.
   const casedBody = t => (p.body_uppercase ?? p.uppercase) ? String(t||'').toUpperCase() : t;
 
-  ctx.font = fontStr(p, tSize);
-  if('letterSpacing' in ctx) ctx.letterSpacing = ((p.letter_spacing_em||0)*tSize).toFixed(2)+'px';
-  const tLines = wrap(ctx, cased(displayTitle(slide, p)), maxW);
-  ctx.font = fontStr(p, bSize, bWeight, bFam);
-  if('letterSpacing' in ctx) ctx.letterSpacing = '0px';
-  const bLines = isHook ? [] : wrap(ctx, casedBody(slide.body), bMaxW);
-
   const tLine = titleLineEm(p), bLine = bodyLineEm(p);
-  const gap = bLines.length ? bSize*(p.title_gap_em ?? 0.7) : 0;
-  const totalH = blockHeight(tSize, tLines.length, treat, tLine) + gap + blockHeight(bSize, bLines.length, treat, bLine);
+  /* One pass of the caption at a given fraction of the set size. Wrapping depends on
+     the size, and the height depends on the wrap, so a block that has to be made
+     smaller has to be measured again rather than simply scaled. */
+  const layout = f => {
+    const tSize = (p.title_size_pct||0.05) * H * (isHook && !doc ? 1.4 : 1) * f;
+    const bSize = (p.body_size_pct||0.033) * H * f;
+    const box = treat === 'label-boxes' ? tSize*0.7 : 0;
+    ctx.font = fontStr(p, tSize);
+    if('letterSpacing' in ctx) ctx.letterSpacing = ((p.letter_spacing_em||0)*tSize).toFixed(2)+'px';
+    const tLines = wrap(ctx, cased(displayTitle(slide, p)), W*(p.max_width_pct ?? 0.86) - box);
+    ctx.font = fontStr(p, bSize, bWeight, bFam);
+    /* The same tracking drawLines will draw the body with. Wrapping it at zero and
+       drawing it tracked measured one paragraph and printed a wider one — invisible
+       while the body was small and the column had slack, and a line running off the
+       right edge as soon as the type was enlarged. */
+    if('letterSpacing' in ctx) ctx.letterSpacing = ((p.letter_spacing_em||0)*bSize).toFixed(2)+'px';
+    const bLines = isHook ? [] : wrap(ctx, casedBody(slide.body), W*(p.body_width_pct ?? p.max_width_pct ?? 0.86) - box);
+    const gap = bLines.length ? bSize*(p.title_gap_em ?? 0.7) : 0;
+    return {tSize, bSize, tLines, bLines, gap,
+            totalH: blockHeight(tSize, tLines.length, treat, tLine) + gap +
+                    blockHeight(bSize, bLines.length, treat, bLine)};
+  };
+
+  const footH = doc ? footerReserve(slide, p, W, H) : 0;
+  let L = layout(1);
+  /* The caption is set at one size, but the frame only has so much room: below the
+     cover's circle, or below the top edge on a body slide. An overlong headline used
+     to be pushed up into the circle by the clamp further down; instead the type steps
+     down until the block fits, and never past the size it would have been set at
+     before the style was enlarged. */
+  if(doc){
+    const ceiling = (isHook && (p.portrait_inset || p.auto_inset))
+      ? H*0.045 + W*0.40 + H*0.022                  // the inset's own top offset, its diameter, and air
+      : H*0.05;
+    const room = H - H*(p.bottom_pad_pct ?? 0.055) - footH - ceiling;
+    for(let f = 1; L.totalH > room && f > (p.min_fit_scale ?? 0.66); ){
+      f = Math.max(p.min_fit_scale ?? 0.66, f - 0.04);
+      L = layout(f);
+    }
+  }
+  const {tSize, bSize, tLines, bLines, gap, totalH} = L;
 
   let top;
-  const footH = doc ? footerReserve(slide, p, W, H) : 0;
   if(doc){
     top = H - H*(p.bottom_pad_pct ?? 0.055) - footH - totalH;   // bottom-anchored, above its own signature
     if(isHook && p.divider) drawDivider(ctx, W, H, p, top - tSize*0.62, logoFor(slide));

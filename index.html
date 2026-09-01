@@ -1200,6 +1200,73 @@ const PRESETS = [
   },
 
   /* ---------------------------------------------------------------------------
+     @fun, on the thrifting frame: a photograph, a gradient off the bottom, one short
+     line of white caps over it. What differs is the colour — the account's yellow
+     arrives as the glow under the cover headline and as the flag — the flag naming the
+     kind of post rather than always reading the same word, and the handle in the
+     corner carrying the account's mark beside it.
+     -------------------------------------------------------------------------- */
+  {
+    name:'Fun', builtin:true,
+    aspect_ratio:'4:5',
+    imagery:'dramatic-editorial-photograph',
+    v: 1,
+    /* The skin clause is not decoration. Left to itself an image model renders a face
+       with no pores, no texture and no asymmetry, and a page about real people that
+       posts eight plastic portraits a week stops looking like it is about real people. */
+    image_prompt_suffix:'dramatic editorial photograph, one person large in frame, hard directional light against '+
+      'deep shadow, rich saturated colour, surroundings falling away into black, shot like a magazine cover. '+
+      'Real skin with visible texture: pores, fine lines, uneven tone, stray hairs, a shine where skin actually shines, and the blemishes a real face has. Not retouched, not smoothed, not airbrushed — a photograph of a person, not a render.',
+    image_prompt_suffix_colour:'dramatic editorial photograph, one person large in frame, hard directional light '+
+      'against deep shadow, rich saturated colour, surroundings falling away into black, shot like a magazine '+
+      'cover. Real skin with visible texture: pores, fine lines, uneven tone, stray hairs, a shine where skin actually shines, and the blemishes a real face has. Not retouched, not smoothed, not airbrushed — a photograph of a person, not a render.',
+    colour_suffix:'Rich saturated colour, strong highlights against near-black surroundings.',
+    mono_suffix:'Black and white only, deep contrast, no colour anywhere in the frame.',
+    caption_treatment:'documentary',
+    portrait_inset:false, auto_inset:false, divider:false, brand_bar:false, cover_swipe:false,
+    logo_on_all:false, shot_ladder:false, subject_context:false,
+    font_family:'Anton', font_weight:400, body_font_family:'Anton', body_weight:400, italic:false,
+    font_fallback:'Archivo',
+    uppercase:true, body_uppercase:true, letter_spacing_em:-0.005,
+    /* A heavier halo than the sibling accounts carry. #FBC91C is about three times the
+       luminance of the red used elsewhere, so white caps over its glow need a dark
+       ground drawn behind the letters themselves rather than only under the block. */
+    text_color:'#FFFFFF', stroke_color:'#000000', stroke_width:0, text_shadow:0.55, shadow_color:'#000000',
+    /* Near-black under the caption so the white caps hold, and the yellow comes in as
+       the glow over it. Tinting the gradient itself to #FBC91C makes a bright band and
+       white type on yellow is unreadable. */
+    scrim_pct:0.34, hook_scrim_pct:0.56, scrim_alpha:0.94,
+    scrim_color:'#000000', hook_scrim_color:'#1A1403',
+    glow_pct:0.34, glow_wide_pct:0.70, glow_color:'#FBC91C', glow_alpha:0.50, glow_on_all:false,
+    bottom_pad_pct:0.085,
+    title_size_pct:0.064, body_size_pct:0.064, title_gap_em:0.5,
+    title_line_em:0.96, body_line_em:0.96,
+    max_width_pct:0.78, body_width_pct:0.78,
+    balance_wrap:true, fit_column:false, min_fit_scale:0.72,
+    text_align:'center',
+    /* The flag says what kind of post this is, and the word comes from the angle so it
+       cannot come back as a synonym of itself. Black on the yellow: white on #FBC91C
+       fails at this size. */
+    badge_fixed:false, badge_from_angle:true, badge_bg:'#FBC91C', badge_color:'#101010',
+    badge_size_pct:0.026, badge_gap_em:0.62, badge_weight:400, badge_tracking_em:0.06,
+    badge_radius_em:0.14,
+    /* The handle and the account's mark, as one lockup in the top corner. The mark is
+       whatever logo is set for this category; with none set the handle simply sits on
+       its own, which is what every other style here does. */
+    handle_text:'@fun', handle_size_pct:0.026, handle_weight:400,
+    handle_tracking_em:0.03, handle_top_pct:0.032, handle_pad_pct:0.050, handle_on_all:false,
+    handle_color:'#FBC91C',
+    handle_logo:true, handle_logo_em:1.55, handle_logo_gap_em:0.45,
+    handle_logo_disc:true, handle_logo_bg:'#FBC91C', handle_logo_inset:0.16,
+    /* Real, recognisable people: the likeness travels as a description, never a name. */
+    cast_unnamed:true,
+    stat_boxes:false, auto_number:false,
+    library_collection:'Fun',
+    structure:'cover states the hook in one line, then each slide advances it by one short line',
+    voice:'short, flat and quick — one line a slide, and the internet does the work'
+  },
+
+  /* ---------------------------------------------------------------------------
      The Disney account, built on the thrifting frame because the format is the same
      one: a picture, a gradient off the bottom, one line of heavy caps over it. Two
      things differ. The cover's colour is the brand blue rather than red — the glow
@@ -1234,7 +1301,7 @@ const PRESETS = [
     scrim_pct:0.34, hook_scrim_pct:0.56, scrim_alpha:0.94,
     scrim_color:'#000000', hook_scrim_color:'#050B1F',
     glow_pct:0.45, glow_wide_pct:0.70, glow_color:'#113CCF', glow_alpha:0.78, glow_on_all:false,
-    bottom_pad_pct:0.062,
+    bottom_pad_pct:0.085,
     title_size_pct:0.064, body_size_pct:0.064, title_gap_em:0.5,
     title_line_em:0.96, body_line_em:0.96,
     max_width_pct:0.78, body_width_pct:0.78,
@@ -1270,10 +1337,10 @@ const PRESETS = [
     v: 1,
     image_prompt_suffix:'editorial portrait photograph, one person large in frame, hard directional light '+
       'against a darker surround, rich saturated colour, shallow depth of field, shot like a magazine feature '+
-      'rather than a snapshot.',
+      'rather than a snapshot. Real skin with visible texture: pores, fine lines, uneven tone, stray hairs, a shine where skin actually shines, and the blemishes a real face has. Not retouched, not smoothed, not airbrushed — a photograph of a person, not a render.',
     image_prompt_suffix_colour:'editorial portrait photograph, one person large in frame, hard directional '+
       'light against a darker surround, rich saturated colour, shallow depth of field, shot like a magazine '+
-      'feature rather than a snapshot.',
+      'feature rather than a snapshot. Real skin with visible texture: pores, fine lines, uneven tone, stray hairs, a shine where skin actually shines, and the blemishes a real face has. Not retouched, not smoothed, not airbrushed — a photograph of a person, not a render.',
     colour_suffix:'Rich saturated colour, strong highlights against a near-black surround.',
     mono_suffix:'Black and white only, deep contrast, no colour anywhere in the frame.',
     caption_treatment:'documentary',
@@ -1860,6 +1927,8 @@ const LOOK_KEYS = ['font_family','body_font_family','font_weight','body_weight',
   'balance_wrap','fit_column','ragged_max','badge_from_angle','badge_bg','badge_color','badge_text','badge_fixed',
   'accent_color','alt_align','cast_unnamed','wordmark','wordmark_size_pct','wordmark_width_pct',
   'inset_pct','inset_pad_pct','inset_top_pct','keep_breaks',
+  'handle_logo','handle_logo_em','handle_logo_gap_em','handle_logo_disc','handle_logo_bg','handle_logo_inset',
+  'handle_text','handle_color','handle_size_pct','handle_top_pct','handle_pad_pct',
   'wordmark_behind','wordmark_layer_lo','wordmark_layer_hi','wordmark_layer_from',
   'wordmark_layer_feather_em','wordmark_layer_alpha',
   'wordmark_top_pct','wordmark_tracking_em','wordmark_color',
@@ -2589,17 +2658,39 @@ function drawGlow(ctx, W, H, p){
   ctx.restore();
 }
 /* the account's name in the corner, as on the cover */
-function drawHandle(ctx, W, H, p){
+function drawHandle(ctx, W, H, p, mark){
   const t = String(p.handle_text || '').trim();
   if(!t) return;
   const size = (p.handle_size_pct || 0.023) * H;
+  const right = W * (1 - (p.handle_pad_pct ?? 0.045));
+  const top = H * (p.handle_top_pct ?? 0.030);
   ctx.save();
   ctx.font = fontStr(p, size, p.handle_weight || 800, p.handle_font_family || p.font_family);
   if('letterSpacing' in ctx) ctx.letterSpacing = ((p.handle_tracking_em ?? 0.03) * size).toFixed(2)+'px';
   ctx.fillStyle = p.handle_color || p.text_color || '#fff';
   ctx.globalAlpha = p.handle_alpha ?? 0.95;
   ctx.textAlign = 'right'; ctx.textBaseline = 'top';
-  ctx.fillText(t.toUpperCase(), W * (1 - (p.handle_pad_pct ?? 0.045)), H * (p.handle_top_pct ?? 0.030));
+  ctx.fillText(t.toUpperCase(), right, top);
+  /* The mark sits to the LEFT of the handle, on the same optical line — the pair reads
+     as one lockup in the corner rather than as two things that happen to be near each
+     other. It is drawn inside a disc of the handle's own colour so a logo with
+     transparent corners still holds against a photograph, and it is skipped silently
+     when no logo is set, which is the state most accounts are in. */
+  if(mark && p.handle_logo){
+    const d = size * (p.handle_logo_em ?? 1.55);
+    const gap = size * (p.handle_logo_gap_em ?? 0.45);
+    const x = right - ctx.measureText(t.toUpperCase()).width - gap - d;
+    const cy = top + size * 0.52;                 // the handle's own middle, not its top
+    if(p.handle_logo_disc){
+      ctx.beginPath(); ctx.arc(x + d/2, cy, d/2, 0, Math.PI*2);
+      ctx.fillStyle = p.handle_logo_bg || p.handle_color || '#fff';
+      ctx.fill();
+      const inset = d * (p.handle_logo_inset ?? 0.16);
+      ctx.drawImage(mark, x + inset, cy - d/2 + inset, d - inset*2, d - inset*2);
+    } else {
+      ctx.drawImage(mark, x, cy - d/2, d, d);
+    }
+  }
   ctx.restore();
 }
 /* Each fact category can carry its own mark — a History deck and a Terrifying deck
@@ -3174,7 +3265,7 @@ function renderSlide(slide, canvas, p, scale){
                   : (slide.badge || (p.badge_from_angle ? angleBadge(slide) : ''));
   if(isHook && p.badge_on_cover !== false && badgeText)
     drawBadge(ctx, W, H, p, badgeText, top - tSize * (p.badge_gap_em ?? 0.85));
-  if(p.handle_text && (isHook || p.handle_on_all)) drawHandle(ctx, W, H, p);
+  if(p.handle_text && (isHook || p.handle_on_all)) drawHandle(ctx, W, H, p, logoFor(slide));
   if(!doc && !isHook && p.stat_boxes){ drawStatBoxes(ctx, W, H, p, slide); drawGain(ctx, W, H, p, slide); }
   if(doc && footH) drawFooter(ctx, slide, W, H, p);
   if(doc && p.logo_on_all && !footH && !(isHook && p.divider)) drawCornerLogo(ctx, W, H, p, logoFor(slide));
@@ -4958,6 +5049,27 @@ const FACT_DEFAULTS = {
     style: 'Obsession',
     collection: 'Obsession',
     tone: 'colour'
+  },
+  /* @fun. Internet culture rather than one person's turn: the scan finds what the
+     internet is doing this week and the rotation decides what shape of post to make of
+     it. Put a date in the focus box to scan back from that day instead of today. */
+  'fun': {
+    prompt: 'Viral internet culture for a general audience who are online: creators, influencers, streamers and '+
+      'public figures, and the moments the internet spends a week on. Who blew up and off what post, who is '+
+      'suddenly everywhere and why, how a viral moment actually unfolded, what any of it pays, an unlikely '+
+      'collaboration, a comeback nobody expected. '+
+      'Recognisable names carry hardest, and the test for a subject is whether somebody would send the post to a '+
+      'friend with "have you seen this". '+
+      'Every figure and quote must be reported and checkable. Never state a rumour or an allegation as fact, '+
+      'never pile on, and never post about anybody under 18 or about a private life somebody has not made public '+
+      'themselves. Warm, quick and amused — the account is a fan of the internet, not a critic of it.',
+    mode: 'angles',
+    angles: 'fun',
+    news: true,
+    news_days: 3,
+    style: 'Fun',
+    collection: 'Fun',
+    tone: 'colour'
   }
 };
 /* Category values were plain prompt strings and most still are. A few carry a little
@@ -5404,6 +5516,92 @@ const ANGLE_SETS = {
      swipe:'And it started with one video.'}
   ],
 
+  /* The @fun rotation. Every post is something the internet is currently doing, but a
+     page that only ever ran "creator blows up" would be one post repeated — so the
+     rotation varies the SHAPE while the news scan varies the subject. Each angle
+     carries the word for the flag on the cover. */
+  fun: [
+    {key:'blewup', kind:'story', badge:'WENT VIRAL',
+     label:'the video that changed everything',
+     brief:'One creator and the single post that took them from nobody to everywhere. The follower count before, '+
+       'the view count of the post, what they were doing for money at the time, and what changed in the weeks '+
+       'after. Real reported figures only. The turn is always the same and it never gets old: they pressed post '+
+       'on an ordinary Tuesday.',
+     cover:'Names what they were before and the number they hit, in one breath.',
+     close:'The last slide is where they are now.',
+     swipe:'They had 900 followers that morning.'},
+
+    {key:'whois', kind:'list', badge:'WHO IS',
+     label:'who this person everybody is posting about actually is',
+     brief:'An explainer for the person who keeps seeing a name and does not know why. Each point is one fact '+
+       'that builds the picture: where they came from, what they actually do, the thing they are known for, the '+
+       'moment that made them big, what they are doing now. Written for somebody with zero context and no time, '+
+       'and never sneering at them for not knowing.',
+     cover:'Names the person and promises a count of things to know about them.',
+     close:'The last slide is the one that explains why they are everywhere this week.',
+     swipe:'Number 4 is why they are trending.'},
+
+    {key:'timeline', kind:'list', badge:'THE TIMELINE',
+     label:'how it actually unfolded, in order',
+     brief:'One viral moment reconstructed step by step: what was posted, when, who replied, what happened next. '+
+       'Each point is one beat with its own timestamp or day. This is the post people send to a friend who asks '+
+       '"wait, what happened?" — so it has to be accurate, in order, and free of the guesswork that fills the '+
+       'comments.',
+     cover:'Names the moment and promises the number of steps it took.',
+     close:'The last slide is where it stands now.',
+     swipe:'It took less than 48 hours.'},
+
+    {key:'money', kind:'list', badge:'THE MONEY',
+     label:'what this actually pays',
+     brief:'What creators and public figures genuinely earn, where the figure is public: a disclosed brand deal, '+
+       'a filing, a number they said out loud on a podcast, a platform payout somebody screenshotted. Say the '+
+       'source of every figure on the slide. Never estimate, never use an "estimated net worth" site — those '+
+       'numbers are invented and this is the post where being wrong is most obvious.',
+     cover:'Names the platform or the tier and promises a count of figures.',
+     close:'The last slide is the biggest number, with where it came from.',
+     swipe:'Number 5 is public record.'},
+
+    {key:'comeback', kind:'story', badge:'THE COMEBACK',
+     label:'written off, and then not',
+     brief:'Somebody the internet decided was finished — a flop, a bad run, a period of being ignored — who came '+
+       'back. What the low point actually was, what they changed, and what it looks like now. Reported facts, not '+
+       'a redemption arc invented for the post. Never revisit an allegation or a scandal for the drama of it: the '+
+       'story here is the work, not the pile-on.',
+     cover:'States the fall and the return in one line, without gloating at either.',
+     close:'The last slide is what they are doing today.',
+     swipe:'Two years ago nobody was booking them.'},
+
+    {key:'crossover', kind:'story', badge:'NO WAY',
+     label:'the collaboration nobody saw coming',
+     brief:'An unlikely pairing that actually happened: a household name replying to a creator with 4,000 '+
+       'followers, two people from completely different worlds making something together, a brand or a legend '+
+       'noticing somebody small. How it started — usually a comment or a DM somebody screenshotted — and what it '+
+       'turned into.',
+     cover:'Names both sides and lets the gap between them do the work.',
+     close:'The last slide is what came of it.',
+     swipe:'It started with one comment.'},
+
+    {key:'onething', kind:'list', badge:'THE PLAYBOOK',
+     label:'what they actually did, that anyone could copy',
+     brief:'Pull apart why something worked, in points a reader could act on: the hook in the first two seconds, '+
+       'the format they repeated, the thing they did that nobody else in their niche was doing. Grounded in what '+
+       'is visibly true of the posts themselves, not in growth-guru theory. If you cannot point at the post that '+
+       'shows it, it does not go in.',
+     cover:'Names the creator and promises a count of things they do.',
+     close:'The last slide is the one nobody copies because it is the hardest.',
+     swipe:'Number 2 is the whole thing.'},
+
+    {key:'thendrop', kind:'story', badge:'PLOT TWIST',
+     label:'and then it turned',
+     brief:'A viral moment with a second half most people missed: the thing everybody shared, and then what was '+
+       'found out, corrected, revealed or admitted afterwards. Only where the turn is documented and the '+
+       'correction is on the record. Never leave somebody looking worse than the facts do — if the second half '+
+       'is only rumour, this is not a post.',
+     cover:'States the thing everybody saw, and hints there is more.',
+     close:'The last slide is the part that never went as viral as the first.',
+     swipe:'The correction got a fraction of the views.'}
+  ],
+
   idisney: [
     {key:'versus', kind:'list', badge:'VERSUS',
      label:'who actually wins',
@@ -5490,7 +5688,7 @@ const ANGLE_SETS = {
 /* Which brief writes a deck for which rotation. Anything not listed gets the dating
    page's, which is the general one. */
 const ANGLE_PROMPTS = {thrifting: (c,d)=>thriftDeckPrompt(c,d), idisney: (c,d)=>disneyDeckPrompt(c,d),
-                       obsession: (c,d)=>obsessionDeckPrompt(c,d)};
+                       obsession: (c,d)=>obsessionDeckPrompt(c,d), fun: (c,d)=>funDeckPrompt(c,d)};
 const angleSet = name => ANGLE_SETS[name] || [];
 const angleIn = (name, key) => angleSet(name).find(a => a.key === key) || null;
 /* The word in the flag on the cover. Most styles carry a fixed one; a page whose posts
@@ -5596,6 +5794,19 @@ async function scanNews(cat, n, days, from){
   }
   if(!out.length) log('the news scan found nothing usable — check the key has Search grounding enabled', 'w');
   return out;
+}
+
+/* The scan says WHAT happened; the rotation says what KIND of post to make of it. An
+   account with one angle — one shape, always — degrades to exactly what it did before. */
+async function newsIdeas(cat, conf, n, from){
+  const found = await scanNews(cat, n, +conf.news_days || 3, from);
+  if(!found.length) return [];
+  const dealt = dealAngles(conf.angles, found.length);
+  return found.map((o, i) => Object.assign({}, o, {
+    hook:  o.claim,
+    angle: (dealt[i] && dealt[i].key)  || 'news',
+    kind:  (dealt[i] && dealt[i].kind) || 'story'
+  }));
 }
 
 /* One call per angle, not one per carousel: asking for six break-up stories in a single
@@ -5779,6 +5990,78 @@ function thriftDeckPrompt(cat, deck){
   );
 }
 
+/* The @fun page. The thrifting frame — one short line of caps over a photograph — but
+   the subjects are people rather than objects, and they are recognisable people, which
+   is the case an image model refuses by name. So this brief carries the likeness rules
+   as well as the format ones. */
+function funDeckPrompt(cat, deck){
+  const p = S.profile;
+  const angle = angleIn(catCfg(cat).angles, deck.angle) || {label:'', brief:'', cover:'', close:''};
+  const promised = hookLeadsWithCount(deck.hook);
+  const list = angle.kind === 'list' || promised > 0;
+  const items = promised || (list ? Math.max(3, deck.n - 2) : 0);
+  const when = deck.day ? ' It was reported around ' + prettyDay(deck.day) + '.' : '';
+  return (
+'Write a ' + (items ? items + 2 : deck.n) + '-slide carousel for a viral internet-culture account.\n\n' +
+'THE POST: ' + deck.subject + '\n' +
+'THE COVER HEADLINE, verbatim or lightly tightened: "' + deck.hook + '"\n' +
+(deck.person ? 'THE PERSON: ' + deck.person + '.' + when + '\n' : '') +
+(deck.source ? 'SOURCE: ' + deck.source + '\n' : '') + '\n' +
+'THE ACCOUNT:\n' + catPrompt(cat) + '\n\n' +
+'THIS POST\'S ANGLE — ' + angle.label.toUpperCase() + ':\n' + angle.brief + '\n\n' +
+
+'HOW THESE SLIDES ARE BUILT:\n' +
+'- Every slide is ONE LINE. A "title" and nothing else. No body text on any slide; leave "body" empty.\n' +
+'- A line is 4 to 10 words, set in heavy caps across the bottom of a photograph. At twelve words it stops being readable.\n' +
+'- Each line advances the post by one step. Read end to end, the lines alone tell the whole thing.\n' +
+'- Plain and flat. Numbers land hardest bare: "IT HIT 40 MILLION VIEWS" beats a sentence about how big it got.\n' +
+'- No hype words, no emoji, no exclamation marks, no "you won\'t believe".\n\n' +
+
+'THE COVER:\n' +
+'- Slide 1 is the headline only, 5 to 10 words. ' + angle.cover + '\n\n' +
+
+'THE REST:\n' +
+(list
+ ? '- THE HEADLINE PROMISES ' + items + '. Deliver exactly ' + items + ' points, one per slide, slides 2 to ' +
+   (items + 1) + '. Not one more, not one fewer.\n' +
+   '- Slide ' + (items + 2) + ' is ONE closing slide beyond those ' + items + '. It is not another point.\n'
+ : '- Slide 2 sets it up in one line. The middle slides run it in order, and one of them is the turn.\n') +
+'- ' + angle.close + '\n\n' +
+
+'WHAT MUST BE TRUE — this is about real people, so it is the whole job:\n' +
+'- Every figure, date, quote and claim must be real and reported. Never invent a number to make a slide land.\n' +
+'- Say only what is on the record. Never speculate about what somebody earns, feels or intended unless they said so.\n' +
+'- Never state an allegation, a rumour or an unconfirmed claim as fact, and do not repeat one for the drama of it.\n' +
+'- No pile-ons. The subject should be able to read the carousel without it being unfair to them.\n' +
+'- Nothing about anyone under 18, nothing about anyone\'s private life beyond what they have made public themselves.\n' +
+'- Where the story is somebody\'s own post, credit them on the closing slide or in the caption.\n\n' +
+
+'THE SWIPE LINE — return it as "swipe": one short line, under 10 words, teasing the turn without giving it.\n\n' +
+
+'CAST — return it as "cast", and treat it as the most important field in the reply.\n' +
+'- One entry for each person who appears in more than one frame. At most three.\n' +
+'- "look" is a PHYSICAL DESCRIPTION ONLY, 40 to 70 words, and it is the only thing the picture is built from — the name is never sent to the image model, because a named real person gets the frame refused and a refused frame is a blank slide.\n' +
+'- Specific enough that two frames come back as the same face: apparent age, build, skin tone, face shape, eye colour, nose and jaw, hair colour and exact length and how it is worn, facial hair, glasses, tattoos, piercings, and the clothes they are in throughout.\n' +
+'- Real skin, and say so: note the texture the face actually has — pores, lines, freckles, uneven tone, a scar, whatever is there. Left alone the image model returns a smoothed, poreless face, and on a page about real people that reads as fake immediately.\n' +
+'- Describe them as they look NOW, not from five years ago. Flat and factual, the way a casting brief reads.\n\n' +
+
+'IMAGES — "scene" describes a photograph and nothing else, and never asks for words, numbers, logos or interface.\n' +
+'- NEVER put a real person\'s name, or a brand, platform or show name, inside "scene". Refer to people by their cast name only and let the description do the work.\n' +
+'- One person large in the frame, hard directional light, the surroundings falling away into shadow. There is a heavy gradient across the bottom of every frame, so keep the lower third simple and dark.\n' +
+'- Vary the framing slide to slide. The cover is the most arresting image in the post.\n' +
+'Style is ' + (p.imagery || 'dramatic editorial photograph') + '.\n\n' +
+
+'CAPTION for Instagram: three short paragraphs separated by blank lines, then one line of 3 to 5 hashtags.\n' +
+(deck.source ? 'Credit ' + deck.source + ' in the caption.\n' : '') + '\n' +
+
+'Return ONLY JSON:\n' +
+'{"subject":"short canonical name for this post","swipe":"...",' +
+'"cast":[{"name":"first name as used in the scenes","look":"40-70 words, physical only"}],' +
+'"slides":[{"kind":"hook","title":"...","scene":"..."},{"kind":"slide","title":"...","body":"","scene":"..."}],' +
+'"caption":"para1\\n\\npara2\\n\\npara3\\n\\n#niche #mid #broad"}'
+  );
+}
+
 /* The news page. Long paragraphs rather than one line a slide, phrases marked for the
    accent colour inside them, and a cast block that has to carry a real person's
    likeness across seven frames using nothing but a description — because the person is
@@ -5820,6 +6103,7 @@ function obsessionDeckPrompt(cat, deck){
 '- One entry for the person at the centre, plus anyone else who appears in more than one frame. At most three.\n' +
 '- "look" is a PHYSICAL DESCRIPTION ONLY, 40 to 70 words, and it is the only thing the picture is built from — the name is never sent to the image model, because a named real person gets the frame refused and a refused frame is a blank slide.\n' +
 '- It must be specific enough that two different frames come back as the same face: apparent age, build and height, skin tone, face shape, eye colour, eyebrows, nose and jaw, hair colour and exact length and how it is worn, facial hair, glasses, visible tattoos or piercings, and the clothing they are in throughout.\n' +
+'- Real skin, and say so: note the texture the face actually has — pores, lines, freckles, uneven tone, a scar, whatever is there. Left alone the image model returns a smoothed, poreless face, and on a page about real people that reads as fake immediately.\n' +
 '- Describe them as they look NOW, in the photographs from this story, not from ten years ago.\n' +
 '- Write it flat and factual, the way a casting brief reads. No admiration, no "striking", no "beautiful".\n' +
 '- Every "scene" that includes a person must name them in "cast" so the description follows them into the frame.\n\n' +
@@ -6261,8 +6545,7 @@ async function runFacts(opts){
          rotation — same review panel, same ledger, same everything downstream, only the
          source of the subjects differs. */
       const ideas = conf.news
-        ? (await scanNews(cat, n, +conf.news_days || 3, seed && /^\d{4}-\d\d-\d\d$/.test(seed.trim()) ? seed.trim() : ''))
-            .map(o => Object.assign({angle:'news', kind:'story', hook:o.claim}, o))
+        ? await newsIdeas(cat, conf, n, seed && /^\d{4}-\d\d-\d\d$/.test(seed.trim()) ? seed.trim() : '')
         : await pickAngleIdeas(cat, seed, dealAngles(conf.angles, n));
       if(!ideas.length) throw new Error(conf.news
         ? 'the news scan came back empty — check the day, the focus, or that the key has Search grounding'

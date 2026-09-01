@@ -1137,7 +1137,7 @@ const PRESETS = [
     name:'Thrifting', builtin:true,
     aspect_ratio:'4:5',
     imagery:'dramatic-editorial-photograph',
-    v: 3,
+    v: 4,
     image_prompt_suffix:'dramatic editorial photograph, hard directional light against deep shadow, the subject '+
       'large in frame and sharply lit, rich saturated colour, dark surroundings falling away into black, '+
       'shot like a magazine cover rather than a catalogue.',
@@ -1164,10 +1164,14 @@ const PRESETS = [
        down — a scrim over half the frame was throwing the picture away. The cover
        carries four lines, so it needs more, and it is near-black rather than maroon:
        the red is a glow added over it, not a tint mixed into it. */
-    scrim_pct:0.30, hook_scrim_pct:0.52, scrim_alpha:0.94,
+    /* raised with the caption: lifting the type off the foot moved its top line into
+       a lighter part of the ramp, so the gradient starts the same distance higher */
+    scrim_pct:0.34, hook_scrim_pct:0.56, scrim_alpha:0.94,
     scrim_color:'#000000', hook_scrim_color:'#12040A',
-    glow_pct:0.40, glow_wide_pct:0.70, glow_color:'#E11D28', glow_alpha:0.58, glow_on_all:false,
-    bottom_pad_pct:0.028,
+    glow_pct:0.45, glow_wide_pct:0.70, glow_color:'#E11D28', glow_alpha:0.72, glow_on_all:false,
+    /* clear of the bottom edge: the account sets the caption up off the foot rather
+       than against it, and it leaves room for the glow to read from under the words */
+    bottom_pad_pct:0.062,
     title_size_pct:0.064, body_size_pct:0.064, title_gap_em:0.5,
     /* Anton stacks close — the account sets it nearly touching. It will not go as tight
        as the Bernoru caps elsewhere, though: Anton's caps are tall against its em, so

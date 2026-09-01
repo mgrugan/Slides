@@ -121,6 +121,23 @@ const r = await p.evaluate(async ()=>{
     return edge[0] > 55 && edge[0] < mid[0];
   })();
   out.glowStaysOffTheSlides = S.profile.glow_on_all === false;
+  /* The caption sits up off the foot, not against it — which is also what leaves room
+     for the glow to read from under the words rather than behind them. */
+  out.captionSitsOffTheFoot = (()=>{
+    const d = cover.getContext('2d').getImageData(0, 0, W, H).data;
+    for(let y = H - 1; y > H*0.6; y--)
+      for(let x = 0; x < W; x++){
+        const i = (y*W + x)*4;
+        if(d[i] > 240 && d[i+1] > 240 && d[i+2] > 240) return (H - y) > H*0.055;
+      }
+    return false;
+  })();
+  /* And the gradient was raised with it: lifting the type moved its top line into a
+     lighter part of the ramp, so the foot under the caption has to stay dark. */
+  out.footStaysDarkUnderTheLift = (()=>{
+    const top = px(item, W*0.5, H - Math.round(H*0.16));      // just above the caption
+    return top[0] < 110 && top[1] < 110 && top[2] < 110;
+  })();
   /* The slides keep their picture: the gradient there only has to hold one line at the
      foot, and a scrim over half the frame was throwing the photograph away. */
   out.slideKeepsItsPicture = S.profile.scrim_pct <= 0.34 && S.profile.hook_scrim_pct > S.profile.scrim_pct;
@@ -164,6 +181,7 @@ const want = {
   setInAnton:true, antonIsCarried:true, antonIsNarrow:true,
   linesStackClose:true, headlineLinesDoNotTouch:true,
   glowIsBrightestAtTheFoot:true, glowSpansTheWidth:true, glowStaysOffTheSlides:true,
+  captionSitsOffTheFoot:true, footStaysDarkUnderTheLift:true,
   slideKeepsItsPicture:true, pictureShowsAtMidHeight:true, doesNotShrinkToFill:true,
   angleCount:8, angleKinds:'list,story', anglesDocumented:true, pillarsCovered:true,
   promptOneLinePerSlide:true, promptCapsLineLength:true, promptDemandsRealFigures:true,

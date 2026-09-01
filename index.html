@@ -4325,10 +4325,11 @@ const slug = s => String(s||'deck').toLowerCase().replace(/[^a-z0-9]+/g,'-').rep
 const NUM_WORDS = {one:1, two:2, three:3, four:4, five:5, six:6, seven:7, eight:8,
                    nine:9, ten:10, eleven:11, twelve:12};
 const UNIT_WORD = /^(seconds?|minutes?|hours?|days?|weeks?|months?|years?|pounds?|lbs?|kgs?|kilos?|percent|reps?|sets?|miles?|km|dollars?|degrees?|am|pm|k|x)$/i;
-function hookItemCount(hook){
+function hookItemCount(hook, maxPos){
   const text = String(hook||'').replace(/(\d),(?=\d{3}\b)/g, '$1');     // 3,000 -> 3000
   const toks = text.split(/[^A-Za-z0-9-]+/).filter(Boolean);
   for(let i = 0; i < toks.length; i++){
+    if(maxPos !== undefined && i > maxPos) break;    // only the opening words are a promise
     const t = toks[i];
     let n = null;
     const dm = /^(\d{1,3})(?:-([A-Za-z]+))?$/.exec(t);
@@ -4354,15 +4355,26 @@ const deckLen = hook => {
 /* `extra` is how many slides beyond the promised count the format is allowed — a
    closing slide that asks the reader something is not a broken promise, and trimming
    it away was how the ask kept disappearing off the end of a list carousel. */
+/* A count in the opening words — "7 CARDS THAT QUIETLY GOT EXPENSIVE", "THE 7 SCENES
+   THEY CUT". The angle decides whether a post is shaped as a list, but the headline is
+   what the reader is holding the deck to, and a story angle is perfectly capable of
+   being headlined with a number. Only the opening is read, so a figure later in the
+   line — "sold for 8 grand in 1994" — is not mistaken for a promise. */
+const hookLeadsWithCount = hook => hookItemCount(hook, 2);
 function trimToPromise(hook, slides, extra){
   const want = hookItemCount(hook);
   if(!want) return slides;
   const room = want + (extra || 0);
   const body = slides.filter(s => s.kind !== 'hook');
   if(body.length > room){
-    const keep = new Set(body.slice(0, room).map(s => s.id));
+    /* Keep the first `want` points and, where a closing slide is allowed, the last one
+       — which is the closer. Taking the front `room` slides instead kept one point too
+       many and threw the closing ask away, so an over-long deck came back both still
+       wrong on the count and missing its ending. */
+    const keep = new Set(body.slice(0, want).map(s => s.id));
+    if(extra) keep.add(body[body.length - 1].id);
     log('"'+String(hook).slice(0,40)+'" came back with '+body.length+' points for a promise of '+want+
-        ' — trimmed to '+room, 'w');
+        ' — trimmed to '+keep.size, 'w');
     return slides.filter(s => s.kind === 'hook' || keep.has(s.id));
   }
   if(body.length < want)
@@ -5334,10 +5346,13 @@ function parseIdeaLines(setName, text){
 function thriftDeckPrompt(cat, deck){
   const p = S.profile;
   const angle = angleIn(catCfg(cat).angles, deck.angle) || {label:'', brief:'', cover:'', close:''};
-  const list = angle.kind === 'list';
-  const items = list ? Math.max(3, deck.n - 2) : 0;
+  /* A headline that opens with a number is a list whatever the angle is shaped as, and
+     the number in it beats the run's slide count — the reader counts the slides. */
+  const promised = hookLeadsWithCount(deck.hook);
+  const list = angle.kind === 'list' || promised > 0;
+  const items = promised || (list ? Math.max(3, deck.n - 2) : 0);
   return (
-'Write a ' + deck.n + '-slide carousel for a thrifting and collectibles account.\n\n' +
+'Write a ' + (items ? items + 2 : deck.n) + '-slide carousel for a thrifting and collectibles account.\n\n' +
 'THE POST: ' + deck.subject + '\n' +
 'THE COVER HEADLINE, verbatim or lightly tightened: "' + deck.hook + '"\n\n' +
 'THE ACCOUNT:\n' + catPrompt(cat) + '\n\n' +
@@ -5357,7 +5372,10 @@ function thriftDeckPrompt(cat, deck){
 
 'THE REST:\n' +
 (list
- ? '- Slides 2 to ' + (items + 1) + ' carry one point each, ' + items + ' of them. Slide ' + (items + 2) + ' closes.\n'
+ ? '- THE HEADLINE PROMISES ' + items + '. Deliver exactly ' + items + ' points, one per slide, slides 2 to ' +
+   (items + 1) + '. Not one more, not one fewer — a reader counts them, and a deck headlined ' + items +
+   ' that carries a different number is broken.\n' +
+   '- Slide ' + (items + 2) + ' is ONE closing slide beyond those ' + items + '. It is not another point.\n'
  : '- Slide 2 sets the scene in one line. The middle slides run the story in order. One of them is the turn — the moment it stops being an ordinary find.\n') +
 '- ' + angle.close + '\n' +
 '- Where the story belongs to somebody who posted it, name them on the closing slide or in the caption.\n\n' +
@@ -5396,10 +5414,12 @@ function thriftDeckPrompt(cat, deck){
 function disneyDeckPrompt(cat, deck){
   const p = S.profile;
   const angle = angleIn(catCfg(cat).angles, deck.angle) || {label:'', brief:'', cover:'', close:''};
-  const list = angle.kind === 'list';
-  const items = list ? Math.max(3, deck.n - 2) : 0;
+  // as above: a counting headline is a promise, whatever shape the angle is
+  const promised = hookLeadsWithCount(deck.hook);
+  const list = angle.kind === 'list' || promised > 0;
+  const items = promised || (list ? Math.max(3, deck.n - 2) : 0);
   return (
-'Write a ' + deck.n + '-slide carousel for a Disney, Pixar, Marvel and Star Wars fan account.\n\n' +
+'Write a ' + (items ? items + 2 : deck.n) + '-slide carousel for a Disney, Pixar, Marvel and Star Wars fan account.\n\n' +
 'THE POST: ' + deck.subject + '\n' +
 'THE COVER HEADLINE, verbatim or lightly tightened: "' + deck.hook + '"\n\n' +
 'THE ACCOUNT:\n' + catPrompt(cat) + '\n\n' +
@@ -5423,7 +5443,9 @@ function disneyDeckPrompt(cat, deck){
 
 'THE REST:\n' +
 (list
- ? '- Slides 2 to ' + (items + 1) + ' carry one point each, ' + items + ' of them. Slide ' + (items + 2) + ' closes.\n'
+ ? '- THE HEADLINE PROMISES ' + items + '. Deliver exactly ' + items + ' points, one per slide, slides 2 to ' +
+   (items + 1) + '. Not one more, not one fewer — this audience counts them.\n' +
+   '- Slide ' + (items + 2) + ' is ONE closing slide beyond those ' + items + '. It is not another point.\n'
  : '- Slide 2 sets it up in one line. The middle slides run it in order, and one of them is the turn.\n') +
 '- ' + angle.close + '\n\n' +
 
@@ -5728,8 +5750,12 @@ async function writeFactDeck(deck){
     deck.swipe = String(j.swipe||'').trim().replace(/^["']|["']$/g,'').slice(0, 90) || fallback;
     const cover = deck.slides.find(s=>s.kind === 'hook');
     if(cover) cover.swipe = deck.swipe;
-    // a headline that counts has to deliver its count, the same as a hook deck does
-    if(deck.kind === 'list') deck.slides = trimToPromise(deck.hook, deck.slides, 1);   // the closing ask is allowed
+    /* A headline that counts has to deliver its count, the same as a hook deck does —
+       and that is true of a story angle headlined "7 CARDS THAT..." as much as of a
+       list one. Only list angles were being held to it, which is why those decks came
+       back with nine points under a promise of seven. */
+    if(deck.kind === 'list' || hookLeadsWithCount(deck.hook))
+      deck.slides = trimToPromise(deck.hook, deck.slides, 1);   // the closing ask is allowed
   }
   if(byHook){
     // the headline promises a count, so the deck delivers exactly that many
@@ -5829,8 +5855,11 @@ async function runFacts(opts){
       const tones = conf.tone ? ideas.map(()=>conf.tone) : deckTones(ideas.length);
       newDecks = ideas.map((idea,i)=>({id:uid(), hook:idea.hook, subject:idea.subject, cat,
         angle:idea.angle, kind:idea.kind, tone:tones[i],
-        // a list headline sets its own length; a story runs to whatever the run asked for
-        n: idea.kind === 'list' ? (hookItemCount(idea.hook) ? hookItemCount(idea.hook) + 2 : slides) : slides,
+        /* A counting headline sets its own length — points, plus the cover and the
+           closing slide. That is true of a story angle headlined with a number too,
+           and reading it only for list angles left the deck's own length disagreeing
+           with the brief written from it. Anything uncounted runs to the run's length. */
+        n: hookLeadsWithCount(idea.hook) ? hookLeadsWithCount(idea.hook) + 2 : slides,
         collection: conf.collection || '',
         slides:[], caption:'', status:'queued', error:''}));
     } else if(byHook){

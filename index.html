@@ -1026,7 +1026,7 @@ const PRESETS = [
     name:'Pickuplines', builtin:true,
     aspect_ratio:'4:5',
     imagery:'cinematic-dramatic-photograph',
-    v: 9,                                       // bump to push the look into projects already saved
+    v: 10,                                       // bump to push the look into projects already saved
     image_prompt_suffix:'cinematic film still from a character drama, 35mm, dramatic directional light with deep '+
       'shadows and strong highlights, shallow depth of field, rich saturated colour, a real human face carrying '+
       'real emotion at the height of the moment, tension in the body, lived-in specific location, shot like a scene '+
@@ -1069,7 +1069,13 @@ const PRESETS = [
        times 1.5 — the headline 0.052 and the body 0.030. The swipe line under the
        cover headline is deliberately NOT scaled: it is measured against the artboard
        as a share of the frame's width, not of the headline. */
-    title_size_pct:0.078, body_size_pct:0.045, title_gap_em:0.60, title_line_em:0.98, body_line_em:1.14,
+    /* Line height, set against the enlarged type. At 1.5x the old 0.98/1.14 put half
+       again as much air between the lines as well, which read as a loose block rather
+       than a headline. The caps go tight — nothing descends out of a line of Bernoru
+       caps, so they can stack close. The Futura body cannot follow them down: its
+       descenders are long and its x-height small, and below about 1.06 the p's and
+       y's run into the ascenders on the line beneath. */
+    title_size_pct:0.078, body_size_pct:0.045, title_gap_em:0.60, title_line_em:0.82, body_line_em:1.08,
     /* The client asked for the type half again as large. A long headline that will
        not fit under the circle at that size steps down, but no further than the
        size it was set at before — 1 / 1.5 of it. */

@@ -114,6 +114,12 @@ const r = await p.evaluate(async ()=>{
      piece of type that does NOT come along — swipeMatchesRef below still holds it to
      its share of the frame's width. */
   out.swipeNotScaled = S.profile.swipe_size_pct < 0.02;
+  /* Line height, checked as a relationship rather than a number. Caps stack tighter
+     than sentence case can — but the Futura body has long descenders, and taking it
+     below about 1.06 runs them into the ascenders on the next line. */
+  out.headlineStacksTight = S.profile.title_line_em <= 0.86;
+  out.bodyClearsDescenders = S.profile.body_line_em >= 1.06 &&
+                             S.profile.body_line_em > S.profile.title_line_em;
 
   /* The client's own cover, set the way they set it: four lines, filling the column.
      A single short line was too loose a target — several sizes satisfy it — and it is
@@ -541,6 +547,7 @@ const want = {
   bodyMatchesSwipeWeight:true, headlineHasAir:true, bodyIsBig:true, bodyReadsBigger:true, bodyAsksForWeight:true,
   typeIsHalfAgain:true, fitFloorHoldsOldSize:true, swipeNotScaled:true,
   coverInkIsHalfAgain:true, longHeadlineClearsCircle:true, bodyStaysInColumn:true,
+  headlineStacksTight:true, bodyClearsDescenders:true,
   castOnNamed:true, castBothNamed:true, castNoneWhenEmpty:true, castFromScene:true, castInsists:true,
   noCastNoBlock:true, castSurvivesSave:true,
   asksForCast:true, asksForDrama:true, bansStock:true, capsBodyLength:true, noFacelessRule:true,

@@ -237,10 +237,65 @@ const r = await p.evaluate(async ()=>{
     const ip = imagePrompt(s, false);
     return /pores/.test(ip) && /not retouched|Not retouched/.test(ip) && /not a render/.test(ip);
   })();
-  out.countingBriefStatesTheNumber = (()=>{
-    const c = funDeckPrompt('fun', {subject:'x', hook:'7 THINGS THEY DID', n:9, angle:'onething'});
-    return /THE HEADLINE PROMISES 7\b/.test(c) && /Deliver exactly 7 points/.test(c);
+  /* --- the length is the one chosen for the run, and nothing else gets a vote.
+     This page writes one news story per post, never a listicle, so the counting rule
+     the other angle pages live by does not apply — a figure that happens to open a
+     news claim ("4 VIDEOS IN A WEEK MADE HER A MILLIONAIRE") was resizing the deck
+     out from under the choice, which is the whole bug. */
+  out.pageIsFixedLength = catCfg('fun').fixed_len === true;
+  const funAt = (n, angle, hook) =>
+    funDeckPrompt('fun', {subject:'x', hook: hook || 'SHE POSTED ONE VIDEO AND EVERYTHING CHANGED',
+                          n, angle});
+  out.storyRunsToTheChoice = /^Write a 5-slide carousel/.test(funAt(5, 'blewup')) &&
+                             /^Write a 9-slide carousel/.test(funAt(9, 'blewup'));
+  out.listRunsToTheChoice  = /^Write a 5-slide carousel/.test(funAt(5, 'whois')) &&
+                             /THIS POST IS EXACTLY 3 POINTS/.test(funAt(5, 'whois')) &&
+                             /Slide 5 is ONE closing slide/.test(funAt(5, 'whois'));
+  out.listFollowsTheChoiceUp = /THIS POST IS EXACTLY 6 POINTS/.test(funAt(8, 'money')) &&
+                               /Slide 8 is ONE closing slide/.test(funAt(8, 'money'));
+  out.storyBriefStatesTheTotal = /THIS POST IS EXACTLY 5 SLIDES/.test(funAt(5, 'blewup'));
+  out.aCountInTheLineIsIgnored = (()=>{
+    const c = funAt(5, 'onething', '7 THINGS THEY DID THAT NOBODY COPIES');
+    return /^Write a 5-slide carousel/.test(c) && /THIS POST IS EXACTLY 3 POINTS/.test(c) &&
+           !/7 points/.test(c) && !/PROMISES/.test(c);
   })();
+  out.coverIsToldNotToCount = /never counts the points out loud|not a listicle/i.test(funAt(5, 'whois'));
+  out.noFunAngleAsksForACount =
+    angleSet('fun').every(a => !/promises (a count|the number)/i.test(a.cover));
+  out.shortestRunStillHasAnEnding = /THIS POST IS EXACTLY 1 POINTS?/.test(funAt(3, 'whois')) &&
+                                    /Slide 3 is ONE closing slide/.test(funAt(3, 'whois'));
+
+  /* and the writer is held to it, because asking is not the same as getting */
+  const writeFun = async (n, hook, returned) => {
+    const slides = [{kind:'hook', title:hook, scene:'s'}];
+    for(let i = 1; i <= returned; i++) slides.push({kind:'slide', title:'POINT '+i, body:'', scene:'s'});
+    slides.push({kind:'slide', title:'CLOSING ASK', body:'', scene:'s'});
+    const keep = window.callModel;
+    window.callModel = async () => ({text: JSON.stringify(
+      {subject:'s', swipe:'w', slides, caption:'a\n\nb\n\nc'}), images:[]});
+    const deck = {id:uid(), cat:'fun', angle:'whois', kind:'list', tone:'colour', hook, subject:'s', n, slides:[]};
+    await writeFactDeck(deck);
+    window.callModel = keep;
+    return deck.slides;
+  };
+  const long = await writeFun(5, 'WHO IS DWARKESH PATEL', 8);
+  out.trimHoldsTheDeckToLength = long.length === 5;
+  out.trimKeepsTheEnding = long[long.length - 1].title === 'CLOSING ASK';
+  out.trimTakesItOutOfTheMiddle = !long.some(s => s.title === 'POINT 8');
+  const numbered = await writeFun(5, '4 VIDEOS IN A WEEK MADE HER A MILLIONAIRE', 8);
+  out.aFigureInTheLineDoesNotResize = numbered.length === 5;
+  const exact = await writeFun(5, 'WHO IS DWARKESH PATEL', 3);
+  out.exactRunUntouched = exact.length === 5 && exact[4].title === 'CLOSING ASK';
+  const short = await writeFun(7, 'WHO IS DWARKESH PATEL', 3);
+  out.shortRunNotPadded = short.length === 5;
+
+  /* the counting pages are counting pages still — this must not have travelled */
+  out.thriftingStillCounts = (()=>{
+    const t = thriftDeckPrompt('Thrifting', {subject:'x', hook:'7 CARDS THAT GOT EXPENSIVE', n:9, angle:'cards'});
+    return /THE HEADLINE PROMISES 7\b/.test(t) && /Deliver exactly 7 points/.test(t);
+  })();
+  out.thriftingIsNotFixedLength = catCfg('Thrifting').fixed_len === false &&
+                                  catCfg('iDisney').fixed_len === false;
   out.dispatchReachesFun = !!ANGLE_PROMPTS['fun'];
 
   /* The likeness. A 60-word description of a streamer returns a plausible stranger —
@@ -312,6 +367,30 @@ const r = await p.evaluate(async ()=>{
   /* The facts pages are a different case and were left alone: there an image is
      presented as documentation of an event, so a generated face is a fabricated
      record. That rule must not have been dragged along by this change. */
+  /* end to end through the run itself, because the deck's length is decided in one
+     place (the run) and enforced in another (the write), and the two disagreeing is
+     exactly how a nine-slide deck came out of a five-slide choice. */
+  out.aRunDeliversTheChosenLength = await (async ()=>{
+    const keep = window.callModel, keepBatch = S.batch;
+    $('factCat').value = 'fun';
+    $('factSlides').value = '5';
+    if($('factImgToggle').dataset.on === '1') $('factImgToggle').click();
+    window.callModel = async () => ({text: JSON.stringify({subject:'s', swipe:'w', caption:'a\n\nb\n\nc',
+      slides: [{kind:'hook', title:'H', scene:'s'}].concat(
+        Array.from({length:8}, (_,i)=>({kind:'slide', title:'POINT '+(i+1), body:'', scene:'s'})),
+        [{kind:'slide', title:'CLOSING ASK', body:'', scene:'s'}])}), images:[]});
+    S.batch = [];
+    await runFacts({ideas:[
+      {hook:'SHE POSTED ONE VIDEO AND EVERYTHING CHANGED', subject:'a', angle:'blewup', kind:'story'},
+      {hook:'WHO IS DWARKESH PATEL', subject:'b', angle:'whois', kind:'list'},
+      {hook:'4 VIDEOS IN A WEEK MADE HER A MILLIONAIRE', subject:'c', angle:'timeline', kind:'list'}
+    ]});
+    const lens = S.batch.map(d=>d.slides.length);
+    const ns = S.batch.map(d=>d.n);
+    window.callModel = keep; S.batch = keepBatch;
+    return JSON.stringify({lens, ns});
+  })();
+
   out.factsPagesStillRefuseTheFace =
     /do NOT describe the face of the specific real named individual/
       .test(factDeckPrompt('History', {subject:'x', claim:'y'}, 6, 'mono'));
@@ -332,7 +411,14 @@ const want = {
   categoryWired:true, scanDealsTheAngles:true, obsessionStillHasOneShape:true,
   briefIsOneLinePerSlide:true, briefDemandsALongLook:true, briefBansBrandsInScene:true,
   briefBansRumour:true, briefBansPileOns:true,
-  briefProtectsMinors:true, briefCarriesTheDay:true, countingBriefStatesTheNumber:true,
+  briefProtectsMinors:true, briefCarriesTheDay:true,
+  pageIsFixedLength:true, storyRunsToTheChoice:true, listRunsToTheChoice:true,
+  listFollowsTheChoiceUp:true, storyBriefStatesTheTotal:true, aCountInTheLineIsIgnored:true,
+  coverIsToldNotToCount:true, noFunAngleAsksForACount:true, shortestRunStillHasAnEnding:true,
+  trimHoldsTheDeckToLength:true, trimKeepsTheEnding:true, trimTakesItOutOfTheMiddle:true,
+  aFigureInTheLineDoesNotResize:true, exactRunUntouched:true, shortRunNotPadded:true,
+  thriftingStillCounts:true, thriftingIsNotFixedLength:true,
+  aRunDeliversTheChosenLength:'{"lens":[5,5,5],"ns":[5,5,5]}',
   briefAsksForRealSkin:true, everyFrameAsksForRealSkin:true,
   dispatchReachesFun:true,
   namesThePerson:true, lookalikeLeadsTheBlock:true, saysTheyAreReal:true, bansAPrettierFace:true,

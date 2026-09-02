@@ -1,2 +1,6 @@
 # the test runner resolves playwright-core through a symlink here — machine-local
 node_modules/
+
+# the suites drop rendered frames next to themselves
+tools/*.png
+tools/*.jpg

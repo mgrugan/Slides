@@ -4756,6 +4756,24 @@ function hookItemCount(hook, maxPos){
   }
   return 0;
 }
+/* Some pages are not counting anything. A news account writes one story per post, so
+   the length is whatever the run asked for and nothing in the headline gets a vote —
+   the writer still has to be held to it, because asked-for length and delivered length
+   are different things. The cover and the closing slide are kept and the surplus comes
+   out of the middle, which is where a writer pads. */
+function trimToLength(slides, n){
+  const body = slides.filter(s => s.kind !== 'hook');
+  const room = Math.max(1, n - 1);                       // the cover is a slide too
+  if(body.length <= room){
+    if(body.length < room)
+      log('asked for '+n+' slides and '+(body.length + 1)+' came back — regenerate if it reads short', 'w');
+    return slides;
+  }
+  const keep = new Set(body.slice(0, room - 1).map(s => s.id));
+  keep.add(body[body.length - 1].id);                    // the ending, not the padding
+  log(body.length + 1 + ' slides came back for a run set to ' + n + ' — trimmed to ' + n, 'w');
+  return slides.filter(s => s.kind === 'hook' || keep.has(s.id));
+}
 const deckLen = hook => {
   const n = hookItemCount(hook);
   return n ? n + 1 : +$('batchCount').value;                            // the cover is a slide too
@@ -5135,6 +5153,11 @@ const FACT_DEFAULTS = {
     angles: 'fun',
     news: true,
     news_days: 3,
+    /* Every post here is one news story, never a listicle — so the run's slide count is
+       the deck's length full stop, and a figure in the headline is just a figure. The
+       counting rule the other pages live by would read "SHE MADE 4 VIDEOS IN A WEEK"
+       as a promise of four points and resize the deck out from under the choice. */
+    fixed_len: true,
     style: 'Fun',
     collection: 'Fun',
     tone: 'colour'
@@ -5145,7 +5168,7 @@ const FACT_DEFAULTS = {
 function catCfg(name){
   const v = FACT_CATS[name];
   const base = {prompt:'', mode:'subjects', cta:'', collection:'', angles:'', style:'', tone:'',
-                news:false, news_days:3};
+                news:false, news_days:3, fixed_len:false};
   if(v && typeof v === 'object') return Object.assign(base, v);
   return Object.assign(base, {prompt: String(v||'')});
 }
@@ -5605,9 +5628,9 @@ const ANGLE_SETS = {
        'that builds the picture: where they came from, what they actually do, the thing they are known for, the '+
        'moment that made them big, what they are doing now. Written for somebody with zero context and no time, '+
        'and never sneering at them for not knowing.',
-     cover:'Names the person and promises a count of things to know about them.',
+     cover:'Names the person and says why they are suddenly everywhere. Never counts the points out loud.',
      close:'The last slide is the one that explains why they are everywhere this week.',
-     swipe:'Number 4 is why they are trending.'},
+     swipe:'The last one is why they are trending.'},
 
     {key:'timeline', kind:'list', badge:'THE TIMELINE',
      label:'how it actually unfolded, in order',
@@ -5615,7 +5638,7 @@ const ANGLE_SETS = {
        'Each point is one beat with its own timestamp or day. This is the post people send to a friend who asks '+
        '"wait, what happened?" — so it has to be accurate, in order, and free of the guesswork that fills the '+
        'comments.',
-     cover:'Names the moment and promises the number of steps it took.',
+     cover:'Names the moment and how fast it happened. Never counts the steps out loud.',
      close:'The last slide is where it stands now.',
      swipe:'It took less than 48 hours.'},
 
@@ -5625,9 +5648,9 @@ const ANGLE_SETS = {
        'a filing, a number they said out loud on a podcast, a platform payout somebody screenshotted. Say the '+
        'source of every figure on the slide. Never estimate, never use an "estimated net worth" site — those '+
        'numbers are invented and this is the post where being wrong is most obvious.',
-     cover:'Names the platform or the tier and promises a count of figures.',
+     cover:'Names the platform or the tier and leads with the biggest public figure. Never counts them out loud.',
      close:'The last slide is the biggest number, with where it came from.',
-     swipe:'Number 5 is public record.'},
+     swipe:'Every figure here is public record.'},
 
     {key:'comeback', kind:'story', badge:'THE COMEBACK',
      label:'written off, and then not',
@@ -5655,9 +5678,9 @@ const ANGLE_SETS = {
        'the format they repeated, the thing they did that nobody else in their niche was doing. Grounded in what '+
        'is visibly true of the posts themselves, not in growth-guru theory. If you cannot point at the post that '+
        'shows it, it does not go in.',
-     cover:'Names the creator and promises a count of things they do.',
+     cover:'Names the creator and what they are doing that nobody else is. Never counts the points out loud.',
      close:'The last slide is the one nobody copies because it is the hardest.',
-     swipe:'Number 2 is the whole thing.'},
+     swipe:'One of these is the whole thing.'},
 
     {key:'thendrop', kind:'story', badge:'PLOT TWIST',
      label:'and then it turned',
@@ -6065,12 +6088,15 @@ function thriftDeckPrompt(cat, deck){
 function funDeckPrompt(cat, deck){
   const p = S.profile;
   const angle = angleIn(catCfg(cat).angles, deck.angle) || {label:'', brief:'', cover:'', close:''};
-  const promised = hookLeadsWithCount(deck.hook);
-  const list = angle.kind === 'list' || promised > 0;
-  const items = promised || (list ? Math.max(3, deck.n - 2) : 0);
+  /* This page never writes a listicle — the headline is a news claim, so no number in
+     it is a promise and the length is simply the one chosen for the run. The list
+     angles still run as points rather than as a narrative; they just take their count
+     from the deck instead of from the line. */
+  const list = angle.kind === 'list';
+  const items = Math.max(1, deck.n - 2);          // the points between cover and closer
   const when = deck.day ? ' It was reported around ' + prettyDay(deck.day) + '.' : '';
   return (
-'Write a ' + (items ? items + 2 : deck.n) + '-slide carousel for a viral internet-culture account.\n\n' +
+'Write a ' + deck.n + '-slide carousel for a viral internet-culture account.\n\n' +
 'THE POST: ' + deck.subject + '\n' +
 'THE COVER HEADLINE, verbatim or lightly tightened: "' + deck.hook + '"\n' +
 (deck.person ? 'THE PERSON: ' + deck.person + '.' + when + '\n' : '') +
@@ -6090,10 +6116,12 @@ function funDeckPrompt(cat, deck){
 
 'THE REST:\n' +
 (list
- ? '- THE HEADLINE PROMISES ' + items + '. Deliver exactly ' + items + ' points, one per slide, slides 2 to ' +
-   (items + 1) + '. Not one more, not one fewer.\n' +
-   '- Slide ' + (items + 2) + ' is ONE closing slide beyond those ' + items + '. It is not another point.\n'
- : '- Slide 2 sets it up in one line. The middle slides run it in order, and one of them is the turn.\n') +
+ ? '- THIS POST IS EXACTLY ' + items + ' POINTS, one per slide, slides 2 to ' + (items + 1) +
+   '. Not one more, not one fewer. Pick the ' + items + ' that carry the story and drop the rest.\n' +
+   '- Slide ' + (items + 2) + ' is ONE closing slide beyond those ' + items + '. It is not another point.\n' +
+   '- The cover never counts the points out loud. No "' + items + ' THINGS" — this is a news post, not a listicle.\n'
+ : '- THIS POST IS EXACTLY ' + deck.n + ' SLIDES. Slide 2 sets it up in one line, the middle slides run it in ' +
+   'order with one of them the turn, and slide ' + deck.n + ' ends it.\n') +
 '- ' + angle.close + '\n\n' +
 
 'WHAT MUST BE TRUE — this is about real people, so it is the whole job:\n' +
@@ -6554,8 +6582,12 @@ async function writeFactDeck(deck){
     /* A headline that counts has to deliver its count, the same as a hook deck does —
        and that is true of a story angle headlined "7 CARDS THAT..." as much as of a
        list one. Only list angles were being held to it, which is why those decks came
-       back with nine points under a promise of seven. */
-    if(deck.kind === 'list' || hookLeadsWithCount(deck.hook))
+       back with nine points under a promise of seven.
+       A fixed-length page counts nothing, so it is held to the length that was chosen
+       for the run — which is the only number in play there. */
+    if(catCfg(cat).fixed_len)
+      deck.slides = trimToLength(deck.slides, deck.n);
+    else if(deck.kind === 'list' || hookLeadsWithCount(deck.hook))
       deck.slides = trimToPromise(deck.hook, deck.slides, 1);   // the closing ask is allowed
   }
   if(byHook){
@@ -6666,8 +6698,10 @@ async function runFacts(opts){
         /* A counting headline sets its own length — points, plus the cover and the
            closing slide. That is true of a story angle headlined with a number too,
            and reading it only for list angles left the deck's own length disagreeing
-           with the brief written from it. Anything uncounted runs to the run's length. */
-        n: hookLeadsWithCount(idea.hook) ? hookLeadsWithCount(idea.hook) + 2 : slides,
+           with the brief written from it. Anything uncounted runs to the run's length,
+           as does everything on a page that never writes a listicle. */
+        n: !conf.fixed_len && hookLeadsWithCount(idea.hook)
+             ? hookLeadsWithCount(idea.hook) + 2 : slides,
         collection: conf.collection || '',
         slides:[], caption:'', status:'queued', error:''}));
     } else if(byHook){

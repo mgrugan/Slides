@@ -1427,7 +1427,11 @@ const PRESETS = [
     name:'Obsession', builtin:true,
     aspect_ratio:'4:5',
     imagery:'dramatic-editorial-portrait',
-    v: 1,
+    v: 2,
+    /* The thing the client liked about the draft: the picture runs across the swipe
+       instead of cutting. Three slides share one wide photograph and each draws its own
+       panel of it — see the note on seamRuns for why three and not the whole deck. */
+    seamless:true, seam_span:3,
     image_prompt_suffix:'editorial portrait photograph, one person large in frame, hard directional light '+
       'against a darker surround, rich saturated colour, shallow depth of field, shot like a magazine feature '+
       'rather than a snapshot. Real skin with visible texture: pores, fine lines, uneven tone, stray hairs, a shine where skin actually shines, and the blemishes a real face has. Not retouched, not smoothed, not airbrushed — a photograph of a person, not a render.',
@@ -1490,6 +1494,25 @@ const PRESETS = [
 ];
 
 const ASPECTS = { '9:16':[1080,1920], '4:5':[1080,1350], '1:1':[1080,1080] };
+/* Ratios the image model will actually generate at, widest first. Only used to pick a
+   shape for a panorama — the canvas ratios above are what gets drawn. */
+const GEN_RATIOS = [['21:9', 21/9], ['16:9', 16/9], ['3:2', 3/2], ['4:3', 4/3],
+                    ['5:4', 5/4], ['1:1', 1]];
+/* Which part of an image belongs to this frame.
+
+   Normally all of it: `_crop` is the rectangle inside whatever border the generator
+   baked in, and the frame cover-fits that. On a seamless deck several slides share ONE
+   wide photograph and each takes a vertical panel of it, so that a swipe carries the
+   picture across the break instead of cutting to a new one. `_seam` rides on the cached
+   image rather than being passed down, because three different places draw a frame and
+   two of them never see the slide. */
+function imgRect(img){
+  const cr = img._crop || {sx:0, sy:0, sw:img.naturalWidth, sh:img.naturalHeight};
+  const seam = img._seam;
+  if(!seam || !(seam.n > 1)) return cr;
+  const w = cr.sw / seam.n;
+  return {sx: cr.sx + w * seam.i, sy: cr.sy, sw: w, sh: cr.sh};
+}
 const NO_TEXT_CLAUSE = 'Absolutely no text anywhere in the image: no words, no letters, no numbers, no captions, no subtitles, no signage, no labels, no logos, no watermarks, no user interface, no charts or diagrams with writing. Purely a picture.';
 /* models love returning a photo OF a print — white paper margin, scan edge, polaroid frame */
 const FULL_BLEED_CLAUSE = 'The photograph fills the entire frame edge to edge. No border, no white margin, no paper edge, ' +
@@ -2028,7 +2051,9 @@ const LOOK_KEYS = ['font_family','body_font_family','font_weight','body_weight',
   'wordmark_behind','wordmark_layer_lo','wordmark_layer_hi','wordmark_layer_from',
   'wordmark_layer_feather_em','wordmark_layer_alpha',
   'wordmark_top_pct','wordmark_tracking_em','wordmark_color',
-  'hook_scrim_pct','hook_scrim_color','glow_pct','glow_wide_pct','glow_color','glow_alpha','glow_on_all'];
+  'hook_scrim_pct','hook_scrim_color','glow_pct','glow_wide_pct','glow_color','glow_alpha','glow_on_all',
+  'edge_glow_pct','edge_glow_alpha','edge_glow_color','edge_glow_on_all',
+  'seamless','seam_span','allow_brand_marks','hook_image_suffix'];
 function refreshBuiltinProfile(){
   const m = /^preset:(\d+)$/.exec(S.styleKey || '');
   const preset = m && PRESETS[+m[1]];
@@ -2088,7 +2113,9 @@ function bodyInteractions(model, parts, opts){
     : {type:'image', mime_type:p.mime||'image/jpeg', data:p.b64});
   const b = {model, input};
   if(opts.wantImage && opts.imageCfg){
-    b.generation_config = {response_modalities:['TEXT','IMAGE'], image_config:{aspect_ratio:opts.aspect}};
+    b.generation_config = {response_modalities:['TEXT','IMAGE'],
+                           image_config: Object.assign({aspect_ratio:opts.aspect},
+                                                       opts.imageSize ? {image_size:opts.imageSize} : {})};
   }
   return b;
 }
@@ -2098,7 +2125,9 @@ function bodyGenerateContent(model, parts, opts){
     : {inline_data:{mime_type:x.mime||'image/jpeg', data:x.b64}});
   const b = {contents:[{role:'user', parts:p}]};
   if(opts.wantImage && opts.imageCfg){
-    b.generationConfig = {responseModalities:['TEXT','IMAGE'], imageConfig:{aspectRatio:opts.aspect}};
+    b.generationConfig = {responseModalities:['TEXT','IMAGE'],
+                          imageConfig: Object.assign({aspectRatio:opts.aspect},
+                                                     opts.imageSize ? {imageSize:opts.imageSize} : {})};
   }
   /* Google Search grounding. A news page cannot run on what the model remembers — the
      training cutoff is months behind the day being posted about, and asked for "today"
@@ -2227,7 +2256,7 @@ function quotaInfo(e){
   return {is429, zero, wait: m ? Math.ceil(parseFloat(m[1])) : 25};
 }
 /* wantImage: ask for an image back. Returns {text, images[]} */
-async function callModel({model, parts, wantImage=false, aspect='9:16', search=false}){
+async function callModel({model, parts, wantImage=false, aspect='9:16', imageSize='', search=false}){
   const c = cfg();
   if(!c.key){ openDrawer('drawerSettings'); $('apiKey').focus(); throw new Error('Add your Gemini API key in Settings.'); }
   let order = c.shape === 'auto' ? ['interactions','generateContent'] : [c.shape];
@@ -2236,7 +2265,7 @@ async function callModel({model, parts, wantImage=false, aspect='9:16', search=f
   await GATE;                                   // respect any active rate-limit hold
   for(let i=0;i<order.length;i++){
     const shape = order[i];
-    const opts = {wantImage, aspect, search, imageCfg: $('sendImageCfg').checked && !NO_IMG_CFG.has(shape)};
+    const opts = {wantImage, aspect, imageSize, search, imageCfg: $('sendImageCfg').checked && !NO_IMG_CFG.has(shape)};
     try{
       const res = await rawCall(shape, model, parts, opts);
       if(c.shape === 'auto' && AUTO_SHAPE !== shape){
@@ -2246,7 +2275,7 @@ async function callModel({model, parts, wantImage=false, aspect='9:16', search=f
       return res;
     }catch(e){
       errs.push(e);
-      const cfgReject = wantImage && opts.imageCfg && /modalit|image_config|imageConfig|aspect_ratio/i.test(e.raw||e.message||'');
+      const cfgReject = wantImage && opts.imageCfg && /modalit|image_config|imageConfig|aspect_ratio|image_size|imageSize/i.test(e.raw||e.message||'');
       if(cfgReject){
         NO_IMG_CFG.add(shape);                  // learn it once, never send them to this shape again
         log(shape + ' rejects the image config fields — dropping them for this session','w');
@@ -2586,7 +2615,7 @@ function layerSubjectOverWordmark(ctx, img, W, H, p, mark){
   off.width = W; off.height = bh;
   const o = off.getContext('2d', {willReadFrequently:true});
   // the same crop and cover-fit the base frame used, shifted up so the band lines up
-  const cr = img._crop || {sx:0, sy:0, sw:img.naturalWidth, sh:img.naturalHeight};
+  const cr = imgRect(img);
   const sc = Math.max(W/cr.sw, H/cr.sh), dw = cr.sw*sc, dh = cr.sh*sc;
   o.drawImage(img, cr.sx, cr.sy, cr.sw, cr.sh, (W-dw)/2, (H-dh)/2 - y0, dw, dh);
   const d = o.getImageData(0, 0, W, bh);
@@ -2898,7 +2927,7 @@ function drawInset(ctx, img, W, H, p){
   ctx.save();
   ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI*2); ctx.closePath();
   ctx.clip();
-  const cr = img._crop || {sx:0, sy:0, sw:img.naturalWidth, sh:img.naturalHeight};
+  const cr = imgRect(img);
   const s = Math.max(d/cr.sw, d/cr.sh);
   ctx.drawImage(img, cr.sx, cr.sy, cr.sw, cr.sh, cx - cr.sw*s/2, cy - cr.sh*s/2, cr.sw*s, cr.sh*s);
   ctx.restore();
@@ -3264,7 +3293,7 @@ function renderSlide(slide, canvas, p, scale){
   if(!img && slide.img) demandImage(slide);            // evicted, or never decoded — fetch it back
   if(img) touchCache(slide.id);
   if(img && img.complete && img.naturalWidth){
-    const cr = img._crop || {sx:0, sy:0, sw:img.naturalWidth, sh:img.naturalHeight};
+    const cr = imgRect(img);
     const s = Math.max(W/cr.sw, H/cr.sh);
     const dw = cr.sw*s, dh = cr.sh*s;
     ctx.drawImage(img, cr.sx, cr.sy, cr.sw, cr.sh, (W-dw)/2, (H-dh)/2, dw, dh);
@@ -3407,6 +3436,7 @@ function renderSlide(slide, canvas, p, scale){
 function setImage(slide, dataUrl, cb){
   slide.img = dataUrl;
   const im = new Image();
+  im._seam = slide.seam || null;
   im.onload = () => { measureCrop(im); IMG_CACHE[slide.id] = im; touchCache(slide.id); trimImageCache();
                       drawOne(slide.id); renderBatchRow(slide._deck); cb && cb(); };
   im.onerror = () => log('image decode failed for slide '+slide.id,'e');
@@ -3469,6 +3499,7 @@ function cacheInset(slide){
 function cacheImage(slide){
   return new Promise(res=>{
     const im = new Image();
+    im._seam = slide.seam || null;
     im.onload = im.onerror = () => { measureCrop(im); IMG_CACHE[slide.id] = im; touchCache(slide.id); trimImageCache(); res(); };
     im.src = slide.img;
     IMG_CACHE[slide.id] = im;
@@ -4283,6 +4314,88 @@ function textClause(slide){
     'the scene. Nothing else: no words, no headlines, no numbers, no captions, no subtitles, no signage, no '+
     'labels, no watermarks, no user interface, no charts or diagrams with writing, and no other company\'s mark.';
 }
+/* Seamless carousels: several consecutive slides sharing ONE wide photograph.
+
+   This is the thing the client actually liked about the draft — the picture carries
+   across the break, so swiping reads as panning rather than as cutting. It cannot be
+   done by generating each frame separately and hoping; the only way the seam is
+   genuinely invisible is to generate one image and cut it up.
+
+   That bounds the run length, and it is worth being plain about why. The image model
+   generates at a fixed set of ratios and the widest is 21:9. A 4:5 slide is 0.8 wide
+   for every 1 tall, so three of them side by side need 2.4:1 and 21:9 is 2.33:1 —
+   just under, which is the right side to be on. A source WIDER than the strip would be
+   cover-fitted by cropping the left and right of every panel, and the left and right of
+   every panel is exactly where the seams are. Narrower crops the top and bottom
+   instead, which costs a little height and keeps the joins exact. So the run length is
+   capped at three, and a longer deck is several runs — each one continuous, with a cut
+   between them, which is how a real seamless carousel is built anyway. */
+function seamSpan(p){ return Math.max(2, Math.min(3, p.seam_span || 3)); }
+function seamRuns(slides, span){
+  const out = [];
+  for(let i = 0; i < slides.length; i += span) out.push(slides.slice(i, i + span));
+  /* A trailing run of one is not a panorama and would be generated as a lone wide
+     frame for no reason — give it to the run before it, which then holds four panels.
+     Four panels off a 21:9 source loses more height than three, and that is a better
+     trade than a slide that visibly does not belong to either side. */
+  if(out.length > 1 && out[out.length-1].length === 1) out.splice(-2, 2, out[out.length-2].concat(out[out.length-1]));
+  return out;
+}
+/* Stamp each slide with the panel it owns. Written onto the slide rather than derived
+   at render time so it survives a save and a reload, and so a deck whose length changed
+   after generation still draws the panels it was actually generated with. */
+function markSeams(deck, p){
+  if(!p.seamless || !deck.slides.length){ deck.slides.forEach(x=>{ delete x.seam; }); return; }
+  seamRuns(deck.slides, seamSpan(p)).forEach((run, r) =>
+    run.forEach((sl, i) => { sl.seam = {run:r, i, n:run.length}; }));
+}
+const seamRunOf = slide => {
+  const deck = slide._deck, seam = slide.seam;
+  if(!deck || !seam) return [slide];
+  return deck.slides.filter(x => x.seam && x.seam.run === seam.run)
+                    .sort((a,b) => a.seam.i - b.seam.i);
+};
+/* The widest ratio the model offers that is not wider than the strip of slides it has
+   to fill — see the note above on why wider is the wrong side to miss by. */
+function seamAspect(n, p){
+  const [W, H] = ASPECTS[p.aspect_ratio] || ASPECTS['4:5'];
+  const want = n * W / H;
+  const hit = GEN_RATIOS.find(([, r]) => r <= want + 1e-9);
+  return hit ? hit[0] : '1:1';
+}
+/* One wide frame carrying every beat in the run. The panels are described left to
+   right and the whole thing is insisted on as ONE photograph, because the failure mode
+   is not a bad picture — it is a triptych with two hard edges in it, which is precisely
+   what this exists to avoid. */
+function panoramaPrompt(run, insist, named){
+  const p = S.profile;
+  const n = run.length;
+  const where = n === 2 ? ['THE LEFT HALF', 'THE RIGHT HALF']
+    : n === 3 ? ['THE LEFT THIRD', 'THE MIDDLE THIRD', 'THE RIGHT THIRD']
+    : run.map((_, i) => 'PANEL ' + (i + 1) + ' OF ' + n);
+  /* castBlock and brandBlock match people against the slide's scene text, so the
+     stand-in they are given has to be the whole run's scenes at once — otherwise only
+     whoever is in the first panel comes through with a likeness. */
+  const all = Object.assign({}, run[0], {
+    scene: run.map(x => x.scene || x.title || '').join(' '),
+    cast: [].concat(...run.map(x => x.cast || []))
+  });
+  return toneLead(p, all, insist) +
+    'ONE SINGLE CONTINUOUS PHOTOGRAPH, very wide, which will be cut into ' + n +
+    ' equal vertical panels and read left to right as the reader swipes. It is one place, one light and ' +
+    'one moment, photographed in a single frame. The ground, the horizon, the light and the colour run ' +
+    'unbroken from the far left edge to the far right edge and must line up exactly where the cuts fall. ' +
+    'It is NOT a collage, NOT a diptych or triptych, NOT panels with edges or gutters between them, and ' +
+    'nothing in it is repeated across the width. ' +
+    run.map((x, i) => where[i] + ': ' + (x.scene || x.title || '') + '.').join(' ') + ' ' +
+    'Nothing important sits directly on a cut line ' +
+    run.slice(1).map((_, i) => 'at ' + Math.round((i + 1) / n * 100) + '% across').join(' or ') + '. ' +
+    subjectContext(p, all) + castBlock(all, named) + brandBlock(all) +
+    styleSuffix(p, all) + toneSuffix(p, all) + ' ' +
+    'Aspect ratio ' + seamAspect(n, p) + ', full-bleed composition. ' +
+    'Keep the lower quarter of the whole width simple, dark and even in tone, because a caption sits over ' +
+    'the bottom of every panel. ' + textClause(all) + ' ' + FULL_BLEED_CLAUSE;
+}
 function imagePrompt(slide, insist, named){
   const p = S.profile;
   const top = slide.kind === 'hook' ? (p.hook_top_pct ?? 0.34) : (p.text_block_top_pct ?? 0.6);
@@ -4366,6 +4479,10 @@ function planImages(slides, mode){
     const key = (s._deck && s._deck.id) || '_solo';
     const at = seen.get(key) || 0;
     seen.set(key, at + 1);
+    /* A seamless deck is asked for one run at a time — the run's first slide carries
+       the request and fills the rest — and none of it can come from the library, since
+       a stored background has no other panel to line up with. */
+    if(s.seam && s.seam.n > 1){ if(s.seam.i === 0) fresh.push(s); continue; }
     // the cover is never reused: it is the frame that has to stop the scroll, and it
     // is the one image in the deck a repeat would be noticed on
     if(!useLib || s.kind === 'hook'){ fresh.push(s); continue; }
@@ -4407,12 +4524,25 @@ let QUOTA_NOTED = false;
 const slideLabel = slide => S.slides.indexOf(slide) >= 0 ? S.slides.indexOf(slide)+1 : (slide._label || '?');
 async function genImage(slide, single, attempt, toneTry, noNames){
   attempt = attempt || 0; toneTry = toneTry || 0;
-  setStatus(slide,'generating');
+  /* A seamless slide is generated as part of its run, from the run's first slide. The
+     rest are filled from the same image and never ask for one of their own. */
+  const run = slide.seam && slide.seam.n > 1 ? seamRunOf(slide) : null;
+  const pano = run && run.length > 1;
+  if(pano && slide.seam.i > 0) return genImage(run[0], single, attempt, toneTry, noNames);
+  if(pano) run.forEach(x=>setStatus(x,'generating'));
+  else setStatus(slide,'generating');
   const named = !!S.profile.cast_named_first && !noNames;
   try{
     const r = await callModel({model: cfg().imageModel,
-      parts:[{type:'text', text: imagePrompt(slide, toneTry > 0, named)}],
-      wantImage:true, aspect:S.profile.aspect_ratio});
+      parts:[{type:'text', text: pano ? panoramaPrompt(run, toneTry > 0, named)
+                                      : imagePrompt(slide, toneTry > 0, named)}],
+      wantImage:true,
+      aspect: pano ? seamAspect(run.length, S.profile) : S.profile.aspect_ratio,
+      /* A panorama is cut into panels, so each panel starts life at a fraction of the
+         width the model returned. At the default size that fraction is soft by the time
+         it is scaled up to a 1080-wide slide, which is the one place asking for more
+         pixels is worth what it costs. */
+      imageSize: pano ? '2K' : ''});
     spend('images');
     if(!r.images.length){
       const said = r.text && !sniffImage(r.text) ? ' — model said: '+r.text.slice(0,140) : '';
@@ -4447,6 +4577,18 @@ async function genImage(slide, single, attempt, toneTry, noNames){
         log('slide '+n0+' is still black and white after a retry — keeping it','w');
       }
     }
+    if(pano){
+      /* Every panel is the same photograph; what differs is the window each one draws,
+         and that is already stamped on the slide. Not kept in the library: a panel of a
+         panorama is not a background anything else can reuse. */
+      for(const x of run){
+        const out = await finishImage(x, r.images[0]);
+        setImage(x, out, autosave);
+        setStatus(x, 'done');
+        x._job = null;
+      }
+      return;
+    }
     const out = await finishImage(slide, r.images[0]);
     setImage(slide, out, autosave);
     setStatus(slide,'done');
@@ -4467,7 +4609,8 @@ async function genImage(slide, single, attempt, toneTry, noNames){
       log('No image quota on this key for "'+cfg().imageModel+'" — the free tier allows 0 requests for it. '+
           'Enable billing on the Google project, or try another image model in Settings. Copy and layout still work; you can upload your own images per slide.','e');
     }
-    setStatus(slide,'failed', q.zero ? 'no image quota for this model' : apiError(e));
+    const why = q.zero ? 'no image quota for this model' : apiError(e);
+    if(pano) run.forEach(x=>setStatus(x, 'failed', why)); else setStatus(slide,'failed', why);
     if(!q.zero) log('slide '+n+' image failed: '+apiError(e),'e');
   }
   if(single) autosave();
@@ -6644,6 +6787,18 @@ function obsessionDeckPrompt(cat, deck){
 '- Only ever put them in a situation that is actually reported. The picture illustrates the story it sits on; it never invents a moment, a place or a company they were not in.\n' +
 '- One person large in the frame, lit hard against a darker surround, shot like a magazine portrait. The story is a person, so the pictures are of a person.\n' +
 '- Vary it slide to slide: the moment described, the place, the framing. Never the same shot twice.\n' +
+/* The seamless build changes what a good set of scenes IS. Consecutive slides are cut
+   out of one wide photograph, so scenes that jump continent to continent produce a
+   frame the model has to fake a join in — the picture stays in one place and the
+   variation moves to where the subject is standing and how close the camera is. */
+(p.seamless
+ ? '- THESE PICTURES ARE CUT FROM ONE WIDE PHOTOGRAPH, ' + seamSpan(p) + ' SLIDES AT A TIME, so that the picture ' +
+   'carries across the swipe. Consecutive scenes must be able to live in a single frame: the same place, the ' +
+   'same light, the same hour. Move the subject through that place rather than moving them to another one.\n' +
+   '- Vary the framing and where they stand, not the location. "At the far end of the room", "closer, half turned ' +
+   'away", "at the window" — three moments in one space, which reads as one photograph. A new place is fine ' +
+   'every ' + seamSpan(p) + ' slides, where the next run starts.\n'
+ : '') +
 'Style is ' + (p.imagery || 'dramatic editorial portrait') + '.\n\n' +
 
 'CAPTION for Instagram: three short paragraphs separated by blank lines, then one line of 3 to 5 hashtags.\n' +
@@ -7028,6 +7183,8 @@ async function writeFactDeck(deck){
       deck.slides = trimToLength(deck.slides, deck.n);
     else if(deck.kind === 'list' || hookLeadsWithCount(deck.hook))
       deck.slides = trimToPromise(deck.hook, deck.slides, 1);   // the closing ask is allowed
+    // after the trim, not before: the runs are cut from the length the deck actually is
+    markSeams(deck, S.profile);
   }
   if(byHook){
     // the headline promises a count, so the deck delivers exactly that many

@@ -1268,6 +1268,96 @@ const PRESETS = [
   },
 
   /* ---------------------------------------------------------------------------
+     @trendpopzz, on the @fun frame, in the account's lime. Same bones — a photograph,
+     a gradient off the bottom, one line of heavy caps — and three deliberate departures,
+     all of them about the cover, because on a news page the cover is the whole job.
+
+       - The cover is CLEANER than its siblings. One subject, near-black around them,
+         and a deeper gradient so the headline sits in quiet rather than in detail.
+         Clean is not the same as empty: the frame is still lit like a magazine cover,
+         it just stops competing with the type.
+       - #D5FD43 is the brightest of the four brand colours by a distance — its relative
+         luminance is about 0.88, against 0.62 for the yellow next door — so it cannot be
+         used the way red is. It comes in as a low glow at the foot and as the flag, and
+         the flag's ink is near-black. White caps over it need the heavier halo.
+       - The lime also goes into the PICTURE, as a rim light along the edge of the
+         subject, and along the top and sides of the frame as a bloom too faint to read
+         as a border. A rim light is a real photographic device rather than a filter, it
+         is what separates a subject from a dark ground, and it makes the brand colour
+         part of the frame instead of something laid on top of it.
+     -------------------------------------------------------------------------- */
+  {
+    name:'Trendpop', builtin:true,
+    aspect_ratio:'4:5',
+    imagery:'dramatic-editorial-photograph',
+    v: 1,
+    image_prompt_suffix:'dramatic editorial photograph, one subject large in frame, hard directional key light '+
+      'against deep shadow, rich saturated colour, surroundings falling away into near-black, shot like a '+
+      'magazine cover. Real skin with visible texture: pores, fine lines, uneven tone, stray hairs, a shine where '+
+      'skin actually shines, and the blemishes a real face has. Not retouched, not smoothed, not airbrushed — a '+
+      'photograph of a person, not a render.',
+    image_prompt_suffix_colour:'dramatic editorial photograph, one subject large in frame, hard directional key '+
+      'light against deep shadow, rich saturated colour, surroundings falling away into near-black, shot like a '+
+      'magazine cover. Real skin with visible texture: pores, fine lines, uneven tone, stray hairs, a shine where '+
+      'skin actually shines, and the blemishes a real face has. Not retouched, not smoothed, not airbrushed — a '+
+      'photograph of a person, not a render.',
+    /* The cover only. Composition first, then the rim, then what to leave out — in that
+       order, because an image model weights the front of a clause. */
+    hook_image_suffix:'THIS IS THE COVER FRAME AND IT HAS ONE JOB: stop a thumb. Compose it like a magazine '+
+      'cover. ONE subject, alone, filling the upper two thirds, shot slightly below eye line so they read as '+
+      'monumental. Nothing else in the frame — no crowd, no props, no second figure, no busy background. The '+
+      'background is a single near-black seamless field with a soft falloff, no location, no scenery, no clutter. '+
+      'A hard acid-lime rim light (#D5FD43) rakes the subject from behind and just off to one side, drawing a '+
+      'bright edge along the hair, shoulder and jaw and separating them cleanly from the black — the only source '+
+      'of that colour in the frame, and it never spills onto the face or washes the picture. The lower third is '+
+      'empty, dark and even, because the headline goes there. High contrast, deep blacks that stay black, no haze, '+
+      'no glow filter, no bloom over the whole image. Sharp, expensive and quiet.',
+    colour_suffix:'Rich saturated colour, strong highlights against near-black surroundings.',
+    mono_suffix:'Black and white only, deep contrast, no colour anywhere in the frame.',
+    caption_treatment:'documentary',
+    portrait_inset:false, auto_inset:false, divider:false, brand_bar:false, cover_swipe:false,
+    logo_on_all:false, shot_ladder:false, subject_context:false,
+    font_family:'Anton', font_weight:400, body_font_family:'Anton', body_weight:400, italic:false,
+    font_fallback:'Archivo',
+    uppercase:true, body_uppercase:true, letter_spacing_em:-0.005,
+    /* the heaviest halo of the four: the lime glow puts more light under the caption
+       than the yellow does, and white caps need a ground drawn behind the letters */
+    text_color:'#FFFFFF', stroke_color:'#000000', stroke_width:0, text_shadow:0.62, shadow_color:'#000000',
+    /* Deeper on the cover than the siblings — that is what "clean" costs. The tint is a
+       near-black with a green cast so the lime glow sits in it rather than on it. */
+    scrim_pct:0.36, hook_scrim_pct:0.62, scrim_alpha:0.94,
+    scrim_color:'#000000', hook_scrim_color:'#08110A',
+    glow_pct:0.30, glow_wide_pct:0.72, glow_color:'#D5FD43', glow_alpha:0.38, glow_on_all:false,
+    /* the cover's edges, breathing the brand colour — see drawEdgeGlow */
+    edge_glow_pct:0.05, edge_glow_alpha:0.09, edge_glow_color:'#D5FD43', edge_glow_on_all:false,
+    bottom_pad_pct:0.088,
+    title_size_pct:0.064, body_size_pct:0.064, title_gap_em:0.5,
+    title_line_em:0.96, body_line_em:0.96,
+    max_width_pct:0.80, body_width_pct:0.78,
+    balance_wrap:true, fit_column:false, min_fit_scale:0.72,
+    text_align:'center',
+    badge_fixed:false, badge_from_angle:true, badge_bg:'#D5FD43', badge_color:'#0A0A0A',
+    badge_size_pct:0.026, badge_gap_em:0.62, badge_weight:400, badge_tracking_em:0.06,
+    badge_radius_em:0.14,
+    handle_text:'@trendpopzz', handle_size_pct:0.026, handle_weight:400,
+    handle_tracking_em:0.03, handle_top_pct:0.032, handle_pad_pct:0.050, handle_on_all:false,
+    handle_color:'#D5FD43',
+    handle_logo:true, handle_logo_em:1.12, handle_logo_gap_em:0.38,
+    handle_logo_bg:'#D5FD43',
+    brand_logo_ring:true, brand_ring_pct:0.06, brand_ring_color:'#D5FD43',
+    cast_named_first:true,
+    /* This page posts about companies as much as about people, and the story is often
+       the company. The blanket ban on marks in the picture would make that impossible,
+       so the named brands in the deck are allowed through — exactly as they really are,
+       and nothing else. */
+    allow_brand_marks:true,
+    stat_boxes:false, auto_number:false,
+    library_collection:'Trendpop',
+    structure:'cover states the hook in one line, then each slide advances it by one short line',
+    voice:'urgent and concrete — one line a slide, the number does the shouting'
+  },
+
+  /* ---------------------------------------------------------------------------
      The Disney account, built on the thrifting frame because the format is the same
      one: a picture, a gradient off the bottom, one line of heavy caps over it. Two
      things differ. The cover's colour is the brand blue rather than red — the glow
@@ -2663,6 +2753,38 @@ function drawGlow(ctx, W, H, p){
   ctx.fillRect(-rx, -rx, rx*2, rx*2);
   ctx.restore();
 }
+/* A brand-coloured bloom hugging the inside of the frame, cover only.
+
+   The glow at the foot sits under the words and belongs to the type. This one belongs
+   to the picture: it puts a thin, uneven wash of the account's colour along the edges,
+   so a cover that is otherwise one subject on black still reads as this account's cover
+   at thumbnail size. It is drawn with `lighter` for the same reason the other one is —
+   painted over, a colour this bright makes a border, and a border is the cheapest thing
+   a carousel can do. Kept low: the moment it is visible AS a border it has failed. */
+function drawEdgeGlow(ctx, W, H, p){
+  const inset = p.edge_glow_pct || 0;
+  if(inset <= 0) return;
+  const c = hexToRGB(p.edge_glow_color || p.glow_color || '#FFFFFF').join(',');
+  const a = p.edge_glow_alpha ?? 0.16;
+  const d = Math.min(W, H) * inset;
+  ctx.save();
+  ctx.globalCompositeOperation = 'lighter';
+  /* Top and sides only, each fading inward over the same distance. Lighting the foot
+     as well doubles up with the glow under the caption and turns the bottom corners to
+     mud — which is what a first pass at this looked like, and it read as a border. */
+  const edges = [
+    [0, 0, 0, d],            [0, 0, d, 0],            [W, 0, W - d, 0]
+  ];
+  for(const [x0, y0, x1, y1] of edges){
+    const g = ctx.createLinearGradient(x0, y0, x1, y1);
+    g.addColorStop(0,    'rgba('+c+','+a.toFixed(3)+')');
+    g.addColorStop(0.45, 'rgba('+c+','+(a*0.34).toFixed(3)+')');
+    g.addColorStop(1,    'rgba('+c+',0)');
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, W, H);
+  }
+  ctx.restore();
+}
 /* the account's name in the corner, as on the cover */
 function drawHandle(ctx, W, H, p, mark){
   const t = String(p.handle_text || '').trim();
@@ -3163,6 +3285,7 @@ function renderSlide(slide, canvas, p, scale){
     drawScrim(ctx, W, H, p, isHook ? (p.hook_scrim_color || p.scrim_color) : p.scrim_color,
               isHook ? (p.hook_scrim_pct ?? p.scrim_pct) : p.scrim_pct);
     if(isHook || p.glow_on_all) drawGlow(ctx, W, H, p);
+    if(isHook || p.edge_glow_on_all) drawEdgeGlow(ctx, W, H, p);
     if(isHook && p.wordmark){
       const mark = drawWordmark(ctx, W, H, p);
       // then the subject back over it, so the word reads as being behind them
@@ -4121,6 +4244,45 @@ function castBlock(slide, withNames){
       'than they are. ' + c.look;
   }).join(' ') + ' ';
 }
+/* The marks in the picture, for a page that posts about companies.
+
+   Everywhere else here a logo in a generated frame is banned, and rightly: asked for
+   one unprompted a model produces a plausible-looking wrong logo, which is the single
+   detail that tells a reader the picture is fake. On a news page about companies that
+   ban makes the post impossible — the story IS the company — so the deck declares the
+   marks that are legitimately in play and describes each one well enough to be
+   reproduced rather than reinvented, and only those get through. */
+function brandBlock(slide){
+  const deck = slide._deck;
+  // the exemption belongs to the style, not to the deck: a brands list that survived a
+  // style change must not put a logo into a page that bans them
+  if(!(S.profile || {}).allow_brand_marks) return '';
+  const brands = (deck && Array.isArray(deck.brands) ? deck.brands : []).filter(b => b && b.name);
+  if(!brands.length) return '';
+  const scene = String(slide.scene || '').toLowerCase();
+  const inFrame = brands.filter(b => scene.includes(b.name.toLowerCase()));
+  if(!inFrame.length) return '';
+  return 'THE BRAND MARKS IN THIS PICTURE MUST BE EXACT. Reproduce each one as it really is — the real symbol, '+
+    'the real wordmark, the real typeface, the real colours, the current version and not a retired one. Do not '+
+    'redesign, restyle, simplify, recolour or invent a mark, and do not misspell the name. A wrong logo is worse '+
+    'than no logo. ' +
+    inFrame.map(b => b.name + ': ' + String(b.mark||'').trim() +
+      (b.where ? ' It appears ' + String(b.where).trim().replace(/^it appears /i,'') : '') +
+      (/[.!?]$/.test((b.where || b.mark || '').trim()) ? '' : '.')).join(' ') + ' ';
+}
+/* What may carry lettering. Normally nothing does; on a page that declared its brands,
+   those marks do and nothing else — the difference matters, because the blanket ban and
+   the picture the page needs cannot both be true. */
+function textClause(slide){
+  const p = S.profile;
+  const brands = (slide._deck && Array.isArray(slide._deck.brands) ? slide._deck.brands : []);
+  const scene = String(slide.scene || '').toLowerCase();
+  const shown = p.allow_brand_marks && brands.filter(b => b && b.name && scene.includes(b.name.toLowerCase()));
+  if(!shown || !shown.length) return NO_TEXT_CLAUSE;
+  return 'The ONLY lettering anywhere in this image is the brand mark or marks named above, on a real object in '+
+    'the scene. Nothing else: no words, no headlines, no numbers, no captions, no subtitles, no signage, no '+
+    'labels, no watermarks, no user interface, no charts or diagrams with writing, and no other company\'s mark.';
+}
 function imagePrompt(slide, insist, named){
   const p = S.profile;
   const top = slide.kind === 'hook' ? (p.hook_top_pct ?? 0.34) : (p.text_block_top_pct ?? 0.6);
@@ -4131,11 +4293,16 @@ function imagePrompt(slide, insist, named){
     ? 'Keep the ' + region + ' of the frame free of the main point of interest, so a caption can sit over it. '+
       'The frame itself should still be full and alive. '
     : 'Keep the ' + region + ' of the frame visually calm, uncluttered and even in tone so a caption can be placed over it. ';
+  /* The cover can be art-directed separately from the slides, and on a page whose whole
+     job is stopping a thumb it should be: one subject, a plain ground, and the brand
+     colour arriving as a rim light rather than as a filter over everything. It goes
+     after the style sentence so it is the last composition instruction the model reads. */
+  const coverArt = slide.kind === 'hook' && p.hook_image_suffix ? ' ' + p.hook_image_suffix : '';
   return toneLead(p, slide, insist) + (slide.scene || slide.title) + '. ' +
-    subjectContext(p, slide) + castBlock(slide, named) +
-    styleSuffix(p, slide) + toneSuffix(p, slide) + shotSuffix(p, slide) + ' ' +
+    subjectContext(p, slide) + castBlock(slide, named) + brandBlock(slide) +
+    styleSuffix(p, slide) + coverArt + toneSuffix(p, slide) + shotSuffix(p, slide) + ' ' +
     'Aspect ratio ' + (p.aspect_ratio||'9:16') + ', full-bleed composition. ' +
-    caption + NO_TEXT_CLAUSE + ' ' + FULL_BLEED_CLAUSE;
+    caption + textClause(slide) + ' ' + FULL_BLEED_CLAUSE;
 }
 async function keepInLibrary(slide, dataUrl){
   if(localStorage.getItem('cb.libSave') === '0') return;
@@ -5161,6 +5328,49 @@ const FACT_DEFAULTS = {
     style: 'Fun',
     collection: 'Fun',
     tone: 'colour'
+  },
+
+  trendpopzz: {
+    prompt: 'The single biggest story on the internet right now, for people who want to know what happened '+
+      'without reading a news site. Three things only: AI — a release, a lawsuit, a settlement, a result that '+
+      'changes what is possible; influencers and creators — a record broken, a deal signed, a platform decision '+
+      'that moves somebody\'s living; and genuinely famous people — the household names, and only when the story '+
+      'is actually enormous. '+
+      'The test for a subject is scale. If a reader would not stop mid-scroll for it, it is not a post here: '+
+      'this account does not do mildly interesting. A number with a lot of zeros in it, a name everybody knows, '+
+      'or a thing that was impossible last month. '+
+      'Loud, urgent and concrete — and accurate to the decimal, because the volume is what makes being wrong '+
+      'unsurvivable. Every figure reported and attributed, allegations never written as findings, no pile-ons, '+
+      'nobody under 18, and no private life anybody has not made public themselves.',
+    mode: 'angles',
+    angles: 'trendpop',
+    news: true,
+    /* "the past week or so" — the sibling pages sweep three days, this one sweeps the
+       week, because a story of this size is still worth posting four days later. */
+    news_days: 7,
+    fixed_len: true,
+    /* The scan's own brief. The default one is looking for warm human-interest with a
+       named person at the centre and rules out court cases outright, which would throw
+       away the exact stories this page exists for — a billion-dollar settlement is not
+       a scandal post, it is the news. */
+    scan: {
+      lead:'a viral news account that posts the single biggest story of the week',
+      claim:'the cover headline, 5 to 9 words, leading with the number or the name — arresting, and literally true',
+      what:
+'- SCALE FIRST. A figure with a lot of zeros, a record, a first, or a thing that was impossible last month. If it is merely interesting, leave it out — this account only posts the enormous.\n' +
+'- It is already spreading: being posted about, argued about or shared widely, not simply published somewhere.\n' +
+'- At the centre is either a person a reader could name or a company a reader could name. Both are fine here.\n' +
+'- One of three worlds: AI, creators and influencers, or genuinely famous people.\n' +
+'- Real, checkable, attributable numbers — sums, users, views, valuations, dates.\n' +
+'- Outcomes of record are welcome and are the point of this page: a settlement, a filing, a ruling, a fine, a disclosure. Report the outcome, never the allegation behind it.',
+      not:
+'- Anything the search does not support. An invented story is the one thing an account this loud cannot survive — return fewer rather than filling the list.\n' +
+'- Party politics and elections, live criminal proceedings against a named individual, deaths, illness, anyone under 18, private individuals who did not put it in public themselves.\n' +
+'- Anything whose only substance is an accusation. If the story is that somebody was accused, it is not a story here; if the story is that a court or a regulator concluded something, it is.'
+    },
+    style: 'Trendpop',
+    collection: 'Trendpop',
+    tone: 'colour'
   }
 };
 /* Category values were plain prompt strings and most still are. A few carry a little
@@ -5774,12 +5984,104 @@ const ANGLE_SETS = {
      cover:'Names the film and promises the version underneath it.',
      close:'The last slide is the single biggest thing they changed.',
      swipe:'The original ending is not for children.'}
+  ],
+
+  /* @trendpopzz. One story a post, and it is always the biggest one of the week — a
+     settlement with nine zeros in it, a model that just made something obsolete, a
+     creator who broke a record overnight. The shapes below are the shapes a big story
+     comes in, not the topics it is about: the topic arrives from the scan, and the
+     rotation decides whether this one is told as the number, the sequence, or the
+     thing everybody missed. Eight of them, because a page that posts daily and only
+     knows three shapes reads as one post repeated. */
+  trendpop: [
+    {key:'howbig', kind:'story', badge:'HOW BIG',
+     label:'the scale of it, made real',
+     brief:'One enormous number and what it actually means. A settlement, a valuation, a payout, a user count, a '+
+       'view record. State the figure early and then make it physical — what it is per day, per person, per '+
+       'second, against something the reader already has a size for. The whole post is the reader recalibrating '+
+       'what "a lot" means. Every figure reported and attributed; never a rounded guess dressed up as a fact.',
+     cover:'Leads with the number and who it belongs to.',
+     close:'The last slide is the comparison that lands hardest.',
+     swipe:'The number is bigger than you think.'},
+
+    {key:'whathappened', kind:'list', badge:'WHAT HAPPENED',
+     label:'the whole thing, in order, in a minute',
+     brief:'A story everybody has half-seen, reconstructed step by step. Each point is one beat with its date or '+
+       'time: what was filed, posted, announced or leaked, who moved next, where it ended up. This is the post '+
+       'people send to a friend who says "wait, explain". Accurate and in order beats dramatic and vague, and '+
+       'anything still unconfirmed is labelled as unconfirmed on the slide it appears on.',
+     cover:'Names the story and how fast it moved.',
+     close:'The last slide is where it stands right now.',
+     swipe:'It moved faster than anyone expected.'},
+
+    {key:'whodidthis', kind:'list', badge:'WHO IS THIS',
+     label:'the person everybody is suddenly posting about',
+     brief:'For the reader who keeps seeing a name and has no idea. Each point builds the picture: where they '+
+       'came from, what they actually do, the thing they are known for, the moment that put them here, what they '+
+       'are doing now. Zero context assumed, and never sneering at the reader for not knowing. Where the centre '+
+       'of the story is a company rather than a person, the same post works on the company.',
+     cover:'Names them and says why their name is everywhere this week.',
+     close:'The last slide is what happens to them next.',
+     swipe:'They were not famous last month.'},
+
+    {key:'receipts', kind:'list', badge:'THE RECEIPTS',
+     label:'what is actually on the record',
+     brief:'The documented facts under a story people are arguing about from vibes: the filing, the disclosure, '+
+       'the transcript, the number the company itself published, the post that has since been deleted but was '+
+       'screenshotted. Every point names its source ON the slide. This is the most valuable post the account '+
+       'makes and the easiest to get wrong — if a point cannot be sourced it does not go in, and no point is '+
+       'ever an allegation stated as a finding.',
+     cover:'Names the argument and promises the documents.',
+     close:'The last slide is the one nobody arguing about this has read.',
+     swipe:'It is all in the filing.'},
+
+    {key:'aishift', kind:'story', badge:'AI',
+     label:'the thing that just changed',
+     brief:'A release, a result or a decision in AI that actually moves something, told without jargon and '+
+       'without hype. What it does that the last one could not, who it affects first, and what is now possible '+
+       'or impossible that was not last week. Benchmarks and claims are attributed to whoever made them — a '+
+       'company\'s own number is reported as the company\'s own number, never as an independent finding.',
+     cover:'Names what changed and what it just made obsolete.',
+     close:'The last slide is what it means for the reader specifically.',
+     swipe:'This is the part nobody is talking about.'},
+
+    {key:'fallout', kind:'story', badge:'THE FALLOUT',
+     label:'what it costs, and who pays',
+     brief:'The second half of a story the internet has already moved on from: the money, the exits, the policy '+
+       'change, the thing quietly rewritten afterwards. Reported consequences only — what has actually happened '+
+       'since, not what somebody predicts will. Never leave a person looking worse than the record does, and '+
+       'never turn a consequence for a company into an accusation against a named employee.',
+     cover:'States the thing everybody saw, and that it was not the end.',
+     close:'The last slide is what has not been settled yet.',
+     swipe:'The bill came later.'},
+
+    {key:'nobodysaw', kind:'story', badge:'NOBODY NOTICED',
+     label:'the detail buried in it',
+     brief:'The line on page forty, the clause in the terms, the one frame of the video, the number in the '+
+       'footnote. Something genuinely in the source that almost nobody reading the headline saw, and what it '+
+       'actually implies. Quote or paraphrase the detail exactly and say where it is, because the entire post '+
+       'rests on it being really there — a detail that turns out to be a misreading is the post that gets the '+
+       'account ratioed.',
+     cover:'Says there is something in it and does not say what.',
+     close:'The last slide is why it was easy to miss.',
+     swipe:'It is on page forty.'},
+
+    {key:'whonow', kind:'list', badge:'WHO WINS',
+     label:'who is better off this morning',
+     brief:'One event, and the people and companies it moved — up and down. Each point is one party and what '+
+       'specifically changed for them: a share price, a contract, a follower count, a job, a product that just '+
+       'lost its reason to exist. Concrete and attributable, one party a slide, and the losers stated as facts '+
+       'about their position rather than as jokes at their expense.',
+     cover:'Names the event and promises who came out of it best.',
+     close:'The last slide is the one nobody expected to be on this list.',
+     swipe:'One of these was not on anybody\'s list.'}
   ]
 };
 /* Which brief writes a deck for which rotation. Anything not listed gets the dating
    page's, which is the general one. */
 const ANGLE_PROMPTS = {thrifting: (c,d)=>thriftDeckPrompt(c,d), idisney: (c,d)=>disneyDeckPrompt(c,d),
-                       obsession: (c,d)=>obsessionDeckPrompt(c,d), fun: (c,d)=>funDeckPrompt(c,d)};
+                       obsession: (c,d)=>obsessionDeckPrompt(c,d), fun: (c,d)=>funDeckPrompt(c,d),
+                       trendpop: (c,d)=>trendDeckPrompt(c,d)};
 const angleSet = name => ANGLE_SETS[name] || [];
 const angleIn = (name, key) => angleSet(name).find(a => a.key === key) || null;
 /* The word in the flag on the cover. Most styles carry a fixed one; a page whose posts
@@ -5828,27 +6130,40 @@ function scanDays(n, from){
   for(let i = 0; i < Math.max(1, n); i++) out.push(isoDay(start - i*DAY_MS));
   return out;
 }
-async function scanNewsDay(cat, day, want, avoid){
-  const sys =
-'You are finding stories for a viral human-interest account. Search the web — do not answer from memory.\n\n' +
-'THE DAY: ' + prettyDay(day) + ' (' + day + '). Find stories published, breaking, or being widely shared ON OR ' +
-'WITHIN ABOUT 48 HOURS OF THAT DAY. Nothing older unless it resurfaced then and you can say so.\n\n' +
-'THE ACCOUNT:\n' + catPrompt(cat) + '\n\n' +
-'WHAT COUNTS:\n' +
+/* What the scan is looking for is not the same on every page. The first news account
+   here wanted warm human-interest and one named person, and that is still the default,
+   but a page that runs the week's biggest story is looking for scale — a company can be
+   the centre of it and a settlement is exactly the kind of thing it exists to post. So
+   a category can carry its own scan brief and everything else about the scan stays put. */
+const SCAN_DEFAULT = {
+  lead:'a viral human-interest account',
+  claim:'the cover headline, under 16 words, the turn stated plainly',
+  what:
 '- One named person at the centre of it, who a reader could look up. This account is about people, not topics.\n' +
 '- A turn: they were doing one thing and now they are doing another, and the distance between the two is the post.\n' +
 '- Real, checkable numbers — followers, views, sales, sums, dates.\n' +
-'- Warm or astonishing. Never a tragedy, a scandal or a court case, and nothing that leaves the subject worse off for being posted about.\n\n' +
-'WHAT DOES NOT COUNT:\n' +
+'- Warm or astonishing. Never a tragedy, a scandal or a court case, and nothing that leaves the subject worse off for being posted about.',
+  not:
 '- Anything the search does not support. An invented viral story is the one thing this account cannot survive — return fewer rather than filling the list.\n' +
-'- Party politics, active criminal proceedings, deaths, illness, private individuals who did not put it in public themselves, anyone under 18.\n' +
+'- Party politics, active criminal proceedings, deaths, illness, private individuals who did not put it in public themselves, anyone under 18.'
+};
+async function scanNewsDay(cat, day, want, avoid){
+  const sc = Object.assign({}, SCAN_DEFAULT, catCfg(cat).scan || {});
+  const sys =
+'You are finding stories for ' + sc.lead + '. Search the web — do not answer from memory.\n\n' +
+'THE DAY: ' + prettyDay(day) + ' (' + day + '). Find stories published, breaking, or being widely shared ON OR ' +
+'WITHIN ABOUT 48 HOURS OF THAT DAY. Nothing older unless it resurfaced then and you can say so.\n\n' +
+'THE ACCOUNT:\n' + catPrompt(cat) + '\n\n' +
+'WHAT COUNTS:\n' + sc.what + '\n\n' +
+'WHAT DOES NOT COUNT:\n' + sc.not + '\n' +
 (avoid && avoid.length
  ? '\nALREADY POSTED — do not choose these or anything close to them:\n' + avoid.map(x=>'  · '+x).join('\n') + '\n'
  : '') +
 '\nReturn ONLY a JSON array of up to ' + want + ' objects:\n' +
 '[{"subject":"short canonical name for this post — the person and the thing",' +
-'"claim":"the cover headline, under 16 words, the turn stated plainly",' +
-'"person":"the full name of the person at the centre",' +
+'"claim":"' + sc.claim + '",' +
+'"person":"the full name of the person at the centre, empty if it is a company rather than a person",' +
+'"org":"the company or organisation at the centre, if there is one — otherwise empty",' +
 '"source":"the outlet or account it came from",' +
 '"date":"' + day + '"}]';
   const r = await callModel({model: cfg().textModel, parts:[{type:'text', text:sys}], search:true});
@@ -5859,6 +6174,7 @@ async function scanNewsDay(cat, day, want, avoid){
     subject: String(o.subject||'').trim(),
     claim:   String(o.claim||'').trim(),
     person:  String(o.person||'').trim(),
+    org:     String(o.org||'').trim(),
     source:  String(o.source||'').trim(),
     day
   } : null).filter(o => o && o.subject && o.claim);
@@ -6156,6 +6472,120 @@ function funDeckPrompt(cat, deck){
 'Return ONLY JSON:\n' +
 '{"subject":"short canonical name for this post","swipe":"...",' +
 '"cast":[{"name":"short name as used in the scenes","real":"full public name","known":"one short phrase placing them","look":"40-70 words, physical only"}],' +
+'"slides":[{"kind":"hook","title":"...","scene":"..."},{"kind":"slide","title":"...","body":"","scene":"..."}],' +
+'"caption":"para1\\n\\npara2\\n\\npara3\\n\\n#niche #mid #broad"}'
+  );
+}
+
+/* @trendpopzz. The @fun brief, pulled in three directions.
+
+   FIRST, the register. The client asked for clickbait and that is a real craft rather
+   than a licence: an open loop, a number that does not sound possible, a name the
+   reader knows, and a stake stated in the reader's own terms. What it is NOT is a lie,
+   and the two get confused constantly — "you won't believe" is weak writing AND a
+   promise the post cannot keep, while "META JUST PAID $1.4 BILLION TO ONE STATE" is
+   both more clickable and simply true. So the hype vocabulary is banned and the
+   pressure is put on specificity instead, which is where it belongs. Every accuracy
+   rule the sibling pages carry stays, because an account this loud is the one that
+   cannot afford to be wrong.
+
+   SECOND, the brands. This page posts about companies, so the picture often has to
+   contain a real mark. Everywhere else in this app that is banned outright — a logo in
+   a generated frame is normally a wrong logo — so the deck has to declare which marks
+   are legitimately in play and describe them precisely enough to be reproduced rather
+   than reinvented.
+
+   THIRD, the cover, which on a news page is the entire post. It gets its own set of
+   instructions and its own image treatment, and the brief says so out loud rather than
+   hoping the writer treats slide 1 differently. */
+function trendDeckPrompt(cat, deck){
+  const p = S.profile;
+  const angle = angleIn(catCfg(cat).angles, deck.angle) || {label:'', brief:'', cover:'', close:''};
+  /* Fixed length, like its sibling: the scan hands back one story, never a listicle,
+     so the run's setting is the length and a figure that happens to open a headline is
+     just a figure. */
+  const list = angle.kind === 'list';
+  const items = Math.max(1, deck.n - 2);
+  const when = deck.day ? ' It was reported around ' + prettyDay(deck.day) + '.' : '';
+  const who = deck.person || deck.org || '';
+  return (
+'Write a ' + deck.n + '-slide carousel for a viral news account that posts the biggest story of the week.\n\n' +
+'THE POST: ' + deck.subject + '\n' +
+'THE COVER HEADLINE, verbatim or tightened until it hurts: "' + deck.hook + '"\n' +
+(deck.person ? 'THE PERSON: ' + deck.person + '.' + when + '\n' : '') +
+(deck.org ? 'THE COMPANY: ' + deck.org + '.' + (deck.person ? '' : when) + '\n' : '') +
+(deck.source ? 'SOURCE: ' + deck.source + '\n' : '') + '\n' +
+'THE ACCOUNT:\n' + catPrompt(cat) + '\n\n' +
+'THIS POST\'S ANGLE — ' + angle.label.toUpperCase() + ':\n' + angle.brief + '\n\n' +
+
+'HOW THIS ACCOUNT WRITES — read this twice, it is the whole product:\n' +
+'- Every slide is ONE LINE. A "title" and nothing else. No body text on any slide; leave "body" empty.\n' +
+'- A line is 4 to 10 words, set in heavy caps across the bottom of a photograph. Past twelve words it stops being readable at thumbnail size and the post is dead.\n' +
+'- THE JOB OF EVERY LINE IS TO MAKE THE NEXT SWIPE INVOLUNTARY. Each one closes a loop and opens another.\n' +
+'- Specificity is what stops a thumb, not volume. A real number, a real name, a real date. "$1.4 BILLION" stops people; "A HUGE SUM" does not. Lead the line with the concrete thing and put the context after it.\n' +
+'- Stakes in the reader\'s own terms. Not "the industry is disrupted" but "YOUR PHOTOS TRAINED IT".\n' +
+'- Short words, present tense, active voice. "META JUST PAID" beats "A SETTLEMENT WAS REACHED BY META".\n' +
+'- BANNED, every one of them, because they are the sound of a post with nothing in it: "you won\'t believe", "shocking", "insane", "crazy", "this changes everything", "the internet is losing it", "wait for it", "let that sink in", "here\'s why that matters", emoji, exclamation marks, and any question the slide does not then answer.\n' +
+'- Clickbait here means the TRUE thing said in the most arresting order. It never means implying something the post does not deliver — a cover that oversells is the one thing that costs the account followers instead of gaining them.\n\n' +
+
+'THE COVER — slide 1, and it decides whether any of the rest is seen:\n' +
+'- 5 to 9 words. Fewer than the slides that follow it. It is set large and it needs the room.\n' +
+'- ' + angle.cover + '\n' +
+'- Lead with the biggest concrete element you have: the number, or the name everybody knows. Never open on a subordinate clause.\n' +
+'- It must be true on its own, read alone, by somebody who never swipes.\n' +
+'- Never counts the points out loud. No "5 THINGS" — this is a news post, not a listicle.\n\n' +
+
+'THE REST:\n' +
+(list
+ ? '- THIS POST IS EXACTLY ' + items + ' POINTS, one per slide, slides 2 to ' + (items + 1) +
+   '. Not one more, not one fewer. Pick the ' + items + ' that carry the story and cut the rest.\n' +
+   '- Slide ' + (items + 2) + ' is ONE closing slide beyond those ' + items + '. It is not another point.\n'
+ : '- THIS POST IS EXACTLY ' + deck.n + ' SLIDES. Slide 2 lands the setup in one line, the middle slides run it in ' +
+   'order with one of them the turn, and slide ' + deck.n + ' ends it.\n') +
+'- ' + angle.close + '\n' +
+'- Slide 2 is the second most important line in the post. It is where a reader who swiped once decides whether to swipe again — put the hardest fact there, not the background.\n\n' +
+
+'WHAT MUST BE TRUE — this is a news account, so it is the whole job:\n' +
+'- Every figure, date, quote and claim must be real, reported and checkable. Never invent or round up a number to make a line land.\n' +
+'- Attribute anything contested. A company\'s own figure is reported as the company\'s own figure, never as an independent finding.\n' +
+'- A settlement, a filing or a ruling is reported as what it is. Settling is not an admission and must never be written as one. Never state an allegation as a finding of fact.\n' +
+'- Never speculate about what somebody earns, feels or intended unless they said so on the record.\n' +
+'- Anything not yet confirmed is labelled unconfirmed on the slide it appears on, or it is left out.\n' +
+'- No pile-ons. Nothing about anyone under 18, and nothing about a private life somebody has not made public themselves.\n' +
+'- Where the story is somebody\'s own post or reporting, credit them on the closing slide or in the caption.\n\n' +
+
+'THE SWIPE LINE — return it as "swipe": one short line, under 10 words, opening the loop without closing it.\n\n' +
+
+'CAST — return it as "cast", and treat it as the most important field in the reply.\n' +
+'- One entry for each person who appears in more than one frame. At most three.\n' +
+'- "real" is the person\'s FULL public name — first and last, or the full handle they are known by: "Mark Zuckerberg", "MrBeast", "IShowSpeed". A first name identifies nobody and produces a stranger. Never abbreviate it and never leave it blank for somebody publicly known.\n' +
+'- "known" is one short phrase placing them: "the chief executive of Meta", "the streamer known for IRL streams". The image model finds a face far more reliably when the name arrives with the thing that name is attached to.\n' +
+'- "look" is a PHYSICAL DESCRIPTION ONLY, 40 to 70 words, and it holds the likeness steady from frame to frame: apparent age, build, skin tone, face shape, eye colour, nose and jaw, hair colour and exact length and how it is worn, facial hair, glasses, and the clothes they are in throughout.\n' +
+'- Real skin, and say so: pores, lines, uneven tone, whatever that face actually has. Left alone the image model returns a smoothed, poreless face, and on a page about real people that reads as fake immediately.\n' +
+'- Describe them as they look NOW, not five years ago. Flat and factual, the way a casting brief reads.\n\n' +
+
+'BRANDS — return it as "brands". This account posts about companies and the mark has to be RIGHT.\n' +
+'- One entry for every company, platform or product whose mark appears in any frame. At most three. Empty array if none.\n' +
+'- "name" is the exact legal or trading name as it is written on the mark itself, with its real capitalisation.\n' +
+'- "mark" describes the actual logo precisely enough to reproduce rather than reinvent: the glyph or symbol and its exact shape, whether the wordmark appears with it, the typeface\'s character, the exact brand colours, and the current version of it rather than a retired one. A wrong logo is worse than no logo — it is the detail that tells the reader the picture is fake.\n' +
+'- "where" is one phrase saying how it appears in shot: on a building, on a laptop lid, on a screen behind them, on a lanyard. It is always a real object in the world, never a graphic pasted over the photograph.\n\n' +
+
+'IMAGES — "scene" describes a photograph and nothing else.\n' +
+'- In "scene", refer to people by their CAST NAME only, and to companies by their BRAND NAME only. The cast and brand entries are what carry the real thing through to the picture.\n' +
+'- Only ever a situation that is actually reported. The picture illustrates the story it sits on; it never invents a moment, a place or a room somebody was not in.\n' +
+'- Never ask for text, headlines, figures, charts, captions or interface in a frame. The ONLY lettering allowed anywhere is a brand mark you declared in "brands", on a real object.\n' +
+'- One subject large in the frame, hard directional light, surroundings falling away into near-black. There is a heavy gradient across the bottom of every frame, so keep the lower third simple and dark.\n' +
+'- THE COVER FRAME IS DIFFERENT AND CLEANER: one subject alone against a plain near-black field, nothing else in shot, no location, no crowd, no props. Say it plainly in the cover\'s "scene" — "' + (who || 'the subject') + ' alone against a plain dark background, shot chest-up" — and let the frame do the rest.\n' +
+'- Vary the framing on the slides that follow so the post does not read as one picture six times.\n' +
+'Style is ' + (p.imagery || 'dramatic editorial photograph') + '.\n\n' +
+
+'CAPTION for Instagram: three short paragraphs separated by blank lines, then one line of 3 to 5 hashtags.\n' +
+(deck.source ? 'Credit ' + deck.source + ' in the caption.\n' : '') + '\n' +
+
+'Return ONLY JSON:\n' +
+'{"subject":"short canonical name for this post","swipe":"...",' +
+'"cast":[{"name":"short name as used in the scenes","real":"full public name","known":"one short phrase placing them","look":"40-70 words, physical only"}],' +
+'"brands":[{"name":"exact brand name","mark":"the logo described precisely enough to reproduce","where":"how it appears in shot"}],' +
 '"slides":[{"kind":"hook","title":"...","scene":"..."},{"kind":"slide","title":"...","body":"","scene":"..."}],' +
 '"caption":"para1\\n\\npara2\\n\\npara3\\n\\n#niche #mid #broad"}'
   );
@@ -6575,6 +7005,15 @@ async function writeFactDeck(deck){
                   known: String((c && c.known) || '').trim().slice(0, 120),
                   look: String((c && c.look) || '').trim().slice(0, 400)}))
       .filter(c => c.name && c.look);
+    /* Only where the style actually allows marks through — everywhere else a brands
+       list in the reply is a writer being helpful about something that is banned. */
+    deck.brands = S.profile.allow_brand_marks && Array.isArray(j.brands)
+      ? j.brands.slice(0, 3)
+          .map(b => ({name: String((b && b.name) || '').trim().slice(0, 60),
+                      mark: String((b && b.mark) || '').trim().slice(0, 400),
+                      where: String((b && b.where) || '').trim().slice(0, 120)}))
+          .filter(b => b.name && b.mark)
+      : [];
     const fallback = (angleIn(catCfg(cat).angles, deck.angle) || {}).swipe || '';
     deck.swipe = String(j.swipe||'').trim().replace(/^["']|["']$/g,'').slice(0, 90) || fallback;
     const cover = deck.slides.find(s=>s.kind === 'hook');
@@ -6694,7 +7133,7 @@ async function runFacts(opts){
       const tones = conf.tone ? ideas.map(()=>conf.tone) : deckTones(ideas.length);
       newDecks = ideas.map((idea,i)=>({id:uid(), hook:idea.hook, subject:idea.subject, cat,
         angle:idea.angle, kind:idea.kind, tone:tones[i],
-        person:idea.person||'', source:idea.source||'', day:idea.day||'',
+        person:idea.person||'', org:idea.org||'', source:idea.source||'', day:idea.day||'',
         /* A counting headline sets its own length — points, plus the cover and the
            closing slide. That is true of a story angle headlined with a number too,
            and reading it only for list angles left the deck's own length disagreeing

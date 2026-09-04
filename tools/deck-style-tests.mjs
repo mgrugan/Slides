@@ -98,6 +98,30 @@ const r = await p.evaluate(async ()=>{
   out.applyStyleAsksForABoardRedraw = /renderBatch\(\)/.test(applyStyle.toString());
   out.renderBatchWarmsTheFonts = /warmDeckFonts\(\)/.test(renderBatch.toString());
 
+  /* --- EVERY output path, not just the ones on screen. The single-deck ZIP and the
+     per-slide download both run through slideCanvas, which was missed the first time:
+     the cards were fixed and the exported files still came out in the wrong skin, which
+     is worse than not fixing it at all because it looks fixed. */
+  out.everyOutputPathAsksTheDeck = ['slideCanvas','downloadDecks']
+    .every(fn => /profileFor\(/.test(window[fn].toString()));
+  out.theSingleDeckZipUsesTheDeckStyle = /renderSlide\(s, c, profileFor\(s\)\)/.test(slideCanvas.toString());
+  out.exportedPixelsAreRight = await (async ()=>{
+    load('Fun');                                    // the wrong style loaded, on purpose
+    S.slides = conspiracy.slides;
+    const cv = slideCanvas(0);
+    const d = cv.getContext('2d').getImageData(0, 0, cv.width, cv.height).data;
+    let yellow = 0;
+    for(let i = 0; i < d.length; i += 4)
+      if(d[i] > 150 && d[i+1] > 140 && d[i+2] < 90) yellow++;
+    out.yellowPixelsInTheExport = yellow;
+    S.slides = [];
+    return yellow < 200;
+  })();
+
+  // --- and the build is identifiable without reading the source
+  out.theBuildIsOnScreen = typeof BUILD === 'string' && BUILD.length > 4 &&
+                           ($('buildStamp') || {}).textContent === BUILD;
+
   // --- opening a deck loads its style so the controls match the cards
   out.openingADeckLoadsItsStyle = await (async ()=>{
     load('Fun');
@@ -117,6 +141,8 @@ const want = {
   liveEditsShowOnTheDeckTheyBelongTo:true,
   theTwoStylesActuallyDiffer:true, aFactsDeckHasNoBrandYellowOnIt:true,
   theBodyIsNotSetHuge:true,
+  theBuildIsOnScreen:true, everyOutputPathAsksTheDeck:true, theSingleDeckZipUsesTheDeckStyle:true,
+  exportedPixelsAreRight:true,
   aStyleChangeRedrawsTheBoard:true, applyStyleAsksForABoardRedraw:true,
   renderBatchWarmsTheFonts:true, openingADeckLoadsItsStyle:true
 };
@@ -126,7 +152,8 @@ for(const [k,v] of Object.entries(want)){
   if(!ok) bad++;
   console.log((ok?'  ok  ':'FAIL  ') + k.padEnd(34) + JSON.stringify(got) + (ok ? '' : '  (wanted ' + JSON.stringify(v) + ')'));
 }
-console.log('  ·   yellow pixels on a facts deck: ' + r.yellowPixelsOnAFactsDeck + ' · body sizes ' + r.bodySizes);
+console.log('  ·   yellow pixels — on the card ' + r.yellowPixelsOnAFactsDeck +
+            ', in the exported file ' + r.yellowPixelsInTheExport + ' · body sizes ' + r.bodySizes);
 if(errs.length){ console.log('page errors:'); errs.forEach(e=>console.log('  '+e)); bad++; }
 console.log(bad ? bad + ' failing' : 'all good');
 process.exit(bad ? 1 : 0);

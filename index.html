@@ -328,6 +328,7 @@ details summary:hover{color:var(--fg)}
 
 <header>
   <div class="brand">Carousel</div>
+  <span id="buildStamp" class="tiny muted" title="Which build of the app this is. If it does not match what you were told, the page is cached — hard-reload it."></span>
   <button id="btnStyle" class="chip"><span class="sw"></span><span id="styleName">Photographic</span></button>
   <div class="spacer"></div>
   <button id="btnLibrary" class="icon" title="Background library">
@@ -1536,6 +1537,11 @@ const NO_TEXT_CLAUSE = 'Absolutely no text anywhere in the image: no words, no l
 const FULL_BLEED_CLAUSE = 'The photograph fills the entire frame edge to edge. No border, no white margin, no paper edge, ' +
   'no scan edge, no film sprocket holes, no polaroid frame, no matting, no rounded corners, no vignette frame. ' +
   'This is the photograph itself, not a picture of a printed photograph lying on a surface.';
+
+/* Bumped by hand whenever something ships. It is shown in the header and logged on
+   load, so a cached copy of this file can be told from the current one without reading
+   the source — the whole app is one file, and a stale one looks completely normal. */
+const BUILD = '2026-09-03 · per-deck styles';
 
 /* ============================ state ============================ */
 const S = {
@@ -7688,7 +7694,12 @@ async function rebuildCopy(){
 function slideCanvas(i){
   const s = S.slides[i];
   const c = document.createElement('canvas');
-  renderSlide(s, c);
+  /* The deck's own look, not whatever style is loaded — the same rule the board and the
+     batch ZIP follow. This one call was missed when that rule went in, and it is the
+     one the single-deck ZIP and the per-slide download both run through, so an exported
+     deck could still come out wearing another account's skin after the cards on screen
+     had been fixed. */
+  renderSlide(s, c, profileFor(s));
   return c;
 }
 function downloadSlide(i){
@@ -7962,6 +7973,12 @@ function init(){
   $('libFile').onchange = e => { if(e.target.files[0]) importLibrary(e.target.files[0]); };
   $('libClear').onclick = () => { if(confirm('Delete all '+LIB.length+' saved backgrounds?')) libClear(); };
   $('jobCheck').onclick = () => JOBS.filter(j=>!j.done).forEach(pollJob);
+
+  /* Which build this is, on screen and in the log. Twice now a fix has been shipped
+     and the page in front of somebody was still the old file, which is invisible: the
+     app is one HTML file, so a stale copy behaves perfectly and behaves wrongly. */
+  if($('buildStamp')) $('buildStamp').textContent = BUILD;
+  log('build ' + BUILD, 'o');
 
   // ---- facts ----
   loadFactCats();

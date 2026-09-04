@@ -3283,6 +3283,44 @@ function cardScale(canvas, p){
   const dpr = Math.min(window.devicePixelRatio || 1, 2);
   return Math.min(1, Math.min(css * dpr, CARD_MAX_EDGE) / W);
 }
+/* Which look a deck is drawn in.
+
+   The style is one global thing and the board holds decks from several accounts at
+   once, so whichever style happened to be loaded was painting all of them — twenty
+   history decks came out in a viral news page's skin, with its type size over their
+   paragraphs, because that page had been run last. Nothing was stored wrongly: the
+   decks were simply being asked to draw themselves as whatever was on screen.
+
+   A deck belongs to a category and a category names its style, so it can answer the
+   question itself and no longer depends on what was run before it. Existing decks are
+   repaired by this too, because it is derived rather than saved.
+
+   The live profile still wins where it IS that style: that is the one the controls
+   edit, and an edit has to show up on the cards. */
+function profileFor(slide){
+  const cat = slide && slide._deck && slide._deck.cat;
+  if(!cat) return S.profile;                      // a hand-built deck has no account
+  const name = catCfg(cat).style || FACTS_STYLE;
+  if((S.profile.name || '') === name) return S.profile;
+  const i = PRESETS.findIndex(x => x.name === name);
+  return i >= 0 ? PRESETS[i] : S.profile;
+}
+/* A style that is on the board but not loaded has not had its font fetched, and a
+   frame drawn before the face arrives is drawn in the fallback. Warm each one once,
+   then redraw. */
+const FONTS_WARMED = new Set();
+async function warmDeckFonts(){
+  const want = new Map();
+  S.batch.concat(S.slides.length ? [{slides:S.slides}] : []).forEach(d=>
+    (d.slides||[]).slice(0,1).forEach(sl=>{
+      const pr = profileFor(sl);
+      if(pr && pr.name && !FONTS_WARMED.has(pr.name)) want.set(pr.name, pr);
+    }));
+  if(!want.size) return;
+  want.forEach((_, k)=>FONTS_WARMED.add(k));
+  for(const pr of want.values()){ try{ await fontReady(pr); }catch(e){} }
+  buildGrid(); renderBatch();
+}
 function renderSlide(slide, canvas, p, scale){
   p = p || S.profile;
   scale = scale || 1;
@@ -3513,7 +3551,7 @@ function cacheImage(slide){
 function drawOne(id){
   const s = S.slides.find(x=>x.id===id); if(!s) return;
   const c = document.querySelector('canvas[data-id="'+id+'"]'); if(!c) return;
-  renderSlide(s, c, S.profile, cardScale(c));
+  renderSlide(s, c, profileFor(s), cardScale(c));
 }
 function drawAll(){ for(const s of S.slides) drawOne(s.id); }
 
@@ -3601,7 +3639,7 @@ function buildGrid(){
     d.querySelector('[data-a=left]').onclick = () => { if(i>0){ const t=S.slides[i-1]; S.slides[i-1]=S.slides[i]; S.slides[i]=t; buildGrid(); autosave(); } };
     d.querySelector('[data-a=right]').onclick = () => { if(i<S.slides.length-1){ const t=S.slides[i+1]; S.slides[i+1]=S.slides[i]; S.slides[i]=t; buildGrid(); autosave(); } };
     const cv = d.querySelector('canvas');
-    renderSlide(s, cv, S.profile, cardScale(cv));
+    renderSlide(s, cv, profileFor(s), cardScale(cv));
     setStatus(s, s.status || '', s.error);
   });
   refreshDeckChrome();
@@ -3680,7 +3718,7 @@ function applyStyle(key, p){
   S.profile = clone(p);
   syncControls();
   buildStyles();
-  fontReady(S.profile).then(()=>{ buildGrid(); });
+  fontReady(S.profile).then(()=>{ buildGrid(); renderBatch(); });
   const differs = old.imagery !== S.profile.imagery || old.image_prompt_suffix !== S.profile.image_prompt_suffix;
   $('imageryNotice').classList.toggle('hide', !(differs && S.slides.some(s=>s.img)));
   autosave();
@@ -5247,6 +5285,7 @@ function batchProgress(){
   renderFinish();
 }
 function renderBatch(){
+  warmDeckFonts();                    // a style on the board but not loaded has no font yet
   const box = $('batchList'); box.innerHTML = '';
   $('batchSection').classList.toggle('hide', !S.batch.length);
   $('batchTally').textContent = S.batch.length ? S.batch.length + ' decks' : '';
@@ -5278,7 +5317,7 @@ function renderBatchRow(deck){
       '<button data-a="zip" title="Download this deck">'+svg(ICON.dl)+'ZIP</button>'+
     '</div>';
   const cv = row.querySelector('canvas');
-  if(deck.slides.length) renderSlide(deck.slides[0], cv, S.profile, 0.07);   // thumbnail-sized render
+  if(deck.slides.length) renderSlide(deck.slides[0], cv, profileFor(deck.slides[0]), 0.07);   // thumbnail-sized render
   else { cv.width = 54; cv.height = 96; }
   row.querySelector('[data-a=open]').onclick = e => { e.stopPropagation(); openBatchDeck(i); };
   row.querySelector('[data-a=zip]').onclick = e => { e.stopPropagation(); downloadDecks([deck]); };
@@ -5297,6 +5336,14 @@ async function openBatchDeck(i){
   S.slides = d.slides; S.caption = d.caption;
   $('capInput').value = S.caption;
   S.slides.forEach(s=>{ if(s.img && !IMG_CACHE[s.id]) cacheImage(s); });
+  /* Load the deck's own style, so the controls describe what is on the cards. Without
+     this the deck drew itself correctly and the panel above it still showed the last
+     account's numbers, which is its own kind of wrong. */
+  const want = PRESETS.findIndex(x => x.name === (catCfg(d.cat || '').style || FACTS_STYLE));
+  if(d.cat && want >= 0 && S.profile.name !== PRESETS[want].name){
+    applyStyle('preset:'+want, PRESETS[want]);
+    await fontReady(S.profile);
+  }
   buildGrid(); renderBatch(); autosave();
   $('deckSection').scrollIntoView({behavior:'smooth', block:'start'});
 }
@@ -5320,11 +5367,11 @@ async function downloadDecks(decks){
         // not reached yet — decode it now or the circle exports empty
         if(s.kind === 'hook'){
           if(s.inset && !IMG_CACHE['inset:'+s.id]) await cacheInset(s);
-          const donor = S.profile.auto_inset && !s.inset && insetDonor(s);
+          const donor = profileFor(s).auto_inset && !s.inset && insetDonor(s);
           if(donor && donor.img && !IMG_CACHE[donor.id]) await cacheImage(donor);
         }
         const c = document.createElement('canvas');
-        renderSlide(s, c, S.profile);
+        renderSlide(s, c, profileFor(s));
         folder.file(String(k+1).padStart(2,'0')+'.jpg', c.toDataURL('image/jpeg',0.92).split(',')[1], {base64:true});
         c.width = c.height = 0;                          // release the backing store now, not at GC's leisure
       }

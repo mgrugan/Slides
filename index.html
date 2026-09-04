@@ -1493,6 +1493,10 @@ const PRESETS = [
   }
 ];
 
+/* What a category is drawn in when it does not name a style: the plain documentary
+   layout, by name rather than by "the first documentary one in the list", so that
+   adding another client skin cannot quietly become the default for every facts page. */
+const FACTS_STYLE = 'Documentary facts';
 const ASPECTS = { '9:16':[1080,1920], '4:5':[1080,1350], '1:1':[1080,1080] };
 /* Ratios the image model will actually generate at, widest first. Only used to pick a
    shape for a panorama — the canvas ratios above are what gets drawn. */
@@ -7231,14 +7235,18 @@ async function runFacts(opts){
   $('factStop').classList.remove('hide'); $('runFacts').disabled = true;
   $('factStatus').textContent = byHook ? 'writing hooks…' : byAngle ? 'planning posts…' : 'picking subjects…';
 
-  /* The look is part of the format. A category may name the style it is drawn in —
-     the dating account is a different account wearing a different skin — and anything
-     that names none gets the documentary layout it always had. */
-  const wantStyle = conf.style
-    ? PRESETS.findIndex(x => x.name === conf.style)
-    : (S.profile.caption_treatment||'') !== 'documentary'
-      ? PRESETS.findIndex(x => x.caption_treatment === 'documentary')
-      : -1;
+  /* The look is part of the format. A category may name the style it is drawn in — a
+     client account is a different account wearing a different skin — and anything that
+     names none is a plain facts page and gets the documentary layout it always had.
+
+     That last part used to be written as "leave the style alone if it is already
+     documentary", which was true exactly once: when the documentary preset was the only
+     one there was. Every client account added since is documentary too, so running
+     Conspiracy straight after @fun found a documentary style already loaded, changed
+     nothing, and drew a history post in the lime and the Anton caps of a viral news
+     page. The plain pages now name their default the same way the client pages name
+     theirs, and the switch happens whenever the loaded style is not it. */
+  const wantStyle = PRESETS.findIndex(x => x.name === (conf.style || FACTS_STYLE));
   if(wantStyle >= 0 && S.profile.name !== PRESETS[wantStyle].name){
     applyStyle('preset:'+wantStyle, PRESETS[wantStyle]);
     await fontReady(S.profile);

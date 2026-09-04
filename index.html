@@ -986,7 +986,7 @@ const PRESETS = [
     name:'Documentary facts', builtin:true,
     aspect_ratio:'4:5',
     imagery:'archival-documentary-photograph',
-    v: 3,                                      // bump when the image brief below changes
+    v: 4,                                      // bump when the image brief below changes
     // "equipment" was quietly responsible for every slide becoming a bench of apparatus
     image_prompt_suffix:'authentic archival documentary photograph, heavy film grain, high contrast with deep blacks '+
       'and slightly blown highlights, period-accurate clothing and setting, photojournalism, '+
@@ -996,6 +996,20 @@ const PRESETS = [
     image_prompt_suffix_colour:'authentic period colour photograph on 35mm colour film, visible grain, '+
       'period-accurate clothing and setting, photojournalism, candid unposed moment, '+
       'slight motion blur, natural light.',
+    /* The cover, art-directed apart from the slides. The body frames want to look like
+       documentary photographs; the cover has one job on top of that, which is to be the
+       most arresting frame in the set — and left to itself an "authentic archival
+       photograph" brief returns something quiet and well-composed, which is the same as
+       returning stock. This says what arresting means here: one subject, close, mid-act,
+       lit hard, and nothing in the frame that is not the story. */
+    hook_image_suffix:'THIS IS THE COVER FRAME AND IT HAS ONE JOB: stop a thumb. It is the single most arresting '+
+      'photograph in the set. ONE clear subject, close and large in frame, caught MID-ACTION at the peak of the '+
+      'moment — not before it and not after it. Hard directional light, deep shadow, strong contrast, the '+
+      'background falling away so nothing competes with the subject. It should look like the one frame from the '+
+      'roll that ran on the front page. NOT a calm, tidy, well-balanced record shot; not a wide establishing view; '+
+      'not an empty place where something once happened; not equipment on a table; nothing symbolic or staged. '+
+      'If it could be a stock photograph it is wrong. Keep the lower third simple and dark, because the headline '+
+      'goes there.',
     mono_suffix:'Black and white only — monochrome film, absolutely no colour anywhere in the frame.',
     pop_suffix:'{pop} is the single most saturated, most colourful thing in the frame and the eye lands on it '+
       'first. Everything else is naturally muted — dust, stone, weathered cloth, overcast light — so that one '+
@@ -5726,10 +5740,21 @@ async function pickSubjects(cat, seed, n){
 'Pick '+ask+' subjects for short documentary-style fact carousels.\n\n' +
 'CATEGORY — '+cat+':\n' + catPrompt(cat) + '\n' +
 (seed ? '\nFOCUS: '+seed+'\n' : '') +
+'\nTHE BAR — this is the whole job, and most subjects fail it:\n' +
+'- The test is "no way". If a reader would not say that out loud, it is not a post. Interesting is not enough; a page of interesting is a page nobody shares.\n' +
+'- It has to survive being said in ONE sentence to somebody who has never heard of it. If the sentence needs setup, the subject is wrong.\n' +
+'- There has to be a PICTURE in it. Something happening that a camera could have been pointed at. A subject whose most photogenic moment is a document or a meeting is a bad subject however important it was.\n' +
+'- Reach for the extreme: the only time it happened, the largest ever recorded, the thing that was hidden for forty years, the decision that reads as insane in hindsight, the consequence wildly out of proportion to its cause, the photograph almost nobody has seen.\n' +
+'- CONTROVERSY IS GOOD where it is documented and settled: a cover-up that came out, an experiment that would be illegal now, an official denial later disproved, a fatal decision somebody signed. Those are the posts people argue about in the comments, and arguing is the algorithm. What is NOT allowed is the undocumented version of the same thing — an open allegation, a live case, a conspiracy theory stated as fact. If the striking version is a myth, pick something else.\n' +
+'\nBANNED — the shapes that make a page boring, whatever the topic:\n' +
+'- Anything whose most interesting sentence is a date. "The year X happened", anniversaries, "on this day".\n' +
+'- Topics rather than events: "the history of", "how X works", "the rise of", a person\'s life story, facts about a country.\n' +
+'- Something a reader has already seen ten times. Titanic, Chernobyl, Area 51, the Bermuda Triangle and their like are only allowed if the specific claim is one almost nobody knows.\n' +
+'- Anything where the astonishing part is a big number with nothing to picture behind it.\n' +
 '\nRules:\n' +
 '- Every subject must be a real, well-documented person, event, programme or phenomenon that a reader can verify.\n' +
-'- Each must carry one astonishing but TRUE headline claim. If the striking version of the story is a myth, pick something else.\n' +
-'- Vary era, country and type. No two from the same event or the same person.\n' +
+'- The "claim" is the COVER HEADLINE, not a description of the topic. Written the way it would be set in caps across the cover: leading with the most concrete impossible-sounding thing in it, and true read on its own by somebody who never swipes.\n' +
+'- Vary era, country and type. No two from the same event or the same person, and not five from the same decade.\n' +
 (recent.length ? '- ALREADY COVERED, do not choose these or close variants:\n' + recent.map(s=>'  · '+s).join('\n') + '\n' : '') +
 '\nReturn ONLY a JSON array of exactly '+ask+' objects: [{"subject":"canonical name","claim":"the astonishing true claim in under 14 words"}]';
     const r = await callModel({model: cfg().textModel, parts:[{type:'text', text:sys}]});
@@ -7087,8 +7112,15 @@ function factDeckPrompt(cat, subj, n, deckTone){
 '- Every claim must be genuinely documented. Nothing invented, exaggerated or "commonly said".\n' +
 '- Never invent a statistic, date, name or number. If you are not confident, write the sentence without it.\n' +
 '- If a famous version of this story is disputed, say what is actually established instead.\n\n' +
+'THE COVER HEADLINE — it decides whether any of the rest is seen, so it gets its own rules:\n' +
+'- 6 to 12 words, no body text. It is set large in caps and it has to work at thumbnail size.\n' +
+'- LEAD WITH THE CONCRETE THING. The number, the object, the act. "US DOCTORS DELIBERATELY INFECTED 1,300 GUATEMALANS" stops a thumb; "A DARK CHAPTER IN MEDICAL HISTORY" does not. Never open on a subordinate clause and never open on a date.\n' +
+'- Name who did it where somebody did it. An actor makes a line land; the passive voice kills it. "THE NAVY DUMPED IT" beats "IT WAS DUMPED".\n' +
+'- Close one loop and open another: the line answers what, and makes the reader need why or how.\n' +
+'- It must be literally true read alone. A cover that oversells is the one thing that costs followers rather than winning them.\n' +
+'- BANNED, because they are the sound of a post with nothing in it: "you won\'t believe", "shocking", "insane", "the truth about", "what really happened", "a dark chapter", "little-known", "changed everything", emoji, exclamation marks, and any question the deck does not then answer.\n\n' +
 'STRUCTURE — it must read as one story across the slides, not a list:\n' +
-'- Slide 1 is the cover: the astonishing claim as a headline of 6-12 words. No body text.\n' +
+'- Slide 1 is the cover: that headline, and nothing else.\n' +
 '- Slide 2 opens the story: a very short punchy title (2-4 words, e.g. "NO ONE KNEW.") and a body that introduces who or what this is.\n' +
 '- The middle slides each carry one beat of the story in order, each with a short title (2-6 words) and a body.\n' +
 '- The last slide closes it: the aftermath, the fate, or a real quotation.\n' +
@@ -7111,7 +7143,7 @@ function factDeckPrompt(cat, subj, n, deckTone){
 '- Anchor each scene to its own beat. It is the moment that body text describes. A scene should be unusable on any other slide.\n' +
 '- Name concrete specifics — the weather, the hour, the material, the number of figures, the one object that matters. "Sixty emus scattering across a wheat field as dust rises behind them" beats "the Australian outback".\n' +
 '- Banned as lazy: empty rooms, empty fields, generic laboratory benches, unattended equipment on a table, a single object on a plain surface, anything symbolic or abstract. If a stranger could not tell what the story was from the picture alone, rewrite it.\n' +
-'- The COVER especially: it has to stop a thumb mid-scroll. Make it the single most arresting, most literal image in the whole story — the thing itself, close, in motion, dramatically lit.\n' +
+'- The COVER especially: it has to stop a thumb mid-scroll. Make it the single most arresting, most literal image in the whole story — the thing itself, close, at the peak of the action, dramatically lit. Ask yourself whether it could be a stock photograph; if it could, it is wrong.\n' +
 'Style is '+(p.imagery||'archival black and white photograph')+', so describe something a camera of that era could plausibly have captured.\n\n' +
 'CAPTION for Instagram:\n' +
 '- Exactly three paragraphs separated by blank lines. First paragraph opens with the hook and the core fact. Second gives the detail and context. Third closes with the aftermath or significance, then invites a reply in one short sentence.\n' +

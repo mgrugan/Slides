@@ -80,7 +80,10 @@ const fail = [];
 for(const [k,v] of Object.entries(brief)) if(!v) fail.push('writer brief: '+k);
 for(const [k,v] of Object.entries(prompts)) if(!v) fail.push('image prompt: '+k);
 if(!refresh.picksUpSubjectContext) fail.push('existing projects do not pick up the new brief');
-if(refresh.version !== 3) fail.push('version not bumped to 3');
+/* A version bump is what makes a saved project pick up a changed image brief, so what
+   matters is that it is AT LEAST the version this test was written against — pinning it
+   exactly turns every later change to the brief into a failure here. */
+if(!(refresh.version >= 3)) fail.push('version not bumped past 3, so saved projects keep the old image brief');
 if(!refresh.editKept) fail.push('a hand edit was clobbered');
 
 console.log(JSON.stringify({brief, prompts, refresh, errs}, null, 1));

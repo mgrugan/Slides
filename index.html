@@ -1541,7 +1541,7 @@ const FULL_BLEED_CLAUSE = 'The photograph fills the entire frame edge to edge. N
 /* Bumped by hand whenever something ships. It is shown in the header and logged on
    load, so a cached copy of this file can be told from the current one without reading
    the source — the whole app is one file, and a stale one looks completely normal. */
-const BUILD = '2026-09-03 · per-deck styles';
+const BUILD = '2026-09-04 · full runs';
 
 /* ============================ state ============================ */
 const S = {
@@ -5737,10 +5737,21 @@ function renderLedger(){
    when a round genuinely brings nothing new. */
 async function pickSubjects(cat, seed, n){
   const out = [], seen = new Set();
+  /* Where a run loses carousels, counted rather than guessed at. A short run used to
+     report only the total, which says nothing about whether the model returned too few,
+     the ledger rejected them, or the model repeated itself — and those three want
+     completely different fixes. */
+  const lost = {returned:0, covered:0, repeated:0};
   let dry = 0;
-  for(let round = 0; out.length < n && round < 5 && dry < 2; round++){
+  /* Eight rounds and three dry ones before giving up. It used to be five and two, which
+     was enough while the brief accepted almost any subject; against a brief that sets a
+     real bar the early rounds come back thin and a run for twenty would stop at twelve. */
+  for(let round = 0; out.length < n && round < 8 && dry < 3; round++){
     const need = n - out.length;
-    const ask = Math.min(30, need + Math.ceil(need * 0.6) + 2);   // overshoot: some will collide
+    /* Overshoot, and overshoot harder each time a round comes back with nothing usable:
+       a dry round means this category is crowded, and asking for the same number again
+       gets the same answer. */
+    const ask = Math.min(40, need + Math.ceil(need * 0.6) + 2 + dry * need);
     const recent = LEDGER.slice(-200).map(e=>e.subject).concat(out.map(o=>o.subject));
     const sys =
 'Pick '+ask+' subjects for short documentary-style fact carousels.\n\n' +
@@ -5758,6 +5769,7 @@ async function pickSubjects(cat, seed, n){
 '- Something a reader has already seen ten times. Titanic, Chernobyl, Area 51, the Bermuda Triangle and their like are only allowed if the specific claim is one almost nobody knows.\n' +
 '- Anything where the astonishing part is a big number with nothing to picture behind it.\n' +
 '\nRules:\n' +
+'- RETURN ALL '+ask+'. The bar above is for choosing WHICH subjects, not for returning fewer — there are far more than '+ask+' stories in the world that clear it, and a short list is a failure of searching rather than a sign of standards. Keep going until you have '+ask+'.\n' +
 '- Every subject must be a real, well-documented person, event, programme or phenomenon that a reader can verify.\n' +
 '- The "claim" is the COVER HEADLINE, not a description of the topic. Written the way it would be set in caps across the cover: leading with the most concrete impossible-sounding thing in it, and true read on its own by somebody who never swipes.\n' +
 '- Vary era, country and type. No two from the same event or the same person, and not five from the same decade.\n' +
@@ -5775,12 +5787,14 @@ async function pickSubjects(cat, seed, n){
       break;
     }
     let added = 0;
+    lost.returned += arr.length;
     for(const o of arr){
       const k = ledgerKey(o.subject);
       // the same identity check as the ledger, so a run cannot hand itself two
       // spellings of one story either
-      if(!k || seen.has(k) || ledgerHas(o.subject)) continue;
-      if(out.some(prev => sameSubject(prev.subject, o.subject))) continue;
+      if(!k || seen.has(k)){ lost.repeated++; continue; }
+      if(ledgerHas(o.subject)){ lost.covered++; continue; }
+      if(out.some(prev => sameSubject(prev.subject, o.subject))){ lost.repeated++; continue; }
       seen.add(k); out.push(o); added++;
       if(out.length >= n) break;
     }
@@ -5788,9 +5802,30 @@ async function pickSubjects(cat, seed, n){
     if(out.length < n) $('factStatus').textContent = 'picking subjects… ' + out.length + ' of ' + n;
   }
   if(out.length < n)
-    log('asked for '+n+' subjects and found '+out.length+' fresh ones — the ledger may be crowding out this category. '+
-        'Try a different category, a FOCUS, or clear some covered subjects.', 'w');
+    log('asked for '+n+' carousels and got '+out.length+'. '+shortfallLine(n, out.length, lost), 'w');
   return out.slice(0, n);
+}
+
+/* A short run, explained. Which of the three causes it was decides what to do about it,
+   and a bare "found 12 of 20" tells you none of them: a model that returned 40 ideas of
+   which 28 were already covered is a full ledger, a model that returned 14 in total is a
+   brief it is struggling with, and a model returning the same five stories over and over
+   is a category that needs a focus. */
+function shortfallLine(want, got, lost){
+  const parts = [lost.returned + ' came back'];
+  if(lost.covered)  parts.push(lost.covered + ' already covered');
+  if(lost.repeated) parts.push(lost.repeated + ' repeats of each other');
+  /* Which cause dominates, not which number is biggest in isolation. Comparing the
+     total returned against the target got this backwards in the case that matters most:
+     a model handing back plenty of ideas that the ledger then rejected reads as "too few
+     returned", which points at the opposite fix. */
+  const rejected = lost.covered + lost.repeated;
+  const why = rejected >= Math.max(1, lost.returned * 0.4)
+    ? (lost.covered >= lost.repeated
+        ? 'The ledger is crowding this category out — try a FOCUS, or clear some covered subjects.'
+        : 'The model keeps circling the same stories — a FOCUS will move it somewhere new.')
+    : 'The model is returning too few to choose from — try a FOCUS to give it somewhere to look.';
+  return parts.join(' · ') + '. ' + why;
 }
 
 /* Some categories are not one story per carousel but one counting hook per carousel —
@@ -6410,21 +6445,36 @@ async function scanNewsDay(cat, day, want, avoid){
 async function scanNews(cat, n, days, from){
   const seen = LEDGER.filter(e => e.cat === cat).slice(-120).map(e => e.subject);
   const list = scanDays(days || 3, from);
-  const per = Math.ceil(n / list.length) + 1;
   const out = [];
-  for(const day of list){
-    if(out.length >= n) break;
-    let got = [];
-    try{ got = await scanNewsDay(cat, day, per, seen.concat(out.map(o=>o.subject))); }
-    catch(e){ log('news scan for ' + day + ' failed: ' + apiError(e), 'w'); continue; }
-    for(const idea of got){
+  const lost = {returned:0, covered:0, repeated:0};
+  /* One sweep of the days used to be the whole scan, so a day that came back with two
+     stories instead of four simply cost the run two carousels and nothing went back for
+     them. It now sweeps again, asking for what is still missing and carrying everything
+     already found as the do-not-repeat list, until the run is full or a whole pass adds
+     nothing. */
+  for(let pass = 0; pass < 3 && out.length < n; pass++){
+    const before = out.length;
+    const per = Math.ceil((n - out.length) / list.length) + 1 + pass;
+    for(const day of list){
       if(out.length >= n) break;
-      if(ledgerHas(idea.subject) || out.some(o => sameSubject(o.subject, idea.subject))) continue;
-      out.push(idea);
+      let got = [];
+      try{ got = await scanNewsDay(cat, day, per, seen.concat(out.map(o=>o.subject))); }
+      catch(e){ log('news scan for ' + day + ' failed: ' + apiError(e), 'w'); continue; }
+      lost.returned += got.length;
+      for(const idea of got){
+        if(out.length >= n) break;
+        if(ledgerHas(idea.subject)){ lost.covered++; continue; }
+        if(out.some(o => sameSubject(o.subject, idea.subject))){ lost.repeated++; continue; }
+        out.push(idea);
+      }
+      log('scanned ' + day + ' — ' + got.length + ' found, ' + out.length + '/' + n + ' kept', 'o');
     }
-    log('scanned ' + day + ' — ' + got.length + ' found, ' + out.length + '/' + n + ' kept', 'o');
+    if(out.length === before) break;                 // a whole pass added nothing
   }
   if(!out.length) log('the news scan found nothing usable — check the key has Search grounding enabled', 'w');
+  else if(out.length < n)
+    log('asked for '+n+' carousels and the scan found '+out.length+'. '+shortfallLine(n, out.length, lost) +
+        ' A news page is also limited by how many big stories a week actually contains — widening the day range in the category helps more than another pass.', 'w');
   return out;
 }
 
@@ -6451,9 +6501,10 @@ async function pickAngleIdeas(cat, seed, angles){
   await runQueue(Object.values(byKey), writeConc(), async ({angle, want}) => {
     const got = [];
     let dry = 0;
-    for(let round = 0; got.length < want && round < 4 && dry < 2; round++){
+    // as in pickSubjects: keep going, and ask for more each time a round comes back dry
+    for(let round = 0; got.length < want && round < 7 && dry < 3; round++){
       const need = want - got.length;
-      const ask = Math.min(20, need + Math.ceil(need*0.6) + 2);
+      const ask = Math.min(30, need + Math.ceil(need*0.6) + 2 + dry * need);
       // what this angle has already covered, then everything else the account has —
       // a break-up story must not repeat a saga carousel either
       const mine = LEDGER.filter(e => e.cat === cat && e.angle === angle.key).slice(-80).map(e=>e.subject);

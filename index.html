@@ -1502,6 +1502,77 @@ const PRESETS = [
     library_collection:'Obsession',
     structure:'cover states the claim, then each slide is one step of the method with a short title over it',
     voice:'plain and concrete — short sentences, real numbers, the method does the work'
+  },
+
+  /* ---------------------------------------------------------------------------
+     Best Forces. The plain facts layout, field for field — it is the same page the
+     history and conspiracy accounts are set in — with one thing changed, which is the
+     imagery. The facts brief asks for an ARCHIVAL photograph: film grain, aged emulsion,
+     period clothing. Point that at a war being fought this week and every frame comes
+     back looking like 1944, which is both wrong and, on a page about current events,
+     actively misleading. So the pictures here are briefed as contemporary press
+     photography instead.
+
+     And they are briefed as ILLUSTRATION rather than evidence. A photorealistic image
+     of a strike that actually happened, posted in a news carousel, is a fabricated
+     record of a real event — it is the specific thing that poisons reporting on a live
+     conflict, and it is also what gets an account labelled as disinformation and pulled.
+     So: hardware, terrain, maps and equipment; never a named place being hit, never a
+     casualty, never an identifiable face. The rule is in the image brief, in the deck
+     brief, and tested, because it is the one that matters most here.
+     -------------------------------------------------------------------------- */
+  {
+    name:'Best Forces', builtin:true,
+    aspect_ratio:'4:5',
+    imagery:'contemporary-press-photograph',
+    v: 1,
+    image_prompt_suffix:'contemporary press photograph, shot on a modern digital body with a long lens, natural '+
+      'daylight, documentary framing, high detail, restrained colour. Present day — modern equipment and modern '+
+      'surroundings, nothing that reads as archival or historical. '+
+      'ILLUSTRATIVE, NOT DOCUMENTARY: this stands beside a news story, it does not depict it. No identifiable '+
+      'faces, no casualties, no injuries, no blood, no bodies, no destroyed homes, no distressed civilians, and '+
+      'nothing that could be mistaken for footage of a specific real incident.',
+    image_prompt_suffix_colour:'contemporary press photograph, shot on a modern digital body with a long lens, '+
+      'natural daylight, documentary framing, high detail, restrained colour. Present day — modern equipment and '+
+      'modern surroundings, nothing that reads as archival or historical. '+
+      'ILLUSTRATIVE, NOT DOCUMENTARY: this stands beside a news story, it does not depict it. No identifiable '+
+      'faces, no casualties, no injuries, no blood, no bodies, no destroyed homes, no distressed civilians, and '+
+      'nothing that could be mistaken for footage of a specific real incident.',
+    /* The cover, art-directed apart from the slides, the same mechanism the other pages
+       use — and held to the same limit, because the cover is the frame most likely to be
+       screenshotted on its own. */
+    hook_image_suffix:'THIS IS THE COVER FRAME AND IT HAS ONE JOB: stop a thumb. One subject, large and clean '+
+      'in frame, shot from low or from distance so it reads as scale: an aircraft against open sky, a vessel on '+
+      'open water, a vehicle on a road, a radar array, a runway at dawn. Hard directional light, deep sky, sharp '+
+      'detail, nothing cluttering the background. Still no people, no place that can be identified, and no '+
+      'suggestion of an event having just happened here. Keep the lower third simple and dark, because the '+
+      'headline goes there.',
+    colour_suffix:'Natural daylight colour — restrained and true, not graded or stylised.',
+    mono_suffix:'Black and white only, deep contrast, no colour anywhere in the frame.',
+    pop_suffix:'{pop} is the single most saturated thing in the frame and the eye lands on it first.',
+    caption_treatment:'documentary',
+    shot_ladder:true, subject_context:false,
+    font_family:'Anton', font_weight:400, body_font_family:'Space Mono', body_weight:400, italic:false,
+    uppercase:true, letter_spacing_em:-0.005,
+    text_color:'#FFFFFF', stroke_color:'#000000', stroke_width:0, text_shadow:0.35, shadow_color:'#000000',
+    label_bg:'#FFFFFF',
+    scrim_pct:0.52, scrim_alpha:0.94,
+    bottom_pad_pct:0.055,
+    title_size_pct:0.072, body_size_pct:0.0225, title_gap_em:1.0, title_line_em:0.92,
+    max_width_pct:0.90, body_width_pct:0.86,
+    divider:true, portrait_inset:true, auto_inset:true,
+    logo_scale_pct:0.075, logo_on_all:false,
+    text_block_top_pct:0.70, hook_top_pct:0.70,
+    auto_number:false,
+    text_align:'center',
+    seamless:false,
+    wordmark:'', accent_color:'', alt_align:false, keep_breaks:false,
+    glow_pct:0, badge_fixed:false, badge_from_angle:false, handle_text:'', handle_on_all:false,
+    cast_named_first:false,
+    stat_boxes:false,
+    library_collection:'Best Forces',
+    structure:'cover states what happened, then each slide is one verified point with a short title over it',
+    voice:'flat and sourced — short declarative sentences, every claim attributed, no adjectives'
   }
 ];
 
@@ -1538,7 +1609,7 @@ const FULL_BLEED_CLAUSE = 'The photograph fills the entire frame edge to edge. N
 /* Bumped by hand whenever something ships. It is shown in the header and logged on
    load, so a cached copy of this file can be told from the current one without reading
    the source — the whole app is one file, and a stale one looks completely normal. */
-const BUILD = '2026-09-04 · obsession rebuilt';
+const BUILD = '2026-09-04 · bestforces';
 
 /* ============================ state ============================ */
 const S = {
@@ -5602,6 +5673,49 @@ const FACT_DEFAULTS = {
     style: 'Trendpop',
     collection: 'Trendpop',
     tone: 'colour'
+  },
+
+  bestforces: {
+    prompt: 'Defence and current-conflict news, for readers who follow this closely enough to notice a wrong '+
+      'designation. What actually happened this week in the wars being fought now: strikes and operations as '+
+      'reported by named sources, deliveries and aid packages, procurement and production, air-defence and '+
+      'drone developments, alliance decisions, negotiations and ceasefires. '+
+      'Sourced or not posted. Every claim names who reported it, a claim by a party to a conflict is reported '+
+      'as that party\'s claim rather than as fact, and where the two sides disagree the post says so instead of '+
+      'choosing. Casualty figures are only ever given with their source and their date, and never as a headline. '+
+      'Flat and factual: equipment is described rather than admired, an attack is reported rather than '+
+      'celebrated, and no side is barracked for. No speculation about intentions, no forecasting, no advocacy, '+
+      'and nothing operational — no live unit positions, nothing that reads as targeting. '+
+      'Nothing graphic, no casualties or aftermath in the pictures, and no individual victims.',
+    mode: 'angles',
+    angles: 'bestforces',
+    news: true,
+    /* Three days. This is the one page here where a week-old story is not news, and
+       where a story that moved on yesterday can make today's post wrong. */
+    news_days: 3,
+    fixed_len: true,
+    /* The default scan is hunting warm human-interest with a person at its centre and
+       rules out conflict outright, which is the entire subject of this page. This one
+       looks for developments of record, and it is stricter than the default about what
+       counts as one rather than looser. */
+    scan: {
+      lead:'a defence and current-conflict news account',
+      claim:'the cover headline, 6 to 12 words, flat and factual, leading with what happened and where',
+      what:
+'- A DEVELOPMENT OF RECORD in a conflict or in defence, reported in the last few days by a named source a reader could check: a wire service, a national broadcaster, a defence ministry, a manufacturer, an alliance statement.\n' +
+'- The centre of it can be a country, an alliance, a manufacturer or a system. It does not need a person and mostly should not have one.\n' +
+'- Concrete and checkable: an announcement, a delivery, a signed contract, a vote, an exercise, a deployment, a published figure, a negotiation, a ceasefire.\n' +
+'- Say who reported it in "source", always. A story without a named source is not a story here.\n' +
+'- Where the parties give conflicting accounts, that conflict is itself the story — say so in the claim rather than picking one.',
+      not:
+'- Anything the search does not support, and anything carried only by social media, an anonymous briefing or a single unverifiable channel. On a live conflict an invented story is not a mistake, it is disinformation — return fewer rather than filling the list.\n' +
+'- Casualty counts as the subject of a post, individual victims, hostages, prisoners, missing persons, anything graphic, and anything about a named private individual caught up in it.\n' +
+'- Domestic party politics and elections, opinion and commentary, think-tank forecasts, and anything whose substance is a prediction.\n' +
+'- Atrocity allegations that have not been established by a court or a formal investigation, and anything that reads as recruitment, advocacy or targeting.'
+    },
+    style: 'Best Forces',
+    collection: 'Best Forces',
+    tone: 'colour'
   }
 };
 /* Category values were plain prompt strings and most still are. A few carry a little
@@ -6148,6 +6262,74 @@ const ANGLE_SETS = {
      swipe:'The editing takes longer than the playing.'}
   ],
 
+  /* Best Forces. A defence-news page: the scan finds what happened this week and the
+     rotation decides what KIND of post to make of it. The shapes matter more here than
+     on most pages, because "what happened" every single day is a wire feed rather than
+     an account — the same event told as the hardware, as the map, as the numbers and as
+     what to watch is four posts, and only the first of them is news everyone else has. */
+  bestforces: [
+    {key:'whathappened', kind:'story', badge:'WHAT HAPPENED',
+     label:'the event, in order, sourced',
+     brief:'One development, reconstructed in order: what was announced, moved, struck or agreed, when, and who '+
+       'reported it. Each point carries its source ON the slide — the ministry, the agency, the wire. Where two '+
+       'sides give different accounts, give both and say they differ rather than picking one. Anything not '+
+       'confirmed by a source the reader could check is labelled unconfirmed or left out.',
+     cover:'States what happened and where, plainly, without adjectives.',
+     close:'The last slide is what is confirmed and what is still contested.',
+     swipe:'Both sides tell it differently.'},
+
+    {key:'thehardware', kind:'story', badge:'THE HARDWARE',
+     label:'the system at the centre of it, explained',
+     brief:'The aircraft, vessel, missile, drone or air-defence system the story turns on, explained for somebody '+
+       'who does not follow this. What it is, what it actually does, its published range or role, who makes it, '+
+       'who operates it, and why it matters in this particular case. Manufacturer and open-source figures only, '+
+       'and say which. Never speculate about capabilities that are not published.',
+     cover:'Names the system and the one thing about it that decides the story.',
+     close:'The last slide is what it cannot do, which is usually the more useful half.',
+     swipe:'Its range is the whole story.'},
+
+    {key:'themap', kind:'story', badge:'THE MAP',
+     label:'where this is, and why the ground matters',
+     brief:'The geography behind a development: the corridor, the strait, the border, the supply route, the '+
+       'distance between two places the reader has heard of. Why this ground rather than any other — what it '+
+       'connects, what it blocks, how far it is from what. Physical facts and published positions only; never '+
+       'assert a front line or a unit\'s location beyond what has been reported.',
+     cover:'Names the place and the distance or chokepoint that explains it.',
+     close:'The last slide is what changes if this ground changes hands.',
+     swipe:'It is closer than most people think.'},
+
+    {key:'thenumbers', kind:'story', badge:'THE NUMBERS',
+     label:'the figures, and who is claiming them',
+     brief:'The published figures around a story — budgets, deliveries, unit counts, production rates, aid '+
+       'packages — each one attributed to whoever published it. This is the angle where being wrong is most '+
+       'visible, so no figure appears without its source, and a claim by a party to the conflict is reported as '+
+       'that party\'s claim, never as an established fact. Casualty figures are only ever given with their '+
+       'source and their date, and never as a headline.',
+     cover:'Leads with the figure and who published it.',
+     close:'The last slide is the number nobody has confirmed.',
+     swipe:'Only one side has published a figure.'},
+
+    {key:'whoisinvolved', kind:'story', badge:'WHO IS INVOLVED',
+     label:'the countries, alliances and industry behind it',
+     brief:'Who is actually party to this — states, alliances, manufacturers, the countries paying for it — and '+
+       'what each one has committed on the record. Treaties, votes, signed contracts and official statements '+
+       'rather than briefings and anonymous sources. Never characterise a country\'s intentions; report what it '+
+       'has said and done.',
+     cover:'Names the parties and what has actually been committed.',
+     close:'The last slide is the party with the most at stake and the least said.',
+     swipe:'One signatory has said nothing.'},
+
+    {key:'whatnext', kind:'story', badge:'WHAT TO WATCH',
+     label:'the things that would tell you it is changing',
+     brief:'Not a prediction: a list of observable things that would signal a shift — a scheduled vote, a '+
+       'delivery date, an exercise already announced, a deadline in an agreement. Each one dated where it has a '+
+       'date. Written so a reader could check them themselves next month. Never forecast an outcome, never put a '+
+       'probability on anything, and never suggest what anybody should do.',
+     cover:'Names the date or the decision the next move hangs on.',
+     close:'The last slide is the one with a date already on the calendar.',
+     swipe:'There is a date already set.'}
+  ],
+
   /* The @fun rotation. Every post is something the internet is currently doing, but a
      page that only ever ran "creator blows up" would be one post repeated — so the
      rotation varies the SHAPE while the news scan varies the subject. Each angle
@@ -6412,7 +6594,7 @@ const ANGLE_SETS = {
    page's, which is the general one. */
 const ANGLE_PROMPTS = {thrifting: (c,d)=>thriftDeckPrompt(c,d), idisney: (c,d)=>disneyDeckPrompt(c,d),
                        obsession: (c,d)=>obsessionDeckPrompt(c,d), fun: (c,d)=>funDeckPrompt(c,d),
-                       trendpop: (c,d)=>trendDeckPrompt(c,d)};
+                       trendpop: (c,d)=>trendDeckPrompt(c,d), bestforces: (c,d)=>forcesDeckPrompt(c,d)};
 const angleSet = name => ANGLE_SETS[name] || [];
 const angleIn = (name, key) => angleSet(name).find(a => a.key === key) || null;
 /* The word in the flag on the cover. Most styles carry a fixed one; a page whose posts
@@ -7001,6 +7183,78 @@ function obsessionDeckPrompt(cat, deck){
 '{"subject":"short canonical name for this post","swipe":"...",' +
 '"slides":[{"kind":"hook","title":"the headline","body":"","scene":"..."},' +
 '{"kind":"slide","title":"SHORT TITLE","body":"two or three short sentences","scene":"..."}],' +
+'"caption":"para1\\n\\npara2\\n\\npara3\\n\\n#niche #mid #broad"}'
+  );
+}
+
+/* Best Forces. The plain facts shape — a short title over a short paragraph — written
+   from a grounded scan of what happened this week.
+
+   Two things here are the whole job and neither is about writing.
+
+   SOURCING. On a live conflict the same event has two official accounts and a dozen
+   unverified ones, and a page that flattens that is not reporting, it is picking a
+   side. So every claim carries who said it, a belligerent's claim is reported as that
+   belligerent's claim, and where accounts differ the post says they differ instead of
+   choosing. Casualty figures never lead a post and never appear without a source.
+
+   PICTURES. Everything here is generated, so a photorealistic frame of a real strike is
+   a fabricated record of a real event — the exact thing that poisons reporting on a live
+   war, and the fastest way for an account to be labelled disinformation. The frames are
+   therefore illustrative by construction: hardware, terrain, equipment, maps. No people,
+   no aftermath, no identifiable place. That is not squeamishness about the subject; it
+   is the line between a defence page and a fake-footage page. */
+function forcesDeckPrompt(cat, deck){
+  const p = S.profile;
+  const angle = angleIn(catCfg(cat).angles, deck.angle) || {label:'', brief:'', cover:'', close:''};
+  const when = deck.day ? ' It was reported around ' + prettyDay(deck.day) + '.' : '';
+  return (
+'Write a ' + deck.n + '-slide carousel for a defence and current-conflict news account.\n\n' +
+'THE STORY: ' + deck.subject + '\n' +
+'THE COVER HEADLINE, verbatim or lightly tightened: "' + deck.hook + '"\n' +
+(deck.org ? 'PARTIES: ' + deck.org + '.' + when + '\n' : '') +
+(deck.source ? 'SOURCE: ' + deck.source + '\n' : (deck.day ? 'REPORTED:' + when + '\n' : '')) + '\n' +
+'THE ACCOUNT:\n' + catPrompt(cat) + '\n\n' +
+'THIS POST\'S ANGLE — ' + angle.label.toUpperCase() + ':\n' + angle.brief + '\n\n' +
+
+'HOW THESE SLIDES ARE BUILT — the plain layout: a short title over a short paragraph.\n' +
+'- Slide 1 is the cover: a headline of 6 to 12 words and nothing else. Leave "body" empty on it.\n' +
+'- Every slide after it has a SHORT TITLE of 2 to 5 words in caps, and a "body" of 2 to 3 short declarative sentences, about 40 words at most.\n' +
+'- One point per slide, in order. ' + angle.cover + '\n' +
+'- ' + angle.close + '\n' +
+'- Flat and factual. No adjectives doing the work of a fact, no drama, no rhetorical questions, no emoji, no exclamation marks.\n\n' +
+
+'SOURCING — this is the product, and it is what separates this page from a rumour account:\n' +
+'- EVERY factual claim names who reported it, on the slide: the ministry, the agency, the wire service, the manufacturer. "According to Reuters", "the defence ministry said", "in the manufacturer\'s published figures".\n' +
+'- A claim made by a party to the conflict is reported as that party\'s claim and never as established fact. Say "X said" and not "X did", unless it is confirmed independently and you say by whom.\n' +
+'- Where the two sides give different accounts, give both and say plainly that they differ. Never resolve it for the reader.\n' +
+'- Anything not confirmed is labelled unconfirmed on the slide it appears on, or it is left out.\n' +
+'- Never invent or round a figure, a date, a unit, a designation or a place name. If you are unsure, write the sentence without it.\n' +
+'- Casualty figures never open a post, never appear without their source and date, and are never used for effect.\n' +
+'- Never speculate about intentions, never forecast an outcome, never put a probability on anything, and never suggest what any country or reader should do.\n' +
+'- Nothing operational: no live positions of units, no unpublished capabilities, nothing that reads as targeting information.\n' +
+'- No glorification and no cheering. Equipment is described, not admired; an attack is reported, not celebrated.\n\n' +
+
+'THE SWIPE LINE — return it as "swipe": one short line under 12 words, the reason to keep swiping. Factual, not teasing.\n\n' +
+
+'IMAGES — read this twice, because it is the part that can do real damage.\n' +
+'- The pictures here are ILLUSTRATIVE. They stand beside the story; they never depict it. Everything on this page is generated, so a realistic frame of an event that actually happened is a fabricated record of that event.\n' +
+'- So "scene" describes ONE OF: a type of aircraft, vessel, vehicle, drone, launcher or radar; a factory or dockyard; a runway, port, road or open terrain; equipment being loaded or moved; a printed map or chart with no legible text on it.\n' +
+'- NEVER: a named real place being struck or burning, an aftermath, a casualty, an injury, blood, a body, a damaged home, a distressed civilian, a crowd, a funeral, a prisoner, a child.\n' +
+'- NEVER a recognisable person, and never a real named individual. No faces in focus at all — if a figure appears it is at distance, in silhouette, or from behind, and it is incidental to the frame.\n' +
+'- Never ask for a national flag, a unit patch, a roundel, a serial number, an insignia or any lettering. Those are what make a generated frame read as documentation of a specific real unit on a specific real day.\n' +
+'- Present day. Modern equipment, modern surroundings, nothing that reads as archival.\n' +
+'- Vary it slide to slide — the air, the sea, the ground, the factory, the map — so the set does not read as one aircraft photographed five times.\n' +
+'Style is ' + (p.imagery || 'contemporary press photograph') + '.\n\n' +
+
+'CAPTION for Instagram: three short paragraphs separated by blank lines, then one line of 3 to 5 hashtags.\n' +
+'- The first paragraph carries the sourcing: who reported this and when.\n' +
+(deck.source ? '- Credit ' + deck.source + '.\n' : '') + '\n' +
+
+'Return ONLY JSON:\n' +
+'{"subject":"short canonical name for this post","swipe":"...",' +
+'"slides":[{"kind":"hook","title":"the headline","body":"","scene":"..."},' +
+'{"kind":"slide","title":"SHORT TITLE","body":"two or three short sourced sentences","scene":"..."}],' +
 '"caption":"para1\\n\\npara2\\n\\npara3\\n\\n#niche #mid #broad"}'
   );
 }

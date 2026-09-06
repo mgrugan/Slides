@@ -31,17 +31,24 @@ const r = await p.evaluate(async ()=>{
   await fontReady(S.profile);
 
   // --- switched on, and only here
-  out.obsessionIsSeamless = S.profile.seamless === true && S.profile.seam_span === 3;
+  out.obsessionIsSeamless = S.profile.seamless === true && S.profile.seam_span === 5;
   out.siblingsAreNot = ['Thrifting','Fun','Trendpop','iDisney']
     .every(n => !PRESETS[PRESETS.findIndex(x=>x.name === n)].seamless);
   out.versionBumped = PRESETS[oi].v >= 2 && LOOK_KEYS.includes('seamless') && LOOK_KEYS.includes('seam_span');
 
-  // --- the runs
-  const runOf = n => seamRuns(Array.from({length:n}, (_,i)=>({i})), 3).map(x=>x.length).join(',');
+  // --- the runs: as few as the span allows, then as even as possible across them
+  const runOf = (n, sp) => seamRuns(Array.from({length:n}, (_,i)=>({i})), sp || 3).map(x=>x.length).join(',');
   out.runsOfThree = runOf(6) === '3,3' && runOf(3) === '3';
   out.aTrailingPairIsItsOwnRun = runOf(5) === '3,2';
-  out.aTrailingSingleJoinsTheRunBefore = runOf(7) === '3,4' && runOf(4) === '4';
+  /* Never a stranded single, and never an oversized panel to avoid one: seven at span
+     three is 3,2,2 rather than 3,3,1 or 3,4. */
+  out.noStrandedSingleAndNoOversizedRun = runOf(7) === '3,2,2' && runOf(4) === '2,2' && runOf(8) === '3,3,2';
   out.oneSlideIsStillOneRun = runOf(1) === '1';
+  /* And at this account's span a short deck is ONE run — which is the point of raising
+     it, since four or five slides with a join in the middle is not a seamless carousel. */
+  out.aShortDeckIsOneRunHere = runOf(4, 5) === '4' && runOf(5, 5) === '5';
+  out.andASixSlideDeckSplitsEvenly = runOf(6, 5) === '3,3';
+  out.spanIsCappedAtFive = seamSpan({seam_span:9}) === 5 && seamSpan({seam_span:1}) === 2;
 
   const mkDeck = (n, prof) => {
     const deck = {id:'d', cat:'Obsession', kind:'story', tone:'colour', slides:[]};
@@ -50,10 +57,10 @@ const r = await p.evaluate(async ()=>{
     markSeams(deck, prof || S.profile);
     return deck;
   };
-  const deck = mkDeck(6);
-  out.everySlideIsStamped = deck.slides.every(s => s.seam && s.seam.n === 3) &&
+  const deck = mkDeck(5);
+  out.everySlideIsStamped = deck.slides.every(s => s.seam && s.seam.n === 5) &&
                             deck.slides.map(s=>s.seam.run + ':' + s.seam.i).join(' ') ===
-                            '0:0 0:1 0:2 1:0 1:1 1:2';
+                            '0:0 0:1 0:2 0:3 0:4';
   out.aPlainStyleGetsNoSeams = (()=>{
     const fi = PRESETS.findIndex(x=>x.name === 'Fun');
     return mkDeck(6, PRESETS[fi]).slides.every(s => !s.seam);
@@ -63,7 +70,7 @@ const r = await p.evaluate(async ()=>{
     markSeams(d, Object.assign({}, S.profile, {seamless:false}));
     return d.slides.every(s => !s.seam);
   })();
-  out.runIsFoundFromAnySlideInIt = seamRunOf(deck.slides[4]).map(s=>s.id).join(',') === 's3,s4,s5';
+  out.runIsFoundFromAnySlideInIt = seamRunOf(deck.slides[3]).map(s=>s.id).join(',') === 's0,s1,s2,s3,s4';
 
   // --- the shape to generate at. Narrower than the strip, never wider.
   out.threeSlidesAsk21by9 = seamAspect(3, S.profile) === '21:9';
@@ -129,15 +136,21 @@ const r = await p.evaluate(async ()=>{
 
   // --- planning: one request per run, and never the library
   out.onlyTheLeadIsAskedFor = (()=>{
-    const d = mkDeck(6);
+    // five slides, one run, one request — which is also five sixths of the image bill
+    const d = mkDeck(5);
     const {fresh, reused} = planImages(d.slides.slice(), 'all');
-    return fresh.length === 2 && fresh[0].id === 's0' && fresh[1].id === 's3' && reused.length === 0;
+    return fresh.length === 1 && fresh[0].id === 's0' && reused.length === 0;
   })();
   out.aPlainDeckStillPlansPerSlide = (()=>{
     const fi = PRESETS.findIndex(x=>x.name === 'Fun');
     const d = mkDeck(6, PRESETS[fi]);
     const {fresh, reused} = planImages(d.slides.slice(), 'off');
     return fresh.length === 6 && reused.length === 0;
+  })();
+  out.aTwoRunDeckAsksTwice = (()=>{
+    const d = mkDeck(6);                     // 3,3 at this span
+    const {fresh} = planImages(d.slides.slice(), 'all');
+    return fresh.length === 2 && fresh[0].id === 's0' && fresh[1].id === 's3';
   })();
 
   // --- one generation fills the whole run
@@ -151,7 +164,7 @@ const r = await p.evaluate(async ()=>{
     await genImage(d.slides[1]);            // asked from the MIDDLE slide, on purpose
     window.callModel = keep;
     out.askedOnce = asked === 1;
-    out.panoramaAspectWasSent = sentAspect === '21:9';
+    out.panoramaAspectWasSent = sentAspect === '21:9';   // widest offered, and narrower than the strip
     out.panoramaAsksForMorePixels = sentSize === '2K';
     out.thePromptWasThePanorama = /ONE SINGLE CONTINUOUS PHOTOGRAPH/.test(sentText);
     return d.slides.every(s => s.img === wide && s.status === 'done');
@@ -194,10 +207,10 @@ const r = await p.evaluate(async ()=>{
   })();
 
   // --- and the writer is told what a good scene now is
-  const dp = obsessionDeckPrompt('Obsession', {subject:'x', hook:'y', n:7, angle:'', person:'A B'});
-  out.briefExplainsTheOneFrame = /CUT FROM ONE WIDE PHOTOGRAPH, 3 SLIDES AT A TIME/.test(dp) &&
-                                 /same place, the same light, the same hour/.test(dp);
-  out.briefMovesTheCameraNotTheCity = /Move the subject through that place rather than moving them to another one/.test(dp);
+  const dp = obsessionDeckPrompt('Obsession', {subject:'x', hook:'y', n:5, angle:'pipeline'});
+  out.briefExplainsTheOneFrame = /CUT FROM ONE VERY WIDE RENDER, 5 SLIDES AT A TIME/.test(dp) &&
+                                 /one stretch of the city, one time of day, one light/.test(dp);
+  out.briefMovesTheCameraNotTheCity = /move ALONG the world rather than to another part of it/.test(dp);
   out.plainPagesGetNoSuchRider = !/CUT FROM ONE WIDE PHOTOGRAPH/.test(
     funDeckPrompt('fun', {subject:'x', hook:'y', n:6, angle:'blewup'}));
   return out;
@@ -206,14 +219,15 @@ await b.close();
 
 const want = {
   obsessionIsSeamless:true, siblingsAreNot:true, versionBumped:true,
-  runsOfThree:true, aTrailingPairIsItsOwnRun:true, aTrailingSingleJoinsTheRunBefore:true,
-  oneSlideIsStillOneRun:true,
+  runsOfThree:true, aTrailingPairIsItsOwnRun:true, noStrandedSingleAndNoOversizedRun:true,
+  oneSlideIsStillOneRun:true, aShortDeckIsOneRunHere:true, andASixSlideDeckSplitsEvenly:true,
+  spanIsCappedAtFive:true,
   everySlideIsStamped:true, aPlainStyleGetsNoSeams:true, turningItOffClearsOldSeams:true,
   runIsFoundFromAnySlideInIt:true,
   threeSlidesAsk21by9:true, twoSlidesAsk3by2:true, neverWiderThanTheStrip:true,
   panelsSplitTheImageEvenly:true, panelsRespectADetectedBorder:true, noSeamIsTheWholeImage:true,
   theJoinsAreInvisible:true, theJoinsAreMeasured:'0,0', thePanelsAreNotAllTheSame:true,
-  onlyTheLeadIsAskedFor:true, aPlainDeckStillPlansPerSlide:true,
+  onlyTheLeadIsAskedFor:true, aPlainDeckStillPlansPerSlide:true, aTwoRunDeckAsksTwice:true,
   oneImageFillsTheRun:true, askedOnce:true, panoramaAspectWasSent:true,
   panoramaAsksForMorePixels:true, thePromptWasThePanorama:true, aPlainSlideStillAsksForItself:true,
   panoInsistsOnOneFrame:true, panoBansTheCollage:true, panoPlacesEveryBeat:true,

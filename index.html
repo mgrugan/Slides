@@ -1441,70 +1441,67 @@ const PRESETS = [
   {
     name:'Obsession', builtin:true,
     aspect_ratio:'4:5',
-    imagery:'dramatic-editorial-portrait',
-    v: 2,
-    /* The thing the client liked about the draft: the picture runs across the swipe
-       instead of cutting. Three slides share one wide photograph and each draws its own
-       panel of it — see the note on seamRuns for why three and not the whole deck. */
-    seamless:true, seam_span:3,
-    image_prompt_suffix:'editorial portrait photograph, one person large in frame, hard directional light '+
-      'against a darker surround, rich saturated colour, shallow depth of field, shot like a magazine feature '+
-      'rather than a snapshot. Real skin with visible texture: pores, fine lines, uneven tone, stray hairs, a shine where skin actually shines, and the blemishes a real face has. Not retouched, not smoothed, not airbrushed — a photograph of a person, not a render.',
-    image_prompt_suffix_colour:'editorial portrait photograph, one person large in frame, hard directional '+
-      'light against a darker surround, rich saturated colour, shallow depth of field, shot like a magazine '+
-      'feature rather than a snapshot. Real skin with visible texture: pores, fine lines, uneven tone, stray hairs, a shine where skin actually shines, and the blemishes a real face has. Not retouched, not smoothed, not airbrushed — a photograph of a person, not a render.',
-    colour_suffix:'Rich saturated colour, strong highlights against a near-black surround.',
+    imagery:'video-game-render',
+    v: 3,
+    /* The one thing this page keeps from its first build: the picture runs across the
+       swipe instead of cutting. Everything else here is the plain facts layout, because
+       that is what the account went back to. Span five, so a four or five slide deck is
+       ONE photograph end to end rather than one with a join in it — see seamSpan for
+       what the extra panels cost. */
+    seamless:true, seam_span:5,
+    /* Not a photograph. These frames are the game, so they are briefed as a game: a
+       render rather than a camera, with the colour grade and the stylisation that comes
+       with one. Briefing it as a photograph is how you get a photograph of a television. */
+    image_prompt_suffix:'a frame of open-world video game footage rendered in a modern game engine — the look of '+
+      'Grand Theft Auto V. Sun-bleached Southern Californian city: palm-lined boulevards, downtown glass towers, '+
+      'ocean haze, muscle cars and supercars, dust and heat shimmer. Saturated warm colour grade with crushed '+
+      'shadows and a slight film grain over it, wide cinematic lens, third-person camera set behind and slightly '+
+      'above the action. Clean render — no interface, no minimap, no health bar, no on-screen text of any kind.',
+    image_prompt_suffix_colour:'a frame of open-world video game footage rendered in a modern game engine — the '+
+      'look of Grand Theft Auto V. Sun-bleached Southern Californian city: palm-lined boulevards, downtown glass '+
+      'towers, ocean haze, muscle cars and supercars, dust and heat shimmer. Saturated warm colour grade with '+
+      'crushed shadows and a slight film grain over it, wide cinematic lens, third-person camera set behind and '+
+      'slightly above the action. Clean render — no interface, no minimap, no health bar, no on-screen text.',
+    /* The cover, art-directed apart from the slides, the same mechanism the facts pages
+       and @trendpopzz use. On this account the cover is the frame that has to look like
+       somebody's best clip. */
+    hook_image_suffix:'THIS IS THE COVER FRAME AND IT HAS ONE JOB: stop a thumb. Make it the single most '+
+      'kinetic frame in the set — the moment a clip gets cut around. Something is moving fast and low in it: a '+
+      'car mid-drift with smoke off the rear tyres, a jump at its apex, a helicopter banking between towers, a '+
+      'chase at speed. Hard low sun or neon against a dark sky, deep saturated colour, motion blur in the '+
+      'background and the subject sharp. Not a parked car, not an empty street, not a character standing still. '+
+      'Keep the lower third simple and dark, because the headline goes there.',
+    colour_suffix:'Saturated warm colour — sunset oranges, sky blues, neon pinks and greens against dark asphalt.',
     mono_suffix:'Black and white only, deep contrast, no colour anywhere in the frame.',
+    pop_suffix:'{pop} is the single most saturated thing in the frame and the eye lands on it first.',
     caption_treatment:'documentary',
-    portrait_inset:true, auto_inset:true,        // the circle top right of the cover
-    divider:false, brand_bar:false, cover_swipe:false,
-    logo_on_all:false, shot_ladder:false, subject_context:false,
-    font_family:'Anton', font_weight:400, font_fallback:'Archivo',
-    /* The slides are paragraphs, so they are set in the text face rather than the
-       poster one, in sentence case — a wall of Anton caps at this length is unreadable. */
-    body_font_family:'Archivo', body_weight:800, body_fallback:'Inter', italic:false,
-    uppercase:true, body_uppercase:false, letter_spacing_em:-0.005,
-    text_color:'#FFFFFF', stroke_color:'#000000', stroke_width:0, text_shadow:0.25, shadow_color:'#000000',
-    /* The second colour. Everything the writer wraps in asterisks prints in it. */
-    accent_color:'#F4511E',
-    /* The word across the top of every cover, sized to fill the measure whatever it
-       says, so it is the same width on every post. */
-    wordmark:'OBSESSION', wordmark_size_pct:0.10, wordmark_width_pct:0.88,
-    wordmark_top_pct:0.025, wordmark_tracking_em:-0.025, wordmark_color:'#FFFFFF',
-    /* The word sits behind the subject: it is drawn, then the frame's own bright
-       pixels are keyed back over it. lo/hi are where the key ramps — below lo the
-       letters win, above hi the picture does. */
-    wordmark_behind:true, wordmark_layer_lo:0.34, wordmark_layer_hi:0.58,
-    wordmark_layer_from:0.42, wordmark_layer_feather_em:0.35, wordmark_layer_alpha:1,
-    // the circle starts under the wordmark rather than in the corner behind it
-    inset_pct:0.34, inset_pad_pct:0.055, inset_top_pct:0.135,
-    /* The cover is a photograph with the accent glowing behind it; the slides are type
-       on near-black with the picture cut in at one side. */
-    scrim_pct:0.30, hook_scrim_pct:0.46, scrim_alpha:0.94,
-    scrim_color:'#000000', hook_scrim_color:'#0A0403',
-    glow_pct:0.42, glow_wide_pct:0.72, glow_color:'#F4511E', glow_alpha:0.55, glow_on_all:false,
+    /* Every frame is a panel of one wide render, so a per-slide camera ladder has
+       nothing to vary; and the scenes illustrate a method rather than documenting an
+       event, so the subject line that names the story in each prompt is off too. */
+    shot_ladder:false, subject_context:false,
+    font_family:'Anton', font_weight:400, body_font_family:'Space Mono', body_weight:400, italic:false,
+    uppercase:true, letter_spacing_em:-0.005,
+    text_color:'#FFFFFF', stroke_color:'#000000', stroke_width:0, text_shadow:0.35, shadow_color:'#000000',
+    label_bg:'#FFFFFF',
+    scrim_pct:0.52, scrim_alpha:0.94,
     bottom_pad_pct:0.055,
-    title_size_pct:0.048, body_size_pct:0.034, title_gap_em:0.6,
-    title_line_em:0.96, body_line_em:1.24,
-    max_width_pct:0.86, body_width_pct:0.80,
-    balance_wrap:true, fit_column:false, min_fit_scale:0.70,
-    keep_breaks:true,          // the writer's paragraph breaks are the rhythm of the slide
-    text_align:'left',
-    /* left, right, left down the deck — the cover is exempt and always sets left */
-    alt_align:true,
-    /* Named. These are recognisable people and the reader is meant to know them on
-       sight — a 60-word description of a streamer returns a plausible stranger, which
-       is the entire post wasted. The description still travels, behind the name, to
-       hold the likeness steady across the frames. If a name comes back refused the
-       frame is asked again without it; see genImage. */
-    cast_named_first:true,
-    badge_fixed:false, badge_from_angle:false,
-    handle_text:'', handle_on_all:false,
-    stat_boxes:false, auto_number:false,
-    brand_logo_ring:true, brand_ring_pct:0.030,
+    title_size_pct:0.072, body_size_pct:0.0225, title_gap_em:1.0, title_line_em:0.92,
+    max_width_pct:0.90, body_width_pct:0.86,
+    divider:true, portrait_inset:true, auto_inset:true,
+    logo_scale_pct:0.075, logo_on_all:false,
+    text_block_top_pct:0.70, hook_top_pct:0.70,
+    auto_number:false,
+    text_align:'center',
+    /* Off, all of it: the wordmark across the cover, the second colour inside the
+       paragraphs, the left/right alternation and the glow were the old account's, and
+       the account asked to go back to the plain layout. */
+    wordmark:'', accent_color:'', alt_align:false, keep_breaks:false,
+    glow_pct:0, badge_fixed:false, badge_from_angle:false, handle_text:'', handle_on_all:false,
+    cast_named_first:false,
+    stat_boxes:false,
     library_collection:'Obsession',
-    structure:'the cover states the turn, then each slide is two to five short paragraphs carrying the story in order',
-    voice:'plain, warm and astonished — short sentences, real figures, and never a word of hype'
+    structure:'cover states the claim, then each slide is one step of the method with a short title over it',
+    voice:'plain and concrete — short sentences, real numbers, the method does the work'
   }
 ];
 
@@ -1541,7 +1538,7 @@ const FULL_BLEED_CLAUSE = 'The photograph fills the entire frame edge to edge. N
 /* Bumped by hand whenever something ships. It is shown in the header and logged on
    load, so a cached copy of this file can be told from the current one without reading
    the source — the whole app is one file, and a stale one looks completely normal. */
-const BUILD = '2026-09-04 · full runs';
+const BUILD = '2026-09-04 · obsession rebuilt';
 
 /* ============================ state ============================ */
 const S = {
@@ -4392,15 +4389,30 @@ function textClause(slide){
    instead, which costs a little height and keeps the joins exact. So the run length is
    capped at three, and a longer deck is several runs — each one continuous, with a cut
    between them, which is how a real seamless carousel is built anyway. */
-function seamSpan(p){ return Math.max(2, Math.min(3, p.seam_span || 3)); }
+/* Three is the length that costs nothing; four and five cost height, and a page that
+   only ever posts four or five slides would rather pay that than have a cut in the
+   middle of a short deck. What it costs, exactly: the panel keeps 2.33/(0.8n) of the
+   source's height, so 97% at three, 73% at four, 58% at five — and the panel starts life
+   at a fifth of the source's width before being scaled up to fill a 1080-wide slide, so
+   five is also the softest. Above five neither is worth it. */
+function seamSpan(p){ return Math.max(2, Math.min(5, p.seam_span || 3)); }
 function seamRuns(slides, span){
+  const n = slides.length;
+  if(!n) return [];
+  /* As few runs as the span allows, and then as EVEN as possible across them. Filling
+     each run to the span and letting the remainder trail was how a seven-slide deck at
+     span three came out as three, three and a stranded one — and patching that by
+     giving the stray slide to the run before it made a four-panel run, which costs a
+     quarter of the picture's height. Balanced, it is three, two and two: same number of
+     joins, no oversized panel, and no slide that visibly belongs to neither side. */
+  const runs = Math.ceil(n / span);
+  const base = Math.floor(n / runs), extra = n % runs;
   const out = [];
-  for(let i = 0; i < slides.length; i += span) out.push(slides.slice(i, i + span));
-  /* A trailing run of one is not a panorama and would be generated as a lone wide
-     frame for no reason — give it to the run before it, which then holds four panels.
-     Four panels off a 21:9 source loses more height than three, and that is a better
-     trade than a slide that visibly does not belong to either side. */
-  if(out.length > 1 && out[out.length-1].length === 1) out.splice(-2, 2, out[out.length-2].concat(out[out.length-1]));
+  for(let i = 0, at = 0; i < runs; i++){
+    const len = base + (i < extra ? 1 : 0);
+    out.push(slides.slice(at, at + len));
+    at += len;
+  }
   return out;
 }
 /* Stamp each slide with the panel it owns. Written onto the slide rather than derived
@@ -5500,19 +5512,24 @@ const FACT_DEFAULTS = {
      one day at a time. Put a date in the focus box (2026-09-01) to scan from that day
      backwards instead of from today. */
   'Obsession': {
-    prompt: 'Viral human-interest stories about one named person, for a large general audience. The shape is '+
-      'always the same and it is the whole account: somebody was doing one thing — struggling, unknown, working '+
-      'an ordinary job — and is now doing another, and the distance between the two is the post. '+
-      'Creators who blew up, people whose side project became their living, someone who gave something away, an '+
-      'unlikely second act, a stranger who changed somebody\'s year. '+
-      'Every figure must be real and reported. Warm rather than cynical, astonished rather than sneering, and '+
-      'the subject always ends the carousel better off for being in it. Never a tragedy, a scandal, a court '+
-      'case, party politics, an illness or a death; never a private individual who did not put it in public '+
-      'themselves; never anyone under 18.',
+    prompt: 'Getting paid for GTA 5 footage, for someone who already plays and has not thought of it as work. '+
+      'The loop is the whole account and every post is one part of it: stream or record a session, pull the '+
+      'thirty seconds worth keeping, cut those into vertical clips, post them to YouTube Shorts, TikTok and '+
+      'Reels, and let the clips feed people back to the stream. '+
+      'GTA specifically, because it produces the moments this works on better than almost anything else — the '+
+      'heist that falls apart, the jump that lands, the police chase, the stunt nobody believes. '+
+      'Practical rather than motivational. Every slide should be something the reader could do this week with '+
+      'the console and the phone they already own. '+
+      'Never promise an income, never quote a payout as guaranteed, never imply a timeline to any figure, and '+
+      'never suggest buying anything to start. Nothing that breaks a platform\'s rules — the clips are the '+
+      'reader\'s own gameplay, never somebody else\'s footage.',
     mode: 'angles',
     angles: 'obsession',
-    news: true,
-    news_days: 3,
+    /* Not a news page any more: the subject is evergreen and the rotation is what makes
+       one topic into a feed. The run's slide count is the deck's length exactly, because
+       these are short posts and a counting headline is not the shape here. */
+    news: false,
+    fixed_len: true,
     style: 'Obsession',
     collection: 'Obsession',
     tone: 'colour'
@@ -6066,15 +6083,69 @@ const ANGLE_SETS = {
   /* The news page does not rotate — every post is the same shape, and what varies is
      the day it came off the wire. One angle, so the review panel and the ledger have
      something to resolve against. */
+  /* This page has ONE subject — getting paid for GTA footage — and a page with one
+     subject lives or dies on having several ways to say it. These are those ways: the
+     same pipeline told as a walkthrough, as an economics lesson, as a mistake to avoid,
+     as a day's routine. The rotation is the variety, because the topic will not be. */
   obsession: [
-    {key:'news', kind:'story', badge:'OBSESSION',
-     label:'today\'s story, about one person',
-     brief:'One person who was doing one thing and is now doing another, reported in the last few days. The '+
-       'distance between the two is the whole post. Real figures, real dates, a named source, and a subject who '+
-       'is better off for the attention rather than worse.',
-     cover:'States the turn in one breath — what they were, then what they are now.',
-     close:'The last slide lands where the story leaves them, and asks the reader something.',
-     swipe:'And it started with one video.'}
+    {key:'pipeline', kind:'story', badge:'THE PIPELINE',
+     label:'stream it once, post it everywhere',
+     brief:'The whole loop, start to finish: play a long session, mark the moments worth keeping, cut them into '+
+       'vertical clips, post them across YouTube Shorts, TikTok and Reels, and let the clips send people back to '+
+       'the stream. Concrete at every step — what gets recorded, what gets cut, how long a clip runs, how many go '+
+       'out a day. The reader should be able to do it tomorrow with what they already own.',
+     cover:'States the loop in one line: one session in, a week of clips out.',
+     close:'The last slide is what the loop looks like once it is running.',
+     swipe:'One session is a week of posts.'},
+
+    {key:'themoment', kind:'story', badge:'WHAT CLIPS',
+     label:'which thirty seconds are worth cutting',
+     brief:'What actually makes a GTA clip travel, and what does not. The near-miss, the impossible jump that '+
+       'lands, the heist that falls apart in the last ten seconds, the stunt nobody believes. How to spot it '+
+       'while playing rather than trawling four hours of footage afterwards, where to cut in and out, and why '+
+       'the first second decides the whole thing. Specific about timing and framing.',
+     cover:'Names the kind of moment and how short the window is.',
+     close:'The last slide is the one most people cut too late.',
+     swipe:'The first second is the whole clip.'},
+
+    {key:'themoney', kind:'story', badge:'THE MONEY',
+     label:'where the money actually comes from',
+     brief:'The real revenue lines and their honest shape: platform payouts on short-form, ad revenue on longer '+
+       'uploads, subscriptions and tips on stream, brand deals once there is an audience. Say plainly which ones '+
+       'pay early and which need scale, and never state a rate as a promise — payouts vary by platform, country '+
+       'and month, and a number quoted as guaranteed is the fastest way to lose a viewer\'s trust.',
+     cover:'Names the earning line and where it sits in the order.',
+     close:'The last slide is the one that only starts paying once the others are running.',
+     swipe:'The first one pays before anyone is watching.'},
+
+    {key:'thesetup', kind:'story', badge:'THE SETUP',
+     label:'what you actually need to start',
+     brief:'The kit and the software, at the level somebody can start with rather than the level a full-time '+
+       'streamer ends with: the console or PC they already have, capture, a free editor, a microphone that is '+
+       'good enough. What matters, what does not, and what to upgrade first and only once it is paying. Never '+
+       'imply an expensive setup is the entry price, because it is not.',
+     cover:'Names the shortest honest list of what is needed.',
+     close:'The last slide is the first thing worth upgrading.',
+     swipe:'You already own most of it.'},
+
+    {key:'themistake', kind:'story', badge:'THE MISTAKE',
+     label:'why most of these channels stall',
+     brief:'The things that stop this working, stated as fixes rather than as scolding: posting the whole session '+
+       'instead of the moment, clips with no hook in the first second, uploading to one platform only, posting '+
+       'in bursts and then vanishing, chasing a trend the channel has nothing to do with. Each one paired with '+
+       'what to do instead, concretely.',
+     cover:'Names the mistake plainly and that it is the common one.',
+     close:'The last slide is the fix that takes the least effort.',
+     swipe:'Almost everyone gets this one wrong.'},
+
+    {key:'theday', kind:'story', badge:'A DAY OF IT',
+     label:'what the routine actually looks like',
+     brief:'One realistic working day: hours streamed, clips pulled, time spent editing, when things go out and '+
+       'where. Real and unglamorous — the editing takes longer than the playing, and saying so is what makes the '+
+       'post credible. It should read as a schedule somebody could copy, not as a highlight reel of a lifestyle.',
+     cover:'Names the hours and what comes out of them.',
+     close:'The last slide is the part that gets easier the second week.',
+     swipe:'The editing takes longer than the playing.'}
   ],
 
   /* The @fun rotation. Every post is something the internet is currently doing, but a
@@ -6873,75 +6944,63 @@ function trendDeckPrompt(cat, deck){
    real and recognisable, which is exactly the case an image model refuses by name. */
 function obsessionDeckPrompt(cat, deck){
   const p = S.profile;
-  const who = deck.person || 'the person at the centre of it';
-  const when = deck.day ? ' It was reported around ' + prettyDay(deck.day) + '.' : '';
+  const span = seamSpan(p);
   return (
-'Write a ' + deck.n + '-slide story carousel for a viral human-interest account.\n\n' +
-'THE STORY: ' + deck.subject + '\n' +
-'THE COVER HEADLINE, verbatim or lightly tightened: "' + deck.hook + '"\n' +
-'THE PERSON: ' + who + '.' + when + '\n' +
-(deck.source ? 'SOURCE: ' + deck.source + '\n' : '') + '\n' +
+'Write a ' + deck.n + '-slide carousel for an account about getting paid for GTA 5 footage.\n\n' +
+'THE POST: ' + deck.subject + '\n' +
+'THE COVER HEADLINE, verbatim or lightly tightened: "' + deck.hook + '"\n\n' +
 'THE ACCOUNT:\n' + catPrompt(cat) + '\n\n' +
 
-'WHAT MUST BE TRUE — the whole account rests on this:\n' +
-'- Every figure, date, name and quote must be real and reported. Never invent a number to make a slide land.\n' +
-'- If you are unsure of a figure, write the sentence without it. "Millions of views" beats a wrong number.\n' +
-'- Say what is known. Never speculate about what someone felt, earned or intended unless they said so.\n' +
-'- Nothing that leaves the subject worse off for being posted about.\n\n' +
+'HOW THESE SLIDES ARE BUILT — the plain layout: a short title over a short paragraph.\n' +
+'- Slide 1 is the cover: a headline of 6 to 12 words and nothing else. Leave "body" empty on it.\n' +
+'- Every slide after it has a SHORT TITLE of 2 to 5 words in caps, and a "body" of 2 to 3 short declarative sentences, about 40 words at most.\n' +
+'- One step, one slide. Read end to end the slides are one method in order, and the reader could act on it.\n' +
+'- Plain and concrete. A number, a duration, a platform, a button. "Cut it at eight seconds" beats "keep it snappy".\n' +
+'- No hype, no emoji, no exclamation marks, no second person plural pep talk, no "you won\'t believe", and never "grind" or "hustle".\n\n' +
 
-'HOW THESE SLIDES ARE BUILT:\n' +
-'- Slide 1 is the cover: the headline only, no body. It states the turn — what they were doing, and what they are doing now.\n' +
-'- Every slide after it is a "body" of 2 to 5 SHORT paragraphs, separated by blank lines. Leave "title" empty on those.\n' +
-'- A paragraph is one or two plain sentences. Short. The story is carried by what happened, in order, not by writing.\n' +
-'- Read end to end the slides are one continuous story, and each one ends on something that makes the next worth swiping to.\n' +
-'- Present tense for the turn, past for the history. No hype words, no emoji, no exclamation marks, no "you won\'t believe".\n\n' +
+'THE COVER HEADLINE — it decides whether the rest is seen:\n' +
+'- Lead with the concrete thing: the number, the hour, the platform, the piece of the loop. Never open on a subordinate clause.\n' +
+'- Say what the reader gets. "ONE GTA SESSION IS A WEEK OF POSTS" works; "HOW TO MONETISE YOUR GAMEPLAY" does not.\n' +
+'- It has to be true read alone. This is advice somebody will act on, so a cover that oversells is a cover that costs the account its credibility.\n\n' +
 
-'THE ACCENT — this page prints some phrases in a second colour:\n' +
-'- Wrap the phrase that carries the slide in asterisks, *like this*. Nothing else in the reply uses asterisks.\n' +
-'- One or two marked phrases per slide, never more: it is emphasis, and everything emphasised is nothing emphasised.\n' +
-'- Mark the figure, the name of the thing, or the line that turns it — "*14 million views*", "*a home of her own*". Never mark a whole paragraph.\n' +
-'- On the cover, mark the second half of the headline: the "now" of it.\n\n' +
+'WHAT MUST BE TRUE — this is advice, and that raises the bar rather than lowering it:\n' +
+'- Never promise an income. No "make $5,000 a month", no "guaranteed", no implied timeline to any figure.\n' +
+'- Where a rate or a threshold is named, say it varies and say what it depends on — platform, country, month, watch time. Programmes and their terms change, so anything stated as a fixed rule must be the kind of thing that is actually stable.\n' +
+'- Never invent a statistic, a payout or a creator\'s earnings. Write the sentence without the number instead.\n' +
+'- No get-rich framing, nothing that reads as a pitch, and never suggest buying anything to start.\n' +
+'- Nothing that breaks a platform\'s rules: no view botting, no re-uploading other people\'s footage, no engagement schemes. Clips are the reader\'s OWN gameplay.\n\n' +
 
-'THE SWIPE LINE — return it as "swipe": one short line that sits under the cover headline, under 12 words.\n\n' +
+'THE SWIPE LINE — return it as "swipe": one short line under 12 words, the reason to keep swiping.\n\n' +
 
-'CAST — return it as "cast", and treat this as the most important field in the reply.\n' +
-'- One entry for the person at the centre, plus anyone else who appears in more than one frame. At most three.\n' +
-'- "real" is the person\'s FULL public name — first and last, or the full handle they are known by: "Dwarkesh Patel", "IShowSpeed", "MrBeast". A first name on its own identifies nobody and produces a stranger. Never abbreviate it and never leave it blank for somebody publicly known.\n' +
-'- "known" is one short phrase placing them: "the host of the Dwarkesh Podcast", "the streamer known for FIFA and IRL streams". The image model finds a face far more reliably when the name arrives with the thing that name is attached to.\n' +
-'- "look" is a PHYSICAL DESCRIPTION ONLY, 40 to 70 words. It rides behind the name and holds the likeness steady from frame to frame, and it is the whole picture on the one occasion the name is declined.\n' +
-'- It must be specific enough that two different frames come back as the same face: apparent age, build and height, skin tone, face shape, eye colour, eyebrows, nose and jaw, hair colour and exact length and how it is worn, facial hair, glasses, visible tattoos or piercings, and the clothing they are in throughout.\n' +
-'- Real skin, and say so: note the texture the face actually has — pores, lines, freckles, uneven tone, a scar, whatever is there. Left alone the image model returns a smoothed, poreless face, and on a page about real people that reads as fake immediately.\n' +
-'- Describe them as they look NOW, in the photographs from this story, not from ten years ago.\n' +
-'- Write it flat and factual, the way a casting brief reads. No admiration, no "striking", no "beautiful".\n' +
-'- Every "scene" that includes a person must name them in "cast" so the description follows them into the frame.\n\n' +
-
-'IMAGES — "scene" describes a photograph and nothing else, and never asks for words, letters, numbers or logos.\n' +
-'- In "scene", refer to them by their CAST NAME only — "Tini in a home kitchen at night" — never by a company, show or brand name. The cast entry carries the real name through to the picture.\n' +
-'- Only ever put them in a situation that is actually reported. The picture illustrates the story it sits on; it never invents a moment, a place or a company they were not in.\n' +
-'- One person large in the frame, lit hard against a darker surround, shot like a magazine portrait. The story is a person, so the pictures are of a person.\n' +
-'- Vary it slide to slide: the moment described, the place, the framing. Never the same shot twice.\n' +
-/* The seamless build changes what a good set of scenes IS. Consecutive slides are cut
-   out of one wide photograph, so scenes that jump continent to continent produce a
-   frame the model has to fake a join in — the picture stays in one place and the
-   variation moves to where the subject is standing and how close the camera is. */
+'IMAGES — "scene" describes a frame of the game, and nothing else.\n' +
+'- These are GAME frames, not photographs: an open-world city that reads as GTA 5. Sun-bleached boulevards, palm trees, downtown towers, the ocean, the desert highway, muscle cars and supercars, neon at night.\n' +
+'- Something is HAPPENING in every frame. A car mid-drift, a jump at its apex, a helicopter low between buildings, a chase, a bike coming off a ramp. Never a parked car, never an empty street, never a character standing still looking at nothing.\n' +
+'- The one frame that is not the game: a player from behind or side-on with a controller in their hands, screen light across them, the game filling the display in front of them. Use it once at most, and only where the slide is about the person rather than the game.\n' +
+'- Never ask for interface, a minimap, a health bar, subtitles, a logo or any on-screen text. A generated interface comes back as garbled lettering and it is the detail that makes a frame look fake.\n' +
+'- Vary what is happening and where the camera is, so the set does not read as one chase photographed five times.\n' +
+/* Every frame here is a panel cut out of one wide render, so "vary the location" is
+   precisely the wrong instruction — it asks for a join the model then has to invent.
+   The variety has to come from what is happening across one continuous stretch of the
+   world, which is also what makes the swipe read as a camera move rather than a cut. */
 (p.seamless
- ? '- THESE PICTURES ARE CUT FROM ONE WIDE PHOTOGRAPH, ' + seamSpan(p) + ' SLIDES AT A TIME, so that the picture ' +
-   'carries across the swipe. Consecutive scenes must be able to live in a single frame: the same place, the ' +
-   'same light, the same hour. Move the subject through that place rather than moving them to another one.\n' +
-   '- Vary the framing and where they stand, not the location. "At the far end of the room", "closer, half turned ' +
-   'away", "at the window" — three moments in one space, which reads as one photograph. A new place is fine ' +
-   'every ' + seamSpan(p) + ' slides, where the next run starts.\n'
+ ? '- THESE FRAMES ARE CUT FROM ONE VERY WIDE RENDER, ' + span + ' SLIDES AT A TIME, so the picture carries '+
+   'across the swipe instead of cutting. Consecutive scenes must be able to live in ONE continuous frame: one '+
+   'stretch of the city, one time of day, one light.\n' +
+   '- So move ALONG the world rather than to another part of it. A boulevard that runs from the beach at one end '+
+   'to the towers at the other, with a different thing happening at each point along it. Write the scenes left to '+
+   'right in that order, and the swipe becomes a camera panning across one shot.\n' +
+   '- Where a player with a controller appears, put them at ONE END of that stretch — the left — with the game '+
+   'world running away from them across the rest of the frame. That reads as one composition; a player in the '+
+   'middle of it does not.\n'
  : '') +
-'Style is ' + (p.imagery || 'dramatic editorial portrait') + '.\n\n' +
+'Style is ' + (p.imagery || 'video game render') + '.\n\n' +
 
-'CAPTION for Instagram: three short paragraphs separated by blank lines, then one line of 3 to 5 hashtags.\n' +
-(deck.source ? 'Credit ' + deck.source + ' in the caption.\n' : '') + '\n' +
+'CAPTION for Instagram: three short paragraphs separated by blank lines, then one line of 3 to 5 hashtags.\n\n' +
 
 'Return ONLY JSON:\n' +
 '{"subject":"short canonical name for this post","swipe":"...",' +
-'"cast":[{"name":"short name as used in the scenes","real":"full public name","known":"one short phrase placing them","look":"40-70 words, physical only"}],' +
-'"slides":[{"kind":"hook","title":"the headline with *the turn marked*","scene":"..."},' +
-'{"kind":"slide","title":"","body":"para\\n\\npara\\n\\npara","scene":"..."}],' +
+'"slides":[{"kind":"hook","title":"the headline","body":"","scene":"..."},' +
+'{"kind":"slide","title":"SHORT TITLE","body":"two or three short sentences","scene":"..."}],' +
 '"caption":"para1\\n\\npara2\\n\\npara3\\n\\n#niche #mid #broad"}'
   );
 }

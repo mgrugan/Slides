@@ -206,11 +206,15 @@ const r = await p.evaluate(async ()=>{
            new Set(ideas.map(i=>i.angle)).size >= 3 &&        // spread, not all one shape
            ideas.every(i => angleIn('fun', i.angle));
   })();
-  out.obsessionStillHasOneShape = await (async ()=>{
-    const stories = [1,2,3].map(i => ({subject:'o '+i, claim:'H '+i, person:'P', source:'s', date:'2026-09-01'}));
-    window.callModel = async () => ({text: JSON.stringify(stories), images:[]});
-    const ideas = await newsIdeas('Obsession', catCfg('Obsession'), 3, '2026-09-01');
-    return ideas.length === 3 && ideas.every(i => i.angle === 'news');
+  /* The rotations belong to their own accounts. This used to check that dealing angles
+     did not bleed into Obsession, which then had exactly one; Obsession has since been
+     rebuilt with six of its own, so the same intent is checked the way it now reads —
+     no key in common, and @fun's deal drawing only from @fun's set. */
+  out.theRotationsDoNotOverlap = (()=>{
+    const mine = new Set(angleSet('fun').map(a=>a.key));
+    const theirs = angleSet('obsession').map(a=>a.key);
+    return theirs.length > 0 && theirs.every(k => !mine.has(k)) &&
+           dealAngles('fun', 12).every(a => mine.has(a.key));
   })();
 
   // --- the brief
@@ -408,7 +412,7 @@ const want = {
   handleDraws:true, markDrawsBesideIt:true, markIsLeftOfTheText:true,
   markFillsItsCircle:true, markIsNotOversized:true, markUsesTheSharedAvatar:true,
   lockupIsCoverOnly:true, noLogoNoCrash:true,
-  categoryWired:true, scanDealsTheAngles:true, obsessionStillHasOneShape:true,
+  categoryWired:true, scanDealsTheAngles:true, theRotationsDoNotOverlap:true,
   briefIsOneLinePerSlide:true, briefDemandsALongLook:true, briefBansBrandsInScene:true,
   briefBansRumour:true, briefBansPileOns:true,
   briefProtectsMinors:true, briefCarriesTheDay:true,

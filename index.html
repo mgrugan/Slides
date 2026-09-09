@@ -1445,10 +1445,16 @@ const PRESETS = [
     v: 3,
     /* The one thing this page keeps from its first build: the picture runs across the
        swipe instead of cutting. Everything else here is the plain facts layout, because
-       that is what the account went back to. Span five, so a four or five slide deck is
-       ONE photograph end to end rather than one with a join in it — see seamSpan for
-       what the extra panels cost. */
-    seamless:true, seam_span:5,
+       that is what the account went back to.
+
+       PAIRS. Slides one and two are one horizontal frame cut down the middle, three and
+       four are the next one, and so on — so every swipe lands on the other half of the
+       shot the reader was just looking at. It is also the best-looking of the spans by
+       some distance: two panels come off a 3:2 source, which keeps 94% of the picture's
+       height against 73% at four and 58% at five, and each panel starts at half the
+       source width rather than a fifth of it. An odd last slide simply gets its own
+       image, which is what a run of one already means. */
+    seamless:true, seam_span:2,
     /* Not a photograph. These frames are the game, so they are briefed as a game: a
        render rather than a camera, with the colour grade and the stylisation that comes
        with one. Briefing it as a photograph is how you get a photograph of a television. */
@@ -1487,7 +1493,10 @@ const PRESETS = [
     bottom_pad_pct:0.055,
     title_size_pct:0.072, body_size_pct:0.0225, title_gap_em:1.0, title_line_em:0.92,
     max_width_pct:0.90, body_width_pct:0.86,
-    divider:true, portrait_inset:true, auto_inset:true,
+    /* The rule above the headline is the one thing this page does not take from the
+       base layout: on a deck whose whole point is that the picture is continuous, a
+       hard horizontal line across the cover is the one element that reads as a seam. */
+    divider:false, portrait_inset:true, auto_inset:true,
     logo_scale_pct:0.075, logo_on_all:false,
     text_block_top_pct:0.70, hook_top_pct:0.70,
     auto_number:false,
@@ -1609,7 +1618,7 @@ const FULL_BLEED_CLAUSE = 'The photograph fills the entire frame edge to edge. N
 /* Bumped by hand whenever something ships. It is shown in the header and logged on
    load, so a cached copy of this file can be told from the current one without reading
    the source — the whole app is one file, and a stale one looks completely normal. */
-const BUILD = '2026-09-04 · bestforces';
+const BUILD = '2026-09-09 · obsession pairs';
 
 /* ============================ state ============================ */
 const S = {
@@ -7165,15 +7174,19 @@ function obsessionDeckPrompt(cat, deck){
    The variety has to come from what is happening across one continuous stretch of the
    world, which is also what makes the swipe read as a camera move rather than a cut. */
 (p.seamless
- ? '- THESE FRAMES ARE CUT FROM ONE VERY WIDE RENDER, ' + span + ' SLIDES AT A TIME, so the picture carries '+
-   'across the swipe instead of cutting. Consecutive scenes must be able to live in ONE continuous frame: one '+
-   'stretch of the city, one time of day, one light.\n' +
-   '- So move ALONG the world rather than to another part of it. A boulevard that runs from the beach at one end '+
-   'to the towers at the other, with a different thing happening at each point along it. Write the scenes left to '+
-   'right in that order, and the swipe becomes a camera panning across one shot.\n' +
-   '- Where a player with a controller appears, put them at ONE END of that stretch — the left — with the game '+
-   'world running away from them across the rest of the frame. That reads as one composition; a player in the '+
-   'middle of it does not.\n'
+ ? '- THE FRAMES COME IN ' + (span === 2 ? 'PAIRS' : 'RUNS OF ' + span) + '. Each ' +
+   (span === 2 ? 'pair of consecutive slides is ONE horizontal frame cut down the middle: the first slide is its '+
+     'left half and the second is its right half' :
+     'run of ' + span + ' consecutive slides is ONE very wide frame cut into ' + span + ' equal panels, left to right') +
+   '. The swipe lands on the rest of the same shot, so it reads as the camera moving rather than as a cut.\n' +
+   '- So write those scenes as ONE picture, not as two. The same street, the same time of day, the same light, ' +
+   'with the action carrying across the middle — a bike leaving a ramp on the left and landing on the right, a ' +
+   'car mid-drift with the smoke trailing off behind it, a chase with the pursuer at one end and the pursued at ' +
+   'the other. Say in each scene which half it is.\n' +
+   '- Nothing important sits dead centre, because that is where the cut falls.\n' +
+   '- Where a player with a controller appears, put them in the LEFT half with the game world running away from ' +
+   'them across the right. That reads as one composition; a player in the middle of it does not.\n' +
+   '- A new ' + (span === 2 ? 'pair' : 'run') + ' is a new picture, so that is where the location may change.\n'
  : '') +
 'Style is ' + (p.imagery || 'video game render') + '.\n\n' +
 

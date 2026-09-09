@@ -31,7 +31,10 @@ const r = await p.evaluate(async ()=>{
   await fontReady(S.profile);
 
   // --- switched on, and only here
-  out.obsessionIsSeamless = S.profile.seamless === true && S.profile.seam_span === 5;
+  /* The account runs in pairs; the machinery below is exercised across every span it
+     supports, because the span is a per-style setting and the next page to use it may
+     not choose two. */
+  out.obsessionIsSeamless = S.profile.seamless === true && S.profile.seam_span === 2;
   out.siblingsAreNot = ['Thrifting','Fun','Trendpop','iDisney']
     .every(n => !PRESETS[PRESETS.findIndex(x=>x.name === n)].seamless);
   out.versionBumped = PRESETS[oi].v >= 2 && LOOK_KEYS.includes('seamless') && LOOK_KEYS.includes('seam_span');
@@ -46,7 +49,9 @@ const r = await p.evaluate(async ()=>{
   out.oneSlideIsStillOneRun = runOf(1) === '1';
   /* And at this account's span a short deck is ONE run — which is the point of raising
      it, since four or five slides with a join in the middle is not a seamless carousel. */
-  out.aShortDeckIsOneRunHere = runOf(4, 5) === '4' && runOf(5, 5) === '5';
+  out.pairsAtSpanTwo = runOf(6, 2) === '2,2,2' && runOf(4, 2) === '2,2';
+  out.anOddTailIsItsOwnRun = runOf(5, 2) === '2,2,1' && runOf(3, 2) === '2,1';
+  out.aShortDeckIsOneRunAtSpanFive = runOf(4, 5) === '4' && runOf(5, 5) === '5';
   out.andASixSlideDeckSplitsEvenly = runOf(6, 5) === '3,3';
   out.spanIsCappedAtFive = seamSpan({seam_span:9}) === 5 && seamSpan({seam_span:1}) === 2;
 
@@ -57,10 +62,10 @@ const r = await p.evaluate(async ()=>{
     markSeams(deck, prof || S.profile);
     return deck;
   };
-  const deck = mkDeck(5);
-  out.everySlideIsStamped = deck.slides.every(s => s.seam && s.seam.n === 5) &&
+  const deck = mkDeck(6);
+  out.everySlideIsStamped = deck.slides.every(s => s.seam && s.seam.n === 2) &&
                             deck.slides.map(s=>s.seam.run + ':' + s.seam.i).join(' ') ===
-                            '0:0 0:1 0:2 0:3 0:4';
+                            '0:0 0:1 1:0 1:1 2:0 2:1';
   out.aPlainStyleGetsNoSeams = (()=>{
     const fi = PRESETS.findIndex(x=>x.name === 'Fun');
     return mkDeck(6, PRESETS[fi]).slides.every(s => !s.seam);
@@ -70,7 +75,7 @@ const r = await p.evaluate(async ()=>{
     markSeams(d, Object.assign({}, S.profile, {seamless:false}));
     return d.slides.every(s => !s.seam);
   })();
-  out.runIsFoundFromAnySlideInIt = seamRunOf(deck.slides[3]).map(s=>s.id).join(',') === 's0,s1,s2,s3,s4';
+  out.runIsFoundFromAnySlideInIt = seamRunOf(deck.slides[3]).map(s=>s.id).join(',') === 's2,s3';
 
   // --- the shape to generate at. Narrower than the strip, never wider.
   out.threeSlidesAsk21by9 = seamAspect(3, S.profile) === '21:9';
@@ -104,14 +109,18 @@ const r = await p.evaluate(async ()=>{
   // --- THE JOIN. A wide gradient cut into panels: the right edge of one panel and the
   //     left edge of the next are the same place in the source and must match.
   const wide = (()=>{
-    const c = document.createElement('canvas'); c.width = 2688; c.height = 1152;
+    /* 3:2, which is what a PAIR is generated at — see seamAspect. A source wider than
+       the strip of slides it fills is cropped at the left and right of every panel,
+       which is where the joins are, so a stand-in of the wrong shape would fail the
+       join test for a reason the app does not have. */
+    const c = document.createElement('canvas'); c.width = 1728; c.height = 1152;
     const x = c.getContext('2d');
-    const g = x.createLinearGradient(0, 0, 2688, 0);
+    const g = x.createLinearGradient(0, 0, 1728, 0);
     g.addColorStop(0, '#2b1d4a'); g.addColorStop(0.5, '#a5442a'); g.addColorStop(1, '#0d3b2e');
     x.fillStyle = g; x.fillRect(0, 0, 2688, 1152);
     return c.toDataURL('image/png');
   })();
-  const three = mkDeck(3);
+  const three = mkDeck(4);        // two pairs, so a join inside one and a cut between them
   await Promise.all(three.slides.map(s=>new Promise(res=>{
     const im = new Image(); im._seam = s.seam;
     im.onload = ()=>{ measureCrop(im); IMG_CACHE[s.id] = im; s.img = im.src; res(); };
@@ -123,23 +132,30 @@ const r = await p.evaluate(async ()=>{
                           return [d[0], d[1], d[2]]; };
   const gap = i => { const a = col(canvases[i], W-1), b2 = col(canvases[i+1], 0);
                      return Math.max(Math.abs(a[0]-b2[0]), Math.abs(a[1]-b2[1]), Math.abs(a[2]-b2[2])); };
-  out.theJoinsAreInvisible = gap(0) <= 4 && gap(1) <= 4;
-  out.theJoinsAreMeasured = [gap(0), gap(1)].join(',');
+  /* Only the joins INSIDE a run. The break between one run and the next is a deliberate
+     cut to a different picture, and requiring it to match would mean the panels were
+     never being cut at all. */
+  const inside = [];
+  for(let i = 0; i < canvases.length - 1; i++)
+    if(three.slides[i].seam.run === three.slides[i+1].seam.run) inside.push(gap(i));
+  out.theJoinsAreInvisible = inside.length > 0 && inside.every(g => g <= 4);
+  out.theJoinsAreMeasured = inside.join(',');
   out.thePanelsAreNotAllTheSame = (()=>{
-    /* Three identical frames would pass a join test trivially — this is what stops the
-       feature quietly becoming a no-op. Measured on two BODY panels: the cover carries
-       a much deeper scrim, so comparing it with a body slide measures the scrim. */
-    const mid = c => col(c, Math.round(W*0.5));
-    const a = mid(canvases[1]), c2 = mid(canvases[2]);
+    /* Identical frames would pass a join test trivially — this is what stops the feature
+       quietly becoming a no-op. Measured at the OUTER edges of the pair, which are the
+       two ends of the source: comparing the panels' midpoints instead compares 25% and
+       75% of the gradient, and on a symmetric one those are nearly the same colour for
+       reasons that have nothing to do with the code. */
+    const a = col(canvases[0], 2), c2 = col(canvases[1], W - 2);
     return Math.abs(a[0]-c2[0]) + Math.abs(a[1]-c2[1]) + Math.abs(a[2]-c2[2]) > 60;
   })();
 
   // --- planning: one request per run, and never the library
   out.onlyTheLeadIsAskedFor = (()=>{
-    // five slides, one run, one request — which is also five sixths of the image bill
-    const d = mkDeck(5);
+    // six slides, three pairs, three requests — half the image bill of frame by frame
+    const d = mkDeck(6);
     const {fresh, reused} = planImages(d.slides.slice(), 'all');
-    return fresh.length === 1 && fresh[0].id === 's0' && reused.length === 0;
+    return fresh.length === 3 && fresh.map(s=>s.id).join(',') === 's0,s2,s4' && reused.length === 0;
   })();
   out.aPlainDeckStillPlansPerSlide = (()=>{
     const fi = PRESETS.findIndex(x=>x.name === 'Fun');
@@ -147,27 +163,28 @@ const r = await p.evaluate(async ()=>{
     const {fresh, reused} = planImages(d.slides.slice(), 'off');
     return fresh.length === 6 && reused.length === 0;
   })();
-  out.aTwoRunDeckAsksTwice = (()=>{
-    const d = mkDeck(6);                     // 3,3 at this span
+  out.anOddTailAsksForItsOwn = (()=>{
+    const d = mkDeck(5);                     // 2,2,1 at this span
     const {fresh} = planImages(d.slides.slice(), 'all');
-    return fresh.length === 2 && fresh[0].id === 's0' && fresh[1].id === 's3';
+    return fresh.length === 3 && fresh.map(s=>s.id).join(',') === 's0,s2,s4';
   })();
 
   // --- one generation fills the whole run
   out.oneImageFillsTheRun = await (async ()=>{
-    const d = mkDeck(3);
+    const d = mkDeck(3);        // a pair plus an odd tail, so the tail must NOT be filled
     const keep = window.callModel;
     let asked = 0, sentAspect = '', sentSize = '', sentText = '';
     window.callModel = async o => { asked++; sentAspect = o.aspect; sentSize = o.imageSize || '';
                                     sentText = o.parts[0].text;
                                     return {text:'', images:[wide]}; };
-    await genImage(d.slides[1]);            // asked from the MIDDLE slide, on purpose
+    await genImage(d.slides[1]);            // asked from the SECOND half of the pair, on purpose
     window.callModel = keep;
     out.askedOnce = asked === 1;
-    out.panoramaAspectWasSent = sentAspect === '21:9';   // widest offered, and narrower than the strip
+    out.theOddTailIsNotFilledByThePair = !d.slides[2].img;
+    out.panoramaAspectWasSent = sentAspect === '3:2';    // widest offered for a pair, and narrower than the strip
     out.panoramaAsksForMorePixels = sentSize === '2K';
     out.thePromptWasThePanorama = /ONE SINGLE CONTINUOUS PHOTOGRAPH/.test(sentText);
-    return d.slides.every(s => s.img === wide && s.status === 'done');
+    return d.slides.slice(0, 2).every(s => s.img === wide && s.status === 'done');
   })();
   out.aPlainSlideStillAsksForItself = await (async ()=>{
     const fi = PRESETS.findIndex(x=>x.name === 'Fun');
@@ -183,16 +200,21 @@ const r = await p.evaluate(async ()=>{
   })();
 
   // --- the brief for the one wide frame
-  const pano = panoramaPrompt(three.slides, false, true);
+  const pano = panoramaPrompt(three.slides.slice(0, 2), false, true);   // one pair
   out.panoInsistsOnOneFrame = /ONE SINGLE CONTINUOUS PHOTOGRAPH/.test(pano) &&
                               /one place, one light and one moment/.test(pano);
   out.panoBansTheCollage = /NOT a collage/.test(pano) && /NOT panels with edges or gutters/.test(pano);
-  out.panoPlacesEveryBeat = /THE LEFT THIRD: a room, 1\./.test(pano) &&
-                            /THE MIDDLE THIRD: a room, 2\./.test(pano) &&
-                            /THE RIGHT THIRD: a room, 3\./.test(pano);
-  out.panoKeepsTheCutLinesClear = /Nothing important sits directly on a cut line at 33% across or at 67% across/.test(pano);
+  out.panoPlacesEveryBeat = /THE LEFT HALF: a room, 1\./.test(pano) &&
+                            /THE RIGHT HALF: a room, 2\./.test(pano);
+  out.panoKeepsTheCutLinesClear = /Nothing important sits directly on a cut line at 50% across/.test(pano);
+  out.aThreeRunStillNamesThirds = (()=>{
+    const d = mkDeck(3, Object.assign({}, S.profile, {seam_span:3}));
+    const t = panoramaPrompt(d.slides, false, true);
+    return /THE LEFT THIRD/.test(t) && /THE MIDDLE THIRD/.test(t) && /THE RIGHT THIRD/.test(t) &&
+           /Aspect ratio 21:9/.test(t);
+  })();
   out.panoKeepsTheCaptionBandDark = /lower quarter of the whole width simple, dark/.test(pano);
-  out.panoCarriesTheAspect = /Aspect ratio 21:9/.test(pano);
+  out.panoCarriesTheAspect = /Aspect ratio 3:2/.test(pano);
   out.panoStillBansText = pano.includes(NO_TEXT_CLAUSE) && pano.includes(FULL_BLEED_CLAUSE);
   out.panoCarriesEveryonePresent = (()=>{
     /* castBlock matches a person against the SLIDE's scene text. Handed one slide it
@@ -207,10 +229,10 @@ const r = await p.evaluate(async ()=>{
   })();
 
   // --- and the writer is told what a good scene now is
-  const dp = obsessionDeckPrompt('Obsession', {subject:'x', hook:'y', n:5, angle:'pipeline'});
-  out.briefExplainsTheOneFrame = /CUT FROM ONE VERY WIDE RENDER, 5 SLIDES AT A TIME/.test(dp) &&
-                                 /one stretch of the city, one time of day, one light/.test(dp);
-  out.briefMovesTheCameraNotTheCity = /move ALONG the world rather than to another part of it/.test(dp);
+  const dp = obsessionDeckPrompt('Obsession', {subject:'x', hook:'y', n:6, angle:'pipeline'});
+  out.briefExplainsTheOneFrame = /THE FRAMES COME IN PAIRS/.test(dp) &&
+                                 /the first slide is its left half and the second is its right half/.test(dp);
+  out.briefMovesTheCameraNotTheCity = /write those scenes as ONE picture, not as two/.test(dp);
   out.plainPagesGetNoSuchRider = !/CUT FROM ONE WIDE PHOTOGRAPH/.test(
     funDeckPrompt('fun', {subject:'x', hook:'y', n:6, angle:'blewup'}));
   return out;
@@ -220,19 +242,20 @@ await b.close();
 const want = {
   obsessionIsSeamless:true, siblingsAreNot:true, versionBumped:true,
   runsOfThree:true, aTrailingPairIsItsOwnRun:true, noStrandedSingleAndNoOversizedRun:true,
-  oneSlideIsStillOneRun:true, aShortDeckIsOneRunHere:true, andASixSlideDeckSplitsEvenly:true,
+  oneSlideIsStillOneRun:true, pairsAtSpanTwo:true, anOddTailIsItsOwnRun:true,
+  aShortDeckIsOneRunAtSpanFive:true, andASixSlideDeckSplitsEvenly:true,
   spanIsCappedAtFive:true,
   everySlideIsStamped:true, aPlainStyleGetsNoSeams:true, turningItOffClearsOldSeams:true,
   runIsFoundFromAnySlideInIt:true,
   threeSlidesAsk21by9:true, twoSlidesAsk3by2:true, neverWiderThanTheStrip:true,
   panelsSplitTheImageEvenly:true, panelsRespectADetectedBorder:true, noSeamIsTheWholeImage:true,
   theJoinsAreInvisible:true, theJoinsAreMeasured:'0,0', thePanelsAreNotAllTheSame:true,
-  onlyTheLeadIsAskedFor:true, aPlainDeckStillPlansPerSlide:true, aTwoRunDeckAsksTwice:true,
-  oneImageFillsTheRun:true, askedOnce:true, panoramaAspectWasSent:true,
+  onlyTheLeadIsAskedFor:true, aPlainDeckStillPlansPerSlide:true, anOddTailAsksForItsOwn:true,
+  oneImageFillsTheRun:true, theOddTailIsNotFilledByThePair:true, askedOnce:true, panoramaAspectWasSent:true,
   panoramaAsksForMorePixels:true, thePromptWasThePanorama:true, aPlainSlideStillAsksForItself:true,
   panoInsistsOnOneFrame:true, panoBansTheCollage:true, panoPlacesEveryBeat:true,
   panoKeepsTheCutLinesClear:true, panoKeepsTheCaptionBandDark:true, panoCarriesTheAspect:true,
-  panoStillBansText:true, panoCarriesEveryonePresent:true,
+  panoStillBansText:true, panoCarriesEveryonePresent:true, aThreeRunStillNamesThirds:true,
   briefExplainsTheOneFrame:true, briefMovesTheCameraNotTheCity:true, plainPagesGetNoSuchRider:true
 };
 let bad = 0;

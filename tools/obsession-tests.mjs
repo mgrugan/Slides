@@ -34,7 +34,7 @@ const r = await p.evaluate(async ()=>{
   const shared = ['caption_treatment','font_family','body_font_family','uppercase','text_align',
                   'title_size_pct','body_size_pct','title_gap_em','title_line_em',
                   'max_width_pct','body_width_pct','scrim_pct','scrim_alpha','bottom_pad_pct',
-                  'text_block_top_pct','hook_top_pct','divider','portrait_inset','auto_inset'];
+                  'text_block_top_pct','hook_top_pct','portrait_inset','auto_inset'];
   const drift = shared.filter(k => O[k] !== F[k]);
   out.matchesTheFactsLayout = drift.length === 0;
   out.whatDrifted = drift.join(',');
@@ -47,6 +47,10 @@ const r = await p.evaluate(async ()=>{
   out.noBadge      = !O.badge_fixed && !O.badge_from_angle;
   out.noHandle     = !O.handle_text;
   out.noKeptBreaks = !O.keep_breaks;
+  /* The one field this page deliberately does NOT take from the base layout. On a deck
+     whose whole point is that the picture is continuous, a hard horizontal rule across
+     the cover is the single element that reads as a seam. */
+  out.noRuleOnTheCover = O.divider === false && F.divider === true;
 
   const mk = n => {
     const deck = {id:'d', cat:'Obsession', angle:'pipeline', kind:'story', tone:'colour', slides:[]};
@@ -57,11 +61,18 @@ const r = await p.evaluate(async ()=>{
     markSeams(deck, S.profile);
     return deck;
   };
-  const deck = mk(5);
+  const deck = mk(6);
   const shot = () => {
-    const c = document.createElement('canvas'); c.width = 2688; c.height = 1152;
+    /* A PAIR is generated at 3:2, not at the 21:9 a three-panel run uses — and the shape
+       matters to the seam rather than only to the picture. A source wider than the strip
+       of slides it fills gets cover-fitted by cropping the left and right of every panel,
+       which is exactly where the joins are; 3:2 across two 4:5 slides is narrower than
+       the strip, so the crop lands on the top and bottom and the joins stay exact. A
+       stand-in of the wrong shape here would fail this test for a reason the app does
+       not have. */
+    const c = document.createElement('canvas'); c.width = 1728; c.height = 1152;   // 3:2
     const x = c.getContext('2d');
-    const g = x.createLinearGradient(0,0,2688,0);
+    const g = x.createLinearGradient(0,0,1728,0);
     /* Deliberately nothing near #F4511E in it: the old accent is looked for on the
        finished frame, and a stand-in with orange in it would find its own background. */
     g.addColorStop(0,'#1f5f7a'); g.addColorStop(0.5,'#2f6f9e'); g.addColorStop(1,'#4a3f86');
@@ -116,23 +127,37 @@ const r = await p.evaluate(async ()=>{
   })();
 
   // --- the one thing it kept
-  out.stillSeamless = O.seamless === true && O.seam_span === 5;
-  out.aShortDeckIsOnePicture = deck.slides.every(s => s.seam && s.seam.n === 5 && s.seam.run === 0);
+  out.stillSeamless = O.seamless === true && O.seam_span === 2;
+  /* Slides one and two are one frame, three and four the next, and so on. Six slides is
+     three pictures rather than one picture and a join. */
+  out.theSlidesAreStampedInPairs = mk(6).slides.map(s=>s.seam.run + ':' + s.seam.i + '/' + s.seam.n).join(' ') ===
+    '0:0/2 0:1/2 1:0/2 1:1/2 2:0/2 2:1/2';
+  out.anOddLastSlideGetsItsOwnPicture = (()=>{
+    const d = mk(5);
+    return d.slides.map(s=>s.seam.n).join(',') === '2,2,2,2,1' &&
+           d.slides[4].seam.run === 2;
+  })();
   out.theJoinsAreInvisible = (()=>{
+    /* Only the joins INSIDE a pair: 1-2, 3-4, 5-6. The gap between one pair and the
+       next is a deliberate cut to a new picture and matching there would mean the
+       feature was doing nothing. */
     const cv = deck.slides.map(draw);
     const col = (c, x) => px(c, x, Math.round(H*0.30));
     let worst = 0;
     for(let i = 0; i < cv.length - 1; i++){
+      if(deck.slides[i].seam.run !== deck.slides[i+1].seam.run) continue;
       const a = col(cv[i], W-1), b2 = col(cv[i+1], 0);
       worst = Math.max(worst, Math.abs(a[0]-b2[0]), Math.abs(a[1]-b2[1]), Math.abs(a[2]-b2[2]));
     }
     out.worstJoin = worst;
     return worst <= 4;
   })();
-  out.oneRequestForTheWholeDeck = (()=>{
-    const {fresh} = planImages(mk(5).slides.slice(), 'all');
-    return fresh.length === 1;
+  out.onePicturePerPair = (()=>{
+    // six slides, three pictures — and half the image bill of a deck drawn frame by frame
+    const {fresh} = planImages(mk(6).slides.slice(), 'all');
+    return fresh.length === 3 && fresh.map(s=>s.id).join(',') === 's0,s2,s4';
   })();
+  out.aPairIsGeneratedAtThreeByTwo = seamAspect(2, S.profile) === '3:2';
 
   // --- the pictures are the game, not a photograph of one
   out.imageryIsARender = O.imagery === 'video-game-render' &&
@@ -164,7 +189,7 @@ const r = await p.evaluate(async ()=>{
                              /GTA specifically/.test(conf.prompt);
 
   // --- advice, not a pitch. This is the part that would get the account reported.
-  const dp = obsessionDeckPrompt('Obsession', {subject:'x', hook:'y', n:5, angle:'themoney'});
+  const dp = obsessionDeckPrompt('Obsession', {subject:'x', hook:'y', n:6, angle:'themoney'});
   out.neverPromisesAnIncome = /Never promise an income/.test(dp) && /no "guaranteed"/.test(dp) &&
                               /no implied timeline/.test(dp);
   out.ratesAreQualified = /say it varies and say what it depends on/.test(dp);
@@ -185,10 +210,13 @@ const r = await p.evaluate(async ()=>{
   out.briefBansTheHypeRegister = /no "you won't believe"/.test(dp) && /never "grind" or "hustle"/.test(dp);
 
   // --- the seamless rider tells the writer what a good set of scenes now is
-  out.briefExplainsTheOneRender = /CUT FROM ONE VERY WIDE RENDER, 5 SLIDES AT A TIME/.test(dp);
-  out.briefMovesAlongTheWorld = /move ALONG the world rather than to another part of it/.test(dp) &&
-                                /the swipe becomes a camera panning across one shot/.test(dp);
-  out.briefPlacesThePlayerAtOneEnd = /put them at ONE END of that stretch — the left/.test(dp);
+  out.briefExplainsThePairing = /THE FRAMES COME IN PAIRS/.test(dp) &&
+    /ONE horizontal frame cut down the middle: the first slide is its left half and the second is its right half/.test(dp);
+  out.briefWantsOnePictureNotTwo = /write those scenes as ONE picture, not as two/.test(dp) &&
+                                   /a bike leaving a ramp on the left and landing on the right/.test(dp);
+  out.briefKeepsTheCentreClear = /Nothing important sits dead centre, because that is where the cut falls/.test(dp);
+  out.briefPlacesThePlayerAtOneEnd = /put them in the LEFT half/.test(dp);
+  out.briefSaysWhereTheLocationMayChange = /A new pair is a new picture, so that is where the location may change/.test(dp);
   out.briefWantsMotionInEveryFrame = /Something is HAPPENING in every frame/.test(dp) &&
                                      /never a parked car/i.test(dp);
 
@@ -207,10 +235,11 @@ await b.close();
 const want = {
   presetExists:true, matchesTheFactsLayout:true, whatDrifted:'',
   noWordmark:true, noAccent:true, noAltAlign:true, noGlow:true, noBadge:true, noHandle:true,
-  noKeptBreaks:true,
+  noKeptBreaks:true, noRuleOnTheCover:true,
   theCoverHasNoWordmarkBand:true, noAccentInkAnywhere:true, captionIsWhite:true, captionIsCentred:true,
-  stillSeamless:true, aShortDeckIsOnePicture:true, theJoinsAreInvisible:true, worstJoin:0,
-  oneRequestForTheWholeDeck:true,
+  stillSeamless:true, theSlidesAreStampedInPairs:true, anOddLastSlideGetsItsOwnPicture:true,
+  theJoinsAreInvisible:true, worstJoin:0,
+  onePicturePerPair:true, aPairIsGeneratedAtThreeByTwo:true,
   imageryIsARender:true, namesTheGameAndDescribesIt:true, bansTheInterface:true,
   theCoverIsDirected:true, theCoverBriefReachesTheCover:true,
   angleCount:6, anglesDocumented:true, anglesAreDistinct:true, theRotationCoversTheLoop:true,
@@ -219,7 +248,8 @@ const want = {
   noGetRichFraming:true, staysInsideThePlatformRules:true, categoryCarriesTheSameLimits:true,
   slidesAreTitlePlusBody:true, coverIsHeadlineOnly:true, noAccentMarkersInTheBrief:true,
   noCastBlockInTheBrief:true, briefBansTheHypeRegister:true,
-  briefExplainsTheOneRender:true, briefMovesAlongTheWorld:true, briefPlacesThePlayerAtOneEnd:true,
+  briefExplainsThePairing:true, briefWantsOnePictureNotTwo:true, briefKeepsTheCentreClear:true,
+  briefPlacesThePlayerAtOneEnd:true, briefSaysWhereTheLocationMayChange:true,
   briefWantsMotionInEveryFrame:true,
   factsPagesUnchanged:true, factsPagesStillRefuseTheFace:true, siblingAccountsAreNotSeamless:true
 };

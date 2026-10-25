@@ -16,7 +16,7 @@ import path from 'path';
 
 const ROWS = ['ABCDEFGHIJKLMNOPQRSTUVWXYZ', '1234567890'];
 const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'fontrebuild-'));
-const b = await chromium.launch({executablePath:'/opt/pw-browsers/chromium-1194/chrome-linux/chrome'});
+const b = await chromium.launch({executablePath:'/opt/pw-browsers/chromium-1243/chrome-linux64/chrome'});
 const p = await b.newPage();
 const errs = []; p.on('pageerror', e=>errs.push(String(e)));
 await p.goto('file:///home/user/Slides/index.html');

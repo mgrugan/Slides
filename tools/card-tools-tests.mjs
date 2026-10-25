@@ -4,7 +4,7 @@
    test; being inside the card and reachable by a click is. */
 import { chromium } from 'playwright-core';
 
-const b = await chromium.launch({executablePath:'/opt/pw-browsers/chromium-1194/chrome-linux/chrome'});
+const b = await chromium.launch({executablePath:'/opt/pw-browsers/chromium-1243/chrome-linux64/chrome'});
 const page = await b.newPage();
 const errs = []; page.on('pageerror', e=>errs.push(String(e)));
 

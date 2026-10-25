@@ -1618,7 +1618,7 @@ const FULL_BLEED_CLAUSE = 'The photograph fills the entire frame edge to edge. N
 /* Bumped by hand whenever something ships. It is shown in the header and logged on
    load, so a cached copy of this file can be told from the current one without reading
    the source — the whole app is one file, and a stale one looks completely normal. */
-const BUILD = '2026-09-09 · obsession pairs';
+const BUILD = '2026-10-25 · memory fix';
 
 /* ============================ state ============================ */
 const S = {
@@ -1638,27 +1638,50 @@ const IMG_CACHE = {};   // slide.id -> HTMLImageElement
 /* drop only decoded images no deck still refers to — batch decks keep theirs */
 function pruneImageCache(){
   const live = new Set(S.slides.map(s=>s.id).concat(S.batch.flatMap(d=>d.slides.map(s=>s.id))));
-  for(const k in IMG_CACHE) if(!live.has(k)) delete IMG_CACHE[k];
+  for(const k in IMG_CACHE) if(!live.has(k)){ delete IMG_CACHE[k]; IMG_MP.delete(k); }
   IMG_LRU.length = 0; IMG_LRU.push(...Object.keys(IMG_CACHE));
 }
 /* A decoded 1080x1350 frame is 5.8MB of bitmap, held outside the JS heap where no
    error is ever thrown — the tab simply dies. Ten decks of six used to decode all
    sixty at once, 334MB, purely so a 44px row thumbnail could be drawn. Only what is
-   on screen stays decoded; anything evicted is re-read from slide.img on demand. */
+   on screen stays decoded; anything evicted is re-read from slide.img on demand.
+
+   The budget is in PIXELS rather than in frames, because a frame is not a fixed size
+   and the moment it stopped being one this cache quietly quadrupled. Panoramas are
+   requested at 2K — they have to be, since each one is cut into panels that are then
+   scaled up to fill a slide — and a 2K frame decodes to 10.7MB against 2.7MB for a 1K
+   one. A ceiling of 28 frames was 156MB of bitmap when it was written and 299MB once
+   the first 2K image arrived, which is where the tab started dying. Counted in pixels
+   it holds the same memory whatever size the generator returns. */
 const IMG_LRU = [];              // slide ids, least recent first
-const IMG_LIMIT = 28;
+const IMG_MP = new Map();        // id -> megapixels, measured once the frame decodes
+const IMG_BUDGET_MP = 40;        // ~156MB of RGBA, the budget the old ceiling worked out at
+const IMG_COUNT_CEIL = 90;       // a backstop, so thumbnails alone cannot grow the map forever
 function touchCache(id){
   const i = IMG_LRU.indexOf(id);
   if(i >= 0) IMG_LRU.splice(i, 1);
   IMG_LRU.push(id);
 }
+/* Measured from the decoded frame rather than assumed: the generator's size is a
+   request, not a guarantee, and an undecoded entry counts as nothing until it lands. */
+function noteCachePixels(id, im){
+  if(im && im.naturalWidth) IMG_MP.set(id, im.naturalWidth * im.naturalHeight / 1048576);
+}
+function cacheMegapixels(){
+  let mp = 0;
+  for(const id of IMG_LRU) mp += IMG_MP.get(id) || 0;
+  return mp;
+}
 function trimImageCache(){
   const keep = new Set(S.slides.map(s=>s.id));          // the open deck is never evicted
-  while(IMG_LRU.length > IMG_LIMIT){
+  let mp = cacheMegapixels();
+  while((mp > IMG_BUDGET_MP || IMG_LRU.length > IMG_COUNT_CEIL) && IMG_LRU.length > 1){
     const id = IMG_LRU.find(x=>!keep.has(x));
-    if(!id) break;
+    if(!id) break;                                      // everything left is on screen
     IMG_LRU.splice(IMG_LRU.indexOf(id), 1);
     delete IMG_CACHE[id];
+    mp -= IMG_MP.get(id) || 0;
+    IMG_MP.delete(id);
   }
 }
 const DECODING = new Set();
@@ -2106,14 +2129,39 @@ function projectJSON(withImages){
     batch: withImages ? S.batch.map(d=>({...d, slides:d.slides.map(s=>slimSlide(s,true))})) : []
   };
 }
-const autosave = debounce(async ()=>{
+/* Two saves, at two speeds, because they do not cost remotely the same thing.
+
+   The light one is the project without its pictures: a few kilobytes of text, cheap
+   enough to run on every keystroke, and it is what keeps the open deck's captions and
+   ordering safe.
+
+   The heavy one carries every image on the board as base64. On a run of twenty decks
+   that is a deep copy and a structured clone of a couple of hundred megabytes — and it
+   was firing once per finished image, so a run did that work a hundred times over,
+   each pass longer than the last. That is the lag: the tab spends the whole run
+   serialising pictures instead of drawing them. It now coalesces to one write every
+   few seconds, and refuses to start a second while the first is still going, so the
+   cost stays flat however many images land. The exposure is a few seconds of images
+   on a crash, against a run that no longer causes one. */
+let SAVING_FULL = false, SAVE_AGAIN = false;
+async function saveFull(){
+  if(SAVING_FULL){ SAVE_AGAIN = true; return; }
+  SAVING_FULL = true;
   try{
-    stashEditorDeck();          // keep the open batch deck's caption in sync
-    localStorage.setItem(LS.project, JSON.stringify(projectJSON(false)));
     await idbPut('project', projectJSON(true));
     $('saveState').textContent = 'saved ' + new Date().toLocaleTimeString();
   }catch(e){ $('saveState').textContent = 'autosave failed: '+e.message; }
+  SAVING_FULL = false;
+  if(SAVE_AGAIN){ SAVE_AGAIN = false; saveFull(); }
+}
+const autosaveLight = debounce(()=>{
+  try{
+    stashEditorDeck();          // keep the open batch deck's caption in sync
+    localStorage.setItem(LS.project, JSON.stringify(projectJSON(false)));
+  }catch(e){ $('saveState').textContent = 'autosave failed: '+e.message; }
 }, 500);
+const autosaveHeavy = debounce(saveFull, 4000);
+function autosave(){ autosaveLight(); autosaveHeavy(); }
 
 /* A project stores its own copy of the style, so a profile saved months — or an
    hour — ago is frozen at whatever fields existed then. Anything the built-in
@@ -3576,7 +3624,8 @@ function setImage(slide, dataUrl, cb){
   slide.img = dataUrl;
   const im = new Image();
   im._seam = slide.seam || null;
-  im.onload = () => { measureCrop(im); IMG_CACHE[slide.id] = im; touchCache(slide.id); trimImageCache();
+  im.onload = () => { measureCrop(im); IMG_CACHE[slide.id] = im; touchCache(slide.id);
+                      noteCachePixels(slide.id, im); trimImageCache();
                       drawOne(slide.id); renderBatchRow(slide._deck); cb && cb(); };
   im.onerror = () => log('image decode failed for slide '+slide.id,'e');
   im.src = dataUrl;
@@ -3639,7 +3688,8 @@ function cacheImage(slide){
   return new Promise(res=>{
     const im = new Image();
     im._seam = slide.seam || null;
-    im.onload = im.onerror = () => { measureCrop(im); IMG_CACHE[slide.id] = im; touchCache(slide.id); trimImageCache(); res(); };
+    im.onload = im.onerror = () => { measureCrop(im); IMG_CACHE[slide.id] = im; touchCache(slide.id);
+                                     noteCachePixels(slide.id, im); trimImageCache(); res(); };
     im.src = slide.img;
     IMG_CACHE[slide.id] = im;
     touchCache(slide.id);

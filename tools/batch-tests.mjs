@@ -28,7 +28,7 @@ const stub = () => {
     return J({output:[{content:[{type:'output_text', text: JSON.stringify({slides, caption:'caption '+window.__n.deck})}]}]});
   };
 };
-const b = await chromium.launch({executablePath:'/opt/pw-browsers/chromium-1194/chrome-linux/chrome'});
+const b = await chromium.launch({executablePath:'/opt/pw-browsers/chromium-1243/chrome-linux64/chrome'});
 const p = await b.newPage();
 const errs=[]; p.on('pageerror', e=>errs.push(String(e)));
 const dls=[]; p.on('download', d=>dls.push(d.suggestedFilename()));

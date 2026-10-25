@@ -3,7 +3,7 @@ import fs from 'fs';
 const REF = fs.readdirSync('/root/.claude/uploads/52ad29f1-ecfc-555a-b76d-09c17dd971e1')
   .map(f=>'/root/.claude/uploads/52ad29f1-ecfc-555a-b76d-09c17dd971e1/'+f)
   .sort((a,b)=>fs.statSync(b).mtimeMs-fs.statSync(a).mtimeMs)[0];
-const b = await chromium.launch({executablePath:'/opt/pw-browsers/chromium-1194/chrome-linux/chrome'});
+const b = await chromium.launch({executablePath:'/opt/pw-browsers/chromium-1243/chrome-linux64/chrome'});
 const p = await b.newPage();
 const errs=[]; p.on('pageerror', e=>errs.push(String(e)));
 await p.goto('file:///home/user/Slides/index.html');

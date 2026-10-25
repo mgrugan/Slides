@@ -12,7 +12,7 @@
    turn", which is the case that was wrong. */
 import { chromium } from 'playwright-core';
 
-const b = await chromium.launch({executablePath:'/opt/pw-browsers/chromium-1194/chrome-linux/chrome'});
+const b = await chromium.launch({executablePath:'/opt/pw-browsers/chromium-1243/chrome-linux64/chrome'});
 const p = await b.newPage();
 const errs = []; p.on('pageerror', e=>errs.push(String(e)));
 await p.goto('file:///home/user/Slides/index.html');

@@ -4,3 +4,4 @@ node_modules/
 # the suites drop rendered frames next to themselves
 tools/*.png
 tools/*.jpg
+node_modules

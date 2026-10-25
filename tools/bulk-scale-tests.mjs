@@ -78,7 +78,9 @@ const run = await p.evaluate(()=>({
   uniqueSubjects: new Set(S.batch.map(d=>d.subject)).size,
   subjectCalls: window.__n.subjectCalls,
   asked: window.__n.asked,
-  decodedResident: Object.keys(IMG_CACHE).length
+  decodedResident: Object.keys(IMG_CACHE).length,
+  residentMegapixels: Math.round(cacheMegapixels()),
+  budgetMegapixels: IMG_BUDGET_MP
 }));
 
 /* the library must be reusable across carousels, never twice inside one */
@@ -124,7 +126,19 @@ if(run.written !== ASK) fail.push('only '+run.written+' of '+ASK+' were written'
 if(run.uniqueSubjects !== ASK) fail.push('subjects repeated: '+run.uniqueSubjects+' unique of '+ASK);
 if(run.slides !== ASK*SLIDES) fail.push('slide total '+run.slides+', expected '+ASK*SLIDES);
 if(run.subjectCalls < 2) fail.push('did not top up — one call for '+ASK+' subjects');
-if(run.decodedResident > 32) fail.push('image cache unbounded at scale: '+run.decodedResident);
+/* What "bounded" means here changed, and for a good reason. This used to assert at
+   most 32 resident frames, which was the right test while a frame was always about
+   1080x1350. Panoramas are requested at 2K and decode to four times that, so a ceiling
+   counted in frames stopped bounding anything — 28 frames was 156MB of bitmap when it
+   was written and 299MB once the first 2K image arrived, and bitmaps live outside the
+   JS heap where nothing throws and the tab simply dies. The budget is in pixels now,
+   so that is what this checks; the frame count is still checked, loosely, because the
+   map itself should not grow forever on thumbnails either. */
+if(run.residentMegapixels > run.budgetMegapixels + 3)
+  fail.push('image cache over its pixel budget at scale: ' + run.residentMegapixels +
+            'MP resident against a budget of ' + run.budgetMegapixels + 'MP');
+if(run.decodedResident > 95)
+  fail.push('image cache holding too many frames at scale: '+run.decodedResident);
 // 8 decks x 4 body slides = 32 reuses from a library of 6, which is only possible
 // if a background may serve more than one carousel
 if(lib.reused !== 32) fail.push('library served '+lib.reused+' of 32 body slides');

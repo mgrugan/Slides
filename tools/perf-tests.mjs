@@ -21,12 +21,16 @@ await p.waitForTimeout(1500);
 
 const r = await p.evaluate(async ()=>{
   const out = {};
+  let seed = 0;
+  // each call must differ, or "a new cover" is byte-identical to the old one and a
+  // cache keyed on the image correctly decides nothing changed
   const frame = (w,h) => new Promise(res=>{
     const c = document.createElement('canvas'); c.width = w; c.height = h;
     const x = c.getContext('2d');
     const g = x.createLinearGradient(0,0,w,h);
-    g.addColorStop(0,'#8a5a2b'); g.addColorStop(1,'#1b2a3a');
+    g.addColorStop(0,'hsl('+((seed++ * 37) % 360)+',45%,35%)'); g.addColorStop(1,'#1b2a3a');
     x.fillStyle = g; x.fillRect(0,0,w,h);
+    for(let i=0;i<60;i++){ x.fillStyle='rgba(210,180,130,0.3)'; x.fillRect((i*97+seed)%w,(i*151)%h,40,40); }
     res(c.toDataURL('image/jpeg', 0.9));
   });
   const twoK = await frame(2048, 1365);        // what a 2K panorama decodes like
@@ -115,7 +119,109 @@ const r = await p.evaluate(async ()=>{
     return maxAtOnce === 1;
   })();
 
-  S.slides = []; S.batch = [];
+  /* --- THE ROW THUMBNAILS. The board in the report had 34 decks and the cache holds
+     about 15 frames, so every pass over the rows demanded the ones just evicted, and
+     each of those decodes redrew its row and evicted another. A loop that never
+     settles, which is why the tab went unresponsive with nothing running. */
+  const board = async n => {
+    S.slides = []; S.batch = []; ROW_THUMB.clear();
+    IMG_LRU.length = 0; IMG_MP.clear();
+    for(const k in IMG_CACHE) delete IMG_CACHE[k];
+    const imgs = [];
+    for(let i = 0; i < 6; i++) imgs.push(await frame(2048, 1365));
+    S.batch = Array.from({length:n}, (_, d) => {
+      const deck = {id:'b'+d, cat:'Terrifying', hook:'DECK '+d, subject:'s', tone:'mono',
+                    status:'done', caption:'', slides:[]};
+      deck.slides = Array.from({length:4}, (_, i)=>({id:'b'+d+'s'+i, kind:i?'slide':'hook',
+        title:'T', body:'b', scene:'s', tone:'mono', status:'done',
+        img: imgs[(d*4+i) % imgs.length], _deck:deck}));
+      return deck;
+    });
+    S.openBatch = -1;
+    const fi = PRESETS.findIndex(x=>x.name === 'Documentary facts');
+    S.profile = JSON.parse(JSON.stringify(PRESETS[fi])); S.styleKey = 'preset:'+fi;
+    await fontReady(S.profile);
+    renderBatch();
+    await new Promise(r=>setTimeout(r, 2500));   // let the first pass decode and cache
+    renderBatch();
+    await new Promise(r=>setTimeout(r, 800));
+  };
+  const countDecodes = () => {
+    let n = 0;
+    const real = window.demandImage;
+    window.demandImage = s => { n++; return real(s); };
+    renderBatch();
+    window.demandImage = real;
+    return n;
+  };
+  await board(34);
+  out.moreDecksThanTheCacheHolds = S.batch.length > Object.keys(IMG_CACHE).length;
+  out.warmRowsDemandNoDecodes = countDecodes() === 0;
+  out.everyRowHasAThumbnail = ROW_THUMB.size === 34;
+  out.thumbnailsAreSmall = (()=>{
+    const any = [...ROW_THUMB.values()][0];
+    return !!any && any.bmp.naturalWidth < 120 && any.bmp.naturalHeight < 200;
+  })();
+  out.aNewCoverRedrawsItsRow = await (async ()=>{
+    const d = S.batch[3], before = ROW_THUMB.get(d.id).key;
+    d.slides[0].img = await frame(2048, 1365);
+    await cacheImage(d.slides[0]);
+    renderBatchRow(d);
+    await new Promise(r=>setTimeout(r, 300));
+    return ROW_THUMB.get(d.id).key !== before;
+  })();
+  out.aLiveStyleEditRedrawsTheRows = (()=>{
+    /* A Terrifying deck resolves to the facts style, which is the one loaded, so an
+       edit to it must reach the row. The style NAME does not change when a slider
+       moves, which is why the key carries a revision as well. */
+    const d = S.batch[5], before = rowThumbKey(d);
+    S.profile.title_size_pct = 0.0801;
+    drawAll();
+    return rowThumbKey(d) !== before;
+  })();
+  out.anotherAccountsRowIsNotRedrawnForIt = (()=>{
+    /* The same edit, against a deck drawn in a style that is NOT the live one. Its
+       row is unaffected and must not be thrown away. */
+    const d = S.batch[6];
+    d.cat = 'fun'; d.slides[0]._deck = d;
+    const before = rowThumbKey(d);
+    S.profile.title_size_pct = 0.0802;
+    drawAll();
+    const after = rowThumbKey(d);
+    d.cat = 'Terrifying';
+    return after === before;
+  })();
+  out.thumbnailsGoWhenTheirDeckDoes = (()=>{
+    S.batch = S.batch.slice(0, 2);
+    trimImageCache();
+    for(const k in IMG_CACHE) if(!new Set(S.batch.flatMap(d=>d.slides.map(x=>x.id))).has(k)) delete IMG_CACHE[k];
+    // the sweep that drops orphans runs on load; call the same path
+    const live = new Set(S.batch.flatMap(d=>d.slides.map(x=>x.id)));
+    for(const k in IMG_CACHE) if(!live.has(k)){ delete IMG_CACHE[k]; IMG_MP.delete(k); }
+    const decks = new Set(S.batch.map(d=>d.id));
+    for(const k of [...ROW_THUMB.keys()]) if(!decks.has(k)) ROW_THUMB.delete(k);
+    return ROW_THUMB.size <= 2;
+  })();
+
+  /* --- THE LEDGER. ledgerHas rebuilt the whole ledger's rarity counts and re-tokenised
+     every entry, on every call, for every candidate a picker considered. Pinned by
+     identity rather than by a stopwatch: the same string must come back as the same
+     Set, and the counts must be the same object until the ledger changes. */
+  LEDGER.length = 0;
+  for(let i = 0; i < 400; i++)
+    LEDGER.push({subject:'Soviet Submarine K-'+i, title:'t', cat:'Terrifying', date:1});
+  out.tokensAreMemoised = subjectTokens('The Great Emu War') === subjectTokens('The Great Emu War');
+  out.countsAreHeldUntilTheLedgerChanges = ledgerTokenCounts() === ledgerTokenCounts();
+  out.countsRebuildWhenItDoes = (()=>{
+    const before = ledgerTokenCounts();
+    LEDGER.push({subject:'Something New Entirely', title:'t', cat:'Terrifying', date:1});
+    return ledgerTokenCounts() !== before;
+  })();
+  out.andTheAnswersDidNotChange = ledgerHas('Soviet Submarine K-17') === true &&
+                                  ledgerHas('A Completely Unrelated Thing') === false;
+  LEDGER.length = 0;
+
+  S.slides = []; S.batch = []; ROW_THUMB.clear();
   return out;
 });
 await b.close();
@@ -125,7 +231,13 @@ const want = {
   staysUnderBudget:true, itEvictedRatherThanRefusing:true, anEvictedFrameIsForgottenToo:true,
   theOpenDeckSurvives:true, smallFramesStillFit:true,
   theHeavyHalfIsSeparate:true, fiftyImagesCauseOneSave:true, theLightHalfCarriesNoImages:true,
-  twoFullSavesDoNotOverlap:true
+  twoFullSavesDoNotOverlap:true,
+  moreDecksThanTheCacheHolds:true, warmRowsDemandNoDecodes:true, everyRowHasAThumbnail:true,
+  thumbnailsAreSmall:true, aNewCoverRedrawsItsRow:true, aLiveStyleEditRedrawsTheRows:true,
+  anotherAccountsRowIsNotRedrawnForIt:true,
+  thumbnailsGoWhenTheirDeckDoes:true,
+  tokensAreMemoised:true, countsAreHeldUntilTheLedgerChanges:true, countsRebuildWhenItDoes:true,
+  andTheAnswersDidNotChange:true
 };
 let bad = 0;
 for(const [k,v] of Object.entries(want)){

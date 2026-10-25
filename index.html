@@ -1618,7 +1618,7 @@ const FULL_BLEED_CLAUSE = 'The photograph fills the entire frame edge to edge. N
 /* Bumped by hand whenever something ships. It is shown in the header and logged on
    load, so a cached copy of this file can be told from the current one without reading
    the source — the whole app is one file, and a stale one looks completely normal. */
-const BUILD = '2026-10-25 · memory fix';
+const BUILD = '2026-10-25 · no decode storm';
 
 /* ============================ state ============================ */
 const S = {
@@ -1639,6 +1639,8 @@ const IMG_CACHE = {};   // slide.id -> HTMLImageElement
 function pruneImageCache(){
   const live = new Set(S.slides.map(s=>s.id).concat(S.batch.flatMap(d=>d.slides.map(s=>s.id))));
   for(const k in IMG_CACHE) if(!live.has(k)){ delete IMG_CACHE[k]; IMG_MP.delete(k); }
+  const decks = new Set(S.batch.map(d=>d.id));
+  for(const k of [...ROW_THUMB.keys()]) if(!decks.has(k)) ROW_THUMB.delete(k);
   IMG_LRU.length = 0; IMG_LRU.push(...Object.keys(IMG_CACHE));
 }
 /* A decoded 1080x1350 frame is 5.8MB of bitmap, held outside the JS heap where no
@@ -3700,7 +3702,7 @@ function drawOne(id){
   const c = document.querySelector('canvas[data-id="'+id+'"]'); if(!c) return;
   renderSlide(s, c, profileFor(s), cardScale(c));
 }
-function drawAll(){ for(const s of S.slides) drawOne(s.id); }
+function drawAll(){ STYLE_REV++; for(const s of S.slides) drawOne(s.id); }
 
 function buildGrid(){
   const g = $('slideGrid'); g.innerHTML = '';
@@ -5459,6 +5461,34 @@ function renderBatch(){
     renderBatchRow(d);
   });
 }
+/* A finished row thumbnail, kept as a 54x96 bitmap per deck.
+
+   The row shows the deck's cover at 0.07 scale, and drawing it meant decoding the
+   full-size cover frame. With more decks on the board than frames the cache can hold,
+   every pass over the rows demanded the ones that had just been evicted — and each of
+   those decodes, on landing, redrew its row and evicted another. A loop that never
+   settles: the board sat there decoding 2K JPEGs forever and the tab went unresponsive
+   with nothing running.
+
+   So the row is rendered properly ONCE and the result kept as a tiny bitmap. The key
+   is the cover's image and the style it is drawn in, so a new cover or a style change
+   redraws it and nothing else does. Sixty kilobytes of thumbnails replaces a hundred
+   megabytes of repeatedly decoded frames. */
+const ROW_THUMB = new Map();          // deck id -> {key, bmp}
+/* Bumped by every redraw of the editor, which is what a style edit triggers. A deck
+   whose row is drawn in the LIVE profile has to notice those edits; a deck drawn in
+   some other account's style is unaffected by them and must not be redrawn for
+   nothing — the style name alone cannot tell those two apart, since the name does not
+   change when the slider does. */
+let STYLE_REV = 0;
+function rowThumbKey(deck){
+  const s = deck.slides[0];
+  if(!s) return 'empty';
+  const prof = profileFor(s);
+  const img = s.img ? s.img.length + ':' + s.img.slice(-24) : 'none';
+  return img + '|' + (prof.name || '') + '|' + (prof === S.profile ? STYLE_REV : 'fixed') +
+         '|' + (s.title || '');
+}
 function renderBatchRow(deck){
   if(!deck) return;
   const i = S.batch.indexOf(deck);
@@ -5479,8 +5509,24 @@ function renderBatchRow(deck){
       '<button data-a="zip" title="Download this deck">'+svg(ICON.dl)+'ZIP</button>'+
     '</div>';
   const cv = row.querySelector('canvas');
-  if(deck.slides.length) renderSlide(deck.slides[0], cv, profileFor(deck.slides[0]), 0.07);   // thumbnail-sized render
-  else { cv.width = 54; cv.height = 96; }
+  if(!deck.slides.length){ cv.width = 54; cv.height = 96; }
+  else {
+    const key = rowThumbKey(deck), had = ROW_THUMB.get(deck.id);
+    if(had && had.key === key && had.bmp.complete && had.bmp.naturalWidth){
+      cv.width = had.bmp.naturalWidth; cv.height = had.bmp.naturalHeight;
+      cv.getContext('2d').drawImage(had.bmp, 0, 0);
+    } else {
+      renderSlide(deck.slides[0], cv, profileFor(deck.slides[0]), 0.07);   // thumbnail-sized render
+      /* Only worth keeping once the frame it was drawn from had actually decoded —
+         otherwise the placeholder gradient gets cached as the deck's thumbnail and the
+         row never updates when the picture arrives. */
+      if(!deck.slides[0].img || IMG_CACHE[deck.slides[0].id]){
+        const bmp = new Image();
+        bmp.onload = () => ROW_THUMB.set(deck.id, {key, bmp});
+        bmp.src = cv.toDataURL('image/jpeg', 0.72);
+      }
+    }
+  }
   row.querySelector('[data-a=open]').onclick = e => { e.stopPropagation(); openBatchDeck(i); };
   row.querySelector('[data-a=zip]').onclick = e => { e.stopPropagation(); downloadDecks([deck]); };
   row.onclick = () => openBatchDeck(i);
@@ -5824,22 +5870,41 @@ const LEDGER_GENERIC = new Set(('the of a an and or in on at to for with from by
 const LEDGER_COMMON = new Set(('war fire flood plague explosion disaster massacre raid mission flight ' +
   'expedition bombing trial hoax theory murder crime death ship plane train bomb attack').split(/\s+/));
 
+/* Tokenising is pure, and the same few hundred strings are tokenised over and over:
+   every ledger entry, once for the rarity counts and again for each comparison, on
+   every candidate a picker considers. With a ledger of six hundred that was 75ms per
+   twenty checks and rising with the ledger — about a second of blocked main thread
+   per run, growing every day the account posts. Memoised it is read once.
+   The returned Set is shared, so nothing may mutate it; every caller only reads. */
+const TOKEN_MEMO = new Map();
 function subjectTokens(s){
-  return new Set(String(s||'').toLowerCase().split(/[^a-z0-9]+/)
+  const k = String(s||'');
+  const had = TOKEN_MEMO.get(k);
+  if(had) return had;
+  const v = new Set(k.toLowerCase().split(/[^a-z0-9]+/)
     // numbers are kept whatever their length: they are often the whole difference
     // between two subjects, as in Apollo 1 and Apollo 13
     .filter(w => (w.length > 2 || /^\d+$/.test(w)) && !LEDGER_GENERIC.has(w))
     .map(w => /^\d+$/.test(w) ? w : stem(w)));
+  if(TOKEN_MEMO.size > 5000) TOKEN_MEMO.clear();
+  TOKEN_MEMO.set(k, v);
+  return v;
 }
 const subjectNumbers = s => new Set(String(s||'').match(/\d+/g) || []);
 /* How rare each ledger token is. A name that turns up in one entry out of two hundred
    identifies that entry — sharing it means sharing the subject, whatever the wording. */
+/* And the counts themselves, which are a full pass over the ledger and were being
+   rebuilt on every single ledgerHas. Held until the ledger changes — every mutation
+   here changes its length or replaces the array, so that is what the cache watches. */
+let COUNTS_CACHE = {ref:null, len:-1, counts:null};
 function ledgerTokenCounts(){
+  if(COUNTS_CACHE.ref === LEDGER && COUNTS_CACHE.len === LEDGER.length) return COUNTS_CACHE.counts;
   const c = {};
   LEDGER.forEach(e=>{
     const t = new Set([...subjectTokens(e.subject), ...subjectTokens(e.alt||'')]);
     t.forEach(x=>{ c[x] = (c[x]||0) + 1; });
   });
+  COUNTS_CACHE = {ref:LEDGER, len:LEDGER.length, counts:c};
   return c;
 }
 function sameSubject(a, b, counts){

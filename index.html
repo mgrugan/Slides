@@ -1618,7 +1618,7 @@ const FULL_BLEED_CLAUSE = 'The photograph fills the entire frame edge to edge. N
 /* Bumped by hand whenever something ships. It is shown in the header and logged on
    load, so a cached copy of this file can be told from the current one without reading
    the source — the whole app is one file, and a stale one looks completely normal. */
-const BUILD = '2026-10-25 · no decode storm';
+const BUILD = '2026-10-25 · fast saves';
 
 /* ============================ state ============================ */
 const S = {
@@ -1748,6 +1748,8 @@ function idb(){
 }
 async function idbPut(k,v){ const db = await idb(); return new Promise((res,rej)=>{ const t=db.transaction('kv','readwrite'); t.objectStore('kv').put(v,k); t.oncomplete=res; t.onerror=()=>rej(t.error); }); }
 async function idbGet(k){ const db = await idb(); return new Promise((res,rej)=>{ const t=db.transaction('kv','readonly'); const q=t.objectStore('kv').get(k); q.onsuccess=()=>res(q.result); q.onerror=()=>rej(q.error); }); }
+async function idbDel(k){ const db = await idb(); return new Promise((res,rej)=>{ const t=db.transaction('kv','readwrite'); t.objectStore('kv').delete(k); t.oncomplete=res; t.onerror=()=>rej(t.error); }); }
+async function idbKeys(){ const db = await idb(); return new Promise((res,rej)=>{ const t=db.transaction('kv','readonly'); const q=t.objectStore('kv').getAllKeys(); q.onsuccess=()=>res(q.result||[]); q.onerror=()=>rej(q.error); }); }
 
 /* ============================ background library ============================
    Every generated background is kept so it can be reused on a later deck without
@@ -2120,16 +2122,81 @@ async function useFromLibrary(slide, item){
   libSave(item);
 }
 
+/* `hasImg` and `hasInset` are the whole reason the pictures can live elsewhere: the
+   project record has to remember WHICH slides had one. Without that, a reload cannot
+   tell a slide whose picture is in another record from a slide that never had one —
+   and getting that backwards is expensive in both directions. Resurrect too eagerly
+   and a picture the user deleted to force a regenerate comes straight back; resurrect
+   too little and the planner reads a finished slide as unmade and pays to make it
+   again. */
 const slimSlide = (s, withImages) => ({id:s.id, kind:s.kind, title:s.title, body:s.body, scene:s.scene, tone:s.tone,
   pop:s.pop||'', swipe:s.swipe||'', cast:s.cast||[], badge:s.badge||'',
   bought:s.bought||'', value:s.value||'', gained:s.gained||'', status:s.status, job:s._job||'',
+  hasImg: !!s.img, hasInset: !!s.inset,
   img: withImages ? (s.img||'') : '', inset: withImages ? (s.inset||'') : ''});
+/* The project record used to carry every picture on the board inside it, which meant
+   saving anything at all rewrote all of them. At 34 decks that is a 115MB record: 1.2
+   seconds to stringify and 2.6 to write, on the main thread, every time — and it grows
+   with the board, so the bigger the run the worse each save gets. That is the freezing.
+
+   The pictures now live one IndexedDB record each, written once when the picture
+   arrives and never rewritten, and the project record carries the text and the
+   structure only. A save during a run went from "all of it, again" to one small record.
+
+   What deliberately did NOT change is the in-memory shape: every slide still carries
+   its own `img`, reattached on load before anything looks at it. Half the app asks
+   whether a slide has a picture — the row counts, the planner, the finish loop — and
+   a slide that had lost its `img` would read as one that was never generated, which
+   on the planner's side means paying to generate it a second time. */
+const DIRTY_IMGS = new Set();          // slide ids whose picture is not on disk yet
+const imgKey = id => 'img:' + id;
+const insKey = id => 'ins:' + id;      // the cover circle, when one was uploaded
 function projectJSON(withImages){
   return {
-    v:2, profile:S.profile, styleKey:S.styleKey, caption:S.caption, openBatch:S.openBatch,
-    slides:S.slides.map(s=>slimSlide(s, withImages)),
-    batch: withImages ? S.batch.map(d=>({...d, slides:d.slides.map(s=>slimSlide(s,true))})) : []
+    v:3, profile:S.profile, styleKey:S.styleKey, caption:S.caption, openBatch:S.openBatch,
+    // `withImages` now means "this copy is the durable one", not "inline the pictures"
+    slides:S.slides.map(s=>slimSlide(s, false)),
+    batch: withImages ? S.batch.map(d=>({...d, slides:d.slides.map(s=>slimSlide(s,false))})) : []
   };
+}
+/* Write out the pictures that arrived since the last save, and sweep any whose slide
+   has since gone. Each one is written once; nothing is ever rewritten. */
+function everySlide(){
+  const all = S.slides.slice();
+  for(const d of S.batch) for(const s of d.slides) all.push(s);
+  return all;
+}
+async function flushImages(){
+  const img = new Map(), ins = new Map();
+  for(const s of everySlide()){
+    if(s.img) img.set(s.id, s.img);
+    if(s.inset) ins.set(s.id, s.inset);
+  }
+  for(const id of [...DIRTY_IMGS]){
+    DIRTY_IMGS.delete(id);
+    try{
+      if(img.has(id)) await idbPut(imgKey(id), img.get(id)); else await idbDel(imgKey(id));
+      if(ins.has(id)) await idbPut(insKey(id), ins.get(id)); else await idbDel(insKey(id));
+    }catch(e){ DIRTY_IMGS.add(id); throw e; }
+  }
+  try{
+    for(const k of await idbKeys()){
+      if(typeof k !== 'string') continue;
+      if(k.startsWith('img:') && !img.has(k.slice(4))) await idbDel(k);
+      if(k.startsWith('ins:') && !ins.has(k.slice(4))) await idbDel(k);
+    }
+  }catch(e){}                          // a failed sweep costs disk, never correctness
+}
+/* Put the pictures back, and ONLY on the slides the project says had one. A slide
+   saved without a picture stays without one — a deleted frame must not come back from
+   a record the sweep has not reached yet. */
+async function loadImages(){
+  for(const s of everySlide()){
+    try{
+      if(!s.img && s.hasImg){ const d = await idbGet(imgKey(s.id)); if(d) s.img = d; }
+      if(!s.inset && s.hasInset){ const d = await idbGet(insKey(s.id)); if(d) s.inset = d; }
+    }catch(e){}
+  }
 }
 /* Two saves, at two speeds, because they do not cost remotely the same thing.
 
@@ -2150,6 +2217,7 @@ async function saveFull(){
   if(SAVING_FULL){ SAVE_AGAIN = true; return; }
   SAVING_FULL = true;
   try{
+    await flushImages();
     await idbPut('project', projectJSON(true));
     $('saveState').textContent = 'saved ' + new Date().toLocaleTimeString();
   }catch(e){ $('saveState').textContent = 'autosave failed: '+e.message; }
@@ -2247,6 +2315,12 @@ async function restoreProject(){
     return deck;                       // _deck is not serialised, so relink it on the way back in
   });
   S.openBatch = typeof p.openBatch === 'number' ? p.openBatch : -1;
+  await loadImages();                  // the pictures, from their own records
+  /* A project written before the pictures moved out carries them inline. They are on
+     the slides already, so nothing is missing — but they are also still inside the big
+     record, so mark them to be written out properly and the next save drops it. */
+  if((p.v || 2) < 3)
+    S.batch.concat([{slides:S.slides}]).forEach(d=>d.slides.forEach(s=>{ if(s.img) DIRTY_IMGS.add(s.id); }));
   // Only the covers are decoded on the way back in — that is all a batch row draws.
   // Everything else waits until its deck is opened, or until a ZIP asks for it.
   S.batch.forEach(d=>d.slides.slice(0,1).forEach(s=>{ if(s.img) cacheImage(s); if(s.inset) cacheInset(s); }));
@@ -3624,6 +3698,8 @@ function renderSlide(slide, canvas, p, scale){
 /* ============================ slide grid ============================ */
 function setImage(slide, dataUrl, cb){
   slide.img = dataUrl;
+  DIRTY_IMGS.add(slide.id);            // written out by the next save, once
+  ROW_THUMB.delete(slide._deck ? slide._deck.id : '');
   const im = new Image();
   im._seam = slide.seam || null;
   im.onload = () => { measureCrop(im); IMG_CACHE[slide.id] = im; touchCache(slide.id);
@@ -3772,7 +3848,8 @@ function buildGrid(){
       d.querySelector('[data-a=insetFile]').onchange = e => {
         const f = e.target.files[0]; if(!f) return;
         const rd = new FileReader();
-        rd.onload = () => { s.inset = rd.result; cacheInset(s).then(()=>{ drawOne(s.id); autosave(); }); };
+        rd.onload = () => { s.inset = rd.result; DIRTY_IMGS.add(s.id);
+                            cacheInset(s).then(()=>{ drawOne(s.id); autosave(); }); };
         rd.readAsDataURL(f);
       };
     }

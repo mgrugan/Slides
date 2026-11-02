@@ -179,16 +179,18 @@ const r = await p.evaluate(async ()=>{
     drawAll();
     return rowThumbKey(d) !== before;
   })();
-  out.anotherAccountsRowIsNotRedrawnForIt = (()=>{
-    /* The same edit, against a deck drawn in a style that is NOT the live one. Its
-       row is unaffected and must not be thrown away. */
+  out.anEditToAnotherStyleLeavesTheRowAlone = (()=>{
+    /* The same edit, made while a DIFFERENT style is loaded. A Terrifying deck is drawn
+       in the facts style whatever is on screen, so editing something else must not
+       throw its thumbnail away. */
     const d = S.batch[6];
-    d.cat = 'fun'; d.slides[0]._deck = d;
+    const keep = S.profile;
+    S.profile = JSON.parse(JSON.stringify(PRESETS[PRESETS.findIndex(x=>x.name === 'Photographic')]));
     const before = rowThumbKey(d);
     S.profile.title_size_pct = 0.0802;
     drawAll();
     const after = rowThumbKey(d);
-    d.cat = 'Terrifying';
+    S.profile = keep;
     return after === before;
   })();
   out.thumbnailsGoWhenTheirDeckDoes = (()=>{
@@ -357,7 +359,7 @@ const want = {
   twoFullSavesDoNotOverlap:true,
   moreDecksThanTheCacheHolds:true, warmRowsDemandNoDecodes:true, everyRowHasAThumbnail:true,
   thumbnailsAreSmall:true, aNewCoverRedrawsItsRow:true, aLiveStyleEditRedrawsTheRows:true,
-  anotherAccountsRowIsNotRedrawnForIt:true,
+  anEditToAnotherStyleLeavesTheRowAlone:true,
   thumbnailsGoWhenTheirDeckDoes:true,
   tokensAreMemoised:true, countsAreHeldUntilTheLedgerChanges:true, countsRebuildWhenItDoes:true,
   andTheAnswersDidNotChange:true,

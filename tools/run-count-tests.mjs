@@ -63,7 +63,26 @@ const r = await p.evaluate(async ()=>{
     const src = pickSubjects.toString();
     return /round < 8/.test(src) && /dry < 3/.test(src);
   })();
-  out.theAskGrowsWhenARoundIsDry = /dry \* need/.test(pickSubjects.toString());
+  out.theRoundReachesFurtherWhenItComesBackDry = await (async ()=>{
+    /* A round that adds nothing means the category is crowded, and asking the same way
+       again gets the same answer. With a cap on what one reply may be asked for, the
+       round reaches further by making MORE calls rather than a bigger one — so what is
+       measured is the size of the wave, with the per-call cap pinned separately. */
+    LEDGER.length = 0;
+    const keep = window.callModel;
+    let calls = 0;
+    const waves = [];
+    const realAll = Promise.all.bind(Promise);
+    Promise.all = (...a) => { waves.push(calls); return realAll(...a); };
+    window.callModel = async () => { calls++;
+      return {text: JSON.stringify([{subject:'The Same Story Every Time', claim:'c'}])}; };
+    await pickSubjects('History', '', 50);
+    Promise.all = realAll;
+    window.callModel = keep;
+    const per = waves.map((v, i) => (i + 1 < waves.length ? waves[i+1] : calls) - v).filter(x => x > 0);
+    out.callsPerRound = per.join(',');
+    return per.length > 1 && per[per.length - 1] > per[0];
+  })();
   out.theBriefSaysTheCountIsNotNegotiable = await (async ()=>{
     const keep = window.callModel;
     let sent = '';
@@ -124,6 +143,110 @@ const r = await p.evaluate(async ()=>{
     return got.length === 10;
   })();
 
+  /* --- A REPLY THAT RAN OUT OF ROOM. Asking for fifty subjects in one reply, each
+     needing a claim and each having to clear a long bar, is a reply that gets cut off
+     with the array still open. JSON.parse fails on it, and the picker used to treat
+     that as the end of the run — so clicking 50 returned however many had arrived
+     before the first long reply truncated. Both halves are fixed: the objects that DID
+     close are salvaged, and a reply nobody can read costs one call rather than the run. */
+  /* Subject names that are genuinely distinct to the DEDUPER, not just to a human.
+     Two stand-ins called "Reply 7 Subject 3" and "Reply 7 Subject 5" share "reply",
+     "subject" and the 7, and the rare-token rule correctly reads them as one subject —
+     so a lazily-named stub measures the tokeniser instead of the picker. Every name
+     here is built from two invented words that appear nowhere else. */
+  let wordN = 0;
+  const uniqueName = () => { const a = 'zel' + (wordN++).toString(36) + 'ix';
+                             const b = 'vorn' + (wordN++).toString(36) + 'ad';
+                             return a + ' ' + b; };
+  const truncating = completes => {
+    let call = 0;
+    return async o => {
+      call++;
+      const asked = +(/Pick (\d+) subjects/.exec(o.parts[0].text) || [0,0])[1];
+      const items = [];
+      for(let i = 0; i < Math.min(asked, completes); i++)
+        items.push('{"subject":"' + uniqueName() + '","claim":"a claim"}');
+      // ran out of room mid-object, so no closing bracket — exactly what a cut reply is
+      return {text: '[' + items.join(',') + (asked > completes ? ',{"subject":"Subj' : ']')};
+    };
+  };
+  /* A picker that throws is itself a regression — it is what the old code did on the
+     first truncated reply — so it is reported as a failed expectation rather than
+     allowed to take the whole suite down with it. */
+  const withModel = async (fn, want) => {
+    LEDGER.length = 0;
+    const keep = window.callModel;
+    let calls = 0;
+    window.callModel = async o => { calls++; return fn(o); };
+    try{
+      const got = await pickSubjects('History', '', want);
+      return {n: got.length, calls, unique: new Set(got.map(x=>x.subject)).size};
+    }catch(e){
+      return {n: 0, calls, unique: 0, threw: e.message};
+    }finally{ window.callModel = keep; }
+  };
+
+  // extractJSON throws when it cannot salvage, which is the regression — catch it so
+  // the suite reports a failed expectation instead of dying on the first one
+  const parsed = t => { try{ return extractJSON(t, true); }catch(e){ return null; } };
+  out.salvagesATruncatedList = (()=>{
+    const v = parsed('[{"subject":"A","claim":"x"},{"subject":"B","claim":"y"},{"subject":"C');
+    return !!v && v.length === 2 && v[1].subject === 'B';
+  })();
+  out.aBraceInsideAStringIsNotAnObject = (()=>{
+    const v = parsed('[{"subject":"A {weird} name","claim":"x"},{"subject":"B","claim":"y"},{"sub');
+    return !!v && v.length === 2 && v[0].subject === 'A {weird} name';
+  })();
+  out.aCompleteListIsStillParsedWhole = (parsed('[{"subject":"A"},{"subject":"B"}]')||[]).length === 2;
+
+  const cut25 = await withModel(truncating(25), 50);
+  out.fiftyArrivesWhenRepliesAreCutAt25 = cut25.n === 50 && cut25.unique === 50;
+  const cut8 = await withModel(truncating(8), 50);
+  out.fiftyArrivesWhenRepliesAreCutAt8 = cut8.n === 50 && cut8.unique === 50;
+  out.aSmallRunStillTakesOneCall = (await withModel(truncating(25), 10)).calls === 1;
+
+  out.oneUnreadableReplyDoesNotEndTheRun = await (async ()=>{
+    /* Every third reply is junk. The run must route around it rather than stop. */
+    let call = 0;
+    const flaky = async o => {
+      call++;
+      if(call % 3 === 0) return {text:'I am sorry, I cannot help with that request.'};
+      const asked = +(/Pick (\d+) subjects/.exec(o.parts[0].text) || [0,0])[1];
+      return {text: JSON.stringify(Array.from({length:asked}, ()=>
+        ({subject: uniqueName(), claim:'c'})))};
+    };
+    const got = await withModel(flaky, 50);
+    return got.n === 50;
+  })();
+  out.allGarbageStillFailsClearly = await (async ()=>{
+    LEDGER.length = 0;
+    const keep = window.callModel;
+    window.callModel = async () => ({text:'I cannot help with that'});
+    let msg = '';
+    try{ await pickSubjects('History', '', 50); }catch(e){ msg = e.message; }
+    window.callModel = keep;
+    return /could not read subjects/.test(msg);
+  })();
+
+  out.noSingleReplyIsAskedForTooMany = await (async ()=>{
+    /* The cap is the point: a reply that is never asked for more than a dozen rarely
+       runs out of room in the first place. */
+    LEDGER.length = 0;
+    const keep = window.callModel;
+    let biggest = 0;
+    window.callModel = async o => {
+      const asked = +(/Pick (\d+) subjects/.exec(o.parts[0].text) || [0,0])[1];
+      biggest = Math.max(biggest, asked);
+      return {text: JSON.stringify(Array.from({length:asked}, (_,i)=>({subject:'Q'+biggest+'-'+i, claim:'c'})))};
+    };
+    await pickSubjects('History', '', 50);
+    window.callModel = keep;
+    out.biggestSingleAsk = biggest;
+    return biggest <= PICK_CHUNK;
+  })();
+  out.unreadableRepliesAreReported = /replies unreadable/.test(
+    shortfallLine(50, 20, {returned:20, covered:0, repeated:0, unreadable:4}));
+
   // --- the rotation picker got the same treatment
   out.theAnglePickerPersistsToo = /round < 7/.test(pickAngleIdeas.toString()) &&
                                   /dry < 3/.test(pickAngleIdeas.toString()) &&
@@ -135,14 +258,20 @@ await b.close();
 
 const want = {
   aThinModelStillFillsTheRun:true, howManyCameBack:20, andTheyAreAllDifferent:true,
-  theOldLimitsWouldHaveFallenShort:true, theAskGrowsWhenARoundIsDry:true,
+  theOldLimitsWouldHaveFallenShort:true, theRoundReachesFurtherWhenItComesBackDry:true,
   theBriefSaysTheCountIsNotNegotiable:true,
   aShortRunIsReported:true, itSaysHowManyCameBack:true, itNamesTooFewReturned:true,
   itNamesTheLedgerWhenThatIsTheCause:true, itNamesTheModelRepeatingItself:true,
   theThreeCausesReadDifferently:true,
   theScanSweepsAgain:true, theScanReportsItsShortfall:true,
   theScanTopsUpToTheNumber:true, scanReturned:10,
-  theAnglePickerPersistsToo:true
+  theAnglePickerPersistsToo:true,
+  salvagesATruncatedList:true, aBraceInsideAStringIsNotAnObject:true,
+  aCompleteListIsStillParsedWhole:true,
+  fiftyArrivesWhenRepliesAreCutAt25:true, fiftyArrivesWhenRepliesAreCutAt8:true,
+  aSmallRunStillTakesOneCall:true, oneUnreadableReplyDoesNotEndTheRun:true,
+  allGarbageStillFailsClearly:true, noSingleReplyIsAskedForTooMany:true,
+  unreadableRepliesAreReported:true
 };
 let bad = 0;
 for(const [k,v] of Object.entries(want)){
@@ -151,5 +280,7 @@ for(const [k,v] of Object.entries(want)){
   console.log((ok?'  ok  ':'FAIL  ') + k.padEnd(36) + JSON.stringify(got) + (ok ? '' : '  (wanted ' + JSON.stringify(v) + ')'));
 }
 if(errs.length){ console.log('page errors:'); errs.forEach(e=>console.log('  '+e)); bad++; }
+console.log('  ·   biggest single ask on a run of 50: ' + r.biggestSingleAsk +
+            ' · calls per round when dry: ' + r.callsPerRound);
 console.log(bad ? bad + ' failing' : 'all good');
 process.exit(bad ? 1 : 0);

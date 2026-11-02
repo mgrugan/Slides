@@ -1073,7 +1073,7 @@ const FULL_BLEED_CLAUSE = 'The photograph fills the entire frame edge to edge. N
 /* Bumped by hand whenever something ships. It is shown in the header and logged on
    load, so a cached copy of this file can be told from the current one without reading
    the source — the whole app is one file, and a stale one looks completely normal. */
-const BUILD = '2026-11-02 · four categories';
+const BUILD = '2026-11-02 · fifty means fifty';
 
 /* ============================ state ============================ */
 const S = {
@@ -1996,8 +1996,44 @@ function extractJSON(text, wantArray){
   try{ return JSON.parse(cand); }
   catch(e){
     try{ return JSON.parse(t); }
-    catch(e2){ const err = new Error('JSON parse failed: '+e.message); err.raw = text; throw err; }
+    catch(e2){
+      /* A list that was cut off mid-flight is not a failed reply, it is a short one.
+         Ask a model for forty objects and it will often stop at twenty-five with the
+         array still open — and throwing away the twenty-five that DID arrive is how a
+         run for fifty quietly returned whatever it had when the first long reply came
+         back truncated. Take the objects that closed. */
+      if(wantArray){
+        const items = salvageObjects(t);
+        if(items.length) return items;
+      }
+      const err = new Error('JSON parse failed: '+e.message); err.raw = text; throw err;
+    }
   }
+}
+/* Every complete {...} at the top level of a list, read by balancing braces rather
+   than by regex, so a brace inside a string does not end an object early. */
+function salvageObjects(t){
+  const out = [];
+  let depth = 0, start = -1, inStr = false, esc = false;
+  for(let i = 0; i < t.length; i++){
+    const c = t[i];
+    if(inStr){
+      if(esc) esc = false;
+      else if(c === '\\') esc = true;
+      else if(c === '"') inStr = false;
+      continue;
+    }
+    if(c === '"'){ inStr = true; continue; }
+    if(c === '{'){ if(depth === 0) start = i; depth++; }
+    else if(c === '}'){
+      depth--;
+      if(depth === 0 && start >= 0){
+        try{ out.push(JSON.parse(t.slice(start, i+1))); }catch(e){}
+        start = -1;
+      }
+    }
+  }
+  return out;
 }
 
 /* ============================ fonts ============================ */
@@ -5334,13 +5370,16 @@ function renderLedger(){
    for 20 with a hundred subjects already covered returned about six. It now tops up
    over several rounds, excluding what it has already gathered, and stops early only
    when a round genuinely brings nothing new. */
+/* The most subjects to ask for in a single reply. Past about a dozen, a reply that
+   also has to carry a claim for each one starts getting cut off. */
+const PICK_CHUNK = 12;
 async function pickSubjects(cat, seed, n){
   const out = [], seen = new Set();
   /* Where a run loses carousels, counted rather than guessed at. A short run used to
      report only the total, which says nothing about whether the model returned too few,
      the ledger rejected them, or the model repeated itself — and those three want
      completely different fixes. */
-  const lost = {returned:0, covered:0, repeated:0};
+  const lost = {returned:0, covered:0, repeated:0, unreadable:0};
   let dry = 0;
   /* Eight rounds and three dry ones before giving up. It used to be five and two, which
      was enough while the brief accepted almost any subject; against a brief that sets a
@@ -5349,8 +5388,20 @@ async function pickSubjects(cat, seed, n){
     const need = n - out.length;
     /* Overshoot, and overshoot harder each time a round comes back with nothing usable:
        a dry round means this category is crowded, and asking for the same number again
-       gets the same answer. */
-    const ask = Math.min(40, need + Math.ceil(need * 0.6) + 2 + dry * need);
+       gets the same answer.
+
+       But never more than a dozen in ONE reply. A single reply listing forty subjects,
+       each of which has to clear a long bar, is a reply that runs out of room — it
+       comes back with the array still open, and before the salvage above that lost the
+       whole round. Asking for fifty is now several small replies at once rather than
+       one enormous one, which is also three or four times faster. */
+    /* A dry round means this category is crowded and asking the same way again gets
+       the same answer, so the round has to reach further. With a cap on what one reply
+       may be asked for, "further" has to mean MORE REPLIES rather than a bigger one —
+       widening the wave is the only axis left, and it is the better one anyway since
+       the calls run in parallel. */
+    const wave = Math.max(1, Math.min(6, Math.ceil(need / PICK_CHUNK) + dry));
+    const ask = Math.min(PICK_CHUNK, Math.ceil(need / wave) + 2);
     const recent = LEDGER.slice(-200).map(e=>e.subject).concat(out.map(o=>o.subject));
     const sys =
 'Pick '+ask+' subjects for short documentary-style fact carousels.\n\n' +
@@ -5374,17 +5425,32 @@ async function pickSubjects(cat, seed, n){
 '- Vary era, country and type. No two from the same event or the same person, and not five from the same decade.\n' +
 (recent.length ? '- ALREADY COVERED, do not choose these or close variants:\n' + recent.map(s=>'  · '+s).join('\n') + '\n' : '') +
 '\nReturn ONLY a JSON array of exactly '+ask+' objects: [{"subject":"canonical name","claim":"the astonishing true claim in under 14 words"}]';
-    const r = await callModel({model: cfg().textModel, parts:[{type:'text', text:sys}]});
-    S.lastRaw = r.text;
-    let arr = [];
-    try{
-      let j = extractJSON(r.text, true);
-      if(!Array.isArray(j) && j && typeof j === 'object') j = Object.values(j).find(v=>Array.isArray(v)) || [];
-      arr = (j||[]).map(o => typeof o === 'string' ? {subject:o, claim:''} : o).filter(o=>o && o.subject);
-    }catch(e){
-      if(!out.length) throw new Error('could not read subjects from the reply — see Console in Settings');
-      break;
+    /* The wave, asked in parallel. They cannot see each other's picks, so they will
+       overlap — the dedupe below is what makes that harmless, and the next wave carries
+       everything found so far in its do-not-repeat list. */
+    const replies = await Promise.all(Array.from({length: wave}, async ()=>{
+      try{
+        const r = await callModel({model: cfg().textModel, parts:[{type:'text', text:sys}]});
+        S.lastRaw = r.text;
+        let j = extractJSON(r.text, true);
+        if(!Array.isArray(j) && j && typeof j === 'object') j = Object.values(j).find(v=>Array.isArray(v)) || [];
+        return (j||[]).map(o => typeof o === 'string' ? {subject:o, claim:''} : o).filter(o=>o && o.subject);
+      }catch(e){
+        /* One unreadable reply is one wasted call, not the end of the run. It used to
+           break out of the loop entirely, so a single truncated reply ended a run for
+           fifty wherever it happened to be — which is most of why asking for fifty
+           returned "however many it felt like". */
+        lost.unreadable++;
+        return null;
+      }
+    }));
+    if(replies.every(x => x === null)){
+      if(!out.length && round >= 2)
+        throw new Error('could not read subjects from the reply — see Console in Settings');
+      dry++;
+      continue;
     }
+    const arr = [].concat(...replies.filter(Boolean));
     let added = 0;
     lost.returned += arr.length;
     for(const o of arr){
@@ -5414,6 +5480,7 @@ function shortfallLine(want, got, lost){
   const parts = [lost.returned + ' came back'];
   if(lost.covered)  parts.push(lost.covered + ' already covered');
   if(lost.repeated) parts.push(lost.repeated + ' repeats of each other');
+  if(lost.unreadable) parts.push(lost.unreadable + ' replies unreadable');
   /* Which cause dominates, not which number is biggest in isolation. Comparing the
      total returned against the target got this backwards in the case that matters most:
      a model handing back plenty of ideas that the ledger then rejected reads as "too few

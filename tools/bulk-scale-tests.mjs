@@ -86,7 +86,7 @@ const run = await p.evaluate(()=>({
 /* the library must be reusable across carousels, never twice inside one */
 const lib = await p.evaluate(()=>{
   LIB.length = 0;
-  for(let i = 0; i < 6; i++) LIB.push({id:'L'+i, data:'', thumb:'', scene:'a street', tags:['street'],
+  for(let i = 0; i < 6; i++) LIB.push({id:'L'+i, data:'', thumb:'', scene:'a street', tags:tagsFrom('a street'), tagsV:TAGS_V,
     imagery: S.profile.imagery, aspect: S.profile.aspect_ratio, collection: currentCollection(),
     tone:'mono', toneChecked:true, bytes:1, stats:{}, created:1, used:0});
 

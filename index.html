@@ -1073,7 +1073,7 @@ const FULL_BLEED_CLAUSE = 'The photograph fills the entire frame edge to edge. N
 /* Bumped by hand whenever something ships. It is shown in the header and logged on
    load, so a cached copy of this file can be told from the current one without reading
    the source — the whole app is one file, and a stale one looks completely normal. */
-const BUILD = '2026-11-02 · fifty means fifty';
+const BUILD = '2026-11-02 · relevant reuse only';
 
 /* ============================ state ============================ */
 const S = {
@@ -1505,6 +1505,40 @@ async function libEnrich(){
 }
 /* How well a saved background suits a slide. Higher is better. Pure arithmetic on
    the prompt words and the image's own brightness/flatness — nothing is sent anywhere. */
+/* How much of what this slide is ASKING FOR the picture actually contains.
+
+   Two numbers, because neither alone separates a good reuse from a bad one.
+
+   The weighted one — recall over the query's tags, each worth more the rarer it is —
+   is what the scoring has always used, and it is right for ranking. As a FLOOR it is
+   wrong on its own: in a library where most frames are corridors, an office corridor
+   matching "a corridor at night" scores 0.058, barely above an anglerfish's 0.000,
+   because the one word they share is the one word the library is full of.
+
+   What does separate them is the plain SHARE of the query's tags that the picture
+   covers, unweighted. Measured across the cases that matter: an office corridor
+   against a night corridor is 0.40, emus against a wheat field 0.46, a thin two-word
+   query matching one of its words 0.50 — and both of the reuses that put an ocean on
+   dry land are 0.00, because they share nothing at all. A quarter is the floor.
+
+   The weighted figure stays as a second way in, for the case the share handles badly:
+   a long query where only one tag matches, but that tag is the rare one that names the
+   subject. A frame qualifies on either. */
+const LIB_MIN_RELEVANCE = 0.15;
+const LIB_MIN_SHARE = 0.25;
+function libOverlap(item, slide, idf){
+  const want = queryTags(slide);
+  if(!want.size || !item.tags || !item.tags.length) return {weighted:0, share:0, shared:0};
+  const have = new Set(item.tags);
+  let hit = 0, total = 0, shared = 0;
+  want.forEach(t=>{ total += idf(t); if(have.has(t)){ hit += idf(t); shared++; } });
+  return {weighted: total ? hit / total : 0, share: shared / want.size, shared};
+}
+const libRelevance = (item, slide, idf) => libOverlap(item, slide, idf).weighted;
+function libFits(item, slide, idf){
+  const o = libOverlap(item, slide, idf);
+  return o.share >= LIB_MIN_SHARE || o.weighted >= LIB_MIN_RELEVANCE;
+}
 function libScore(item, slide, p, idf){
   idf = idf || libIDF();
   let s = 0;
@@ -1514,8 +1548,7 @@ function libScore(item, slide, p, idf){
   const want = queryTags(slide);
   if(want.size && item.tags && item.tags.length){
     const have = new Set(item.tags);
-    let hit = 0, total = 0;
-    want.forEach(t=>{ total += idf(t); if(have.has(t)) hit += idf(t); });
+    const rel = libRelevance(item, slide, idf);
     // Recall alone rewards having MORE tags — every extra word is another chance to
     // contain something the query asked for, so a richly worded background would beat
     // an equally relevant plain one every time. Dividing by the item's own tag mass,
@@ -1524,7 +1557,7 @@ function libScore(item, slide, p, idf){
     let mass = 0; have.forEach(t=>{ mass += idf(t); });
     const avg = idf.avgMass || 1;
     const spread = avg / (avg + Math.max(0, mass - avg) * 0.55);
-    s += total ? 48 * (hit/total) * spread : 0;                   // subject match, the main signal
+    s += 48 * rel * spread;                                       // subject match, the main signal
   }
   const st = item.stats;
   if(st){
@@ -1562,9 +1595,22 @@ function libPick(exclude, p, slide, tally){
     && (!byTone || (x.toneChecked && x.tone === want)));
   if(!free.length) return null;
   const idf = libIDF();
+  /* Reuse was "the best available", with no floor — so a deck about a lighthouse, in a
+     library full of deep-sea frames from the terrifying page, got handed the least bad
+     ocean. The scoring ranks a relevant frame first whenever one exists; the failure is
+     entirely in what happens when none does, and the answer there is to pay for a new
+     picture rather than post a wrong one. Everything in this collection is the right
+     shape and the right tone, so without this the wrong subject always wins by default. */
+  const fit = free.filter(x => libFits(x, slide, idf));
+  LIB_SKIPPED += free.length && !fit.length ? 1 : 0;
+  if(!fit.length) return null;
   const score = x => libScore(x, slide, p, idf) - 9 * ((tally && tally.get(x.id)) || 0);
-  return free.reduce((best,x)=> score(x) > score(best) ? x : best, free[0]);
+  return fit.reduce((best,x)=> score(x) > score(best) ? x : best, fit[0]);
 }
+/* How many slides went to the API because the library held nothing about them. Worth
+   saying out loud: it is the difference between "the library is not being used" and
+   "the library has nothing relevant yet", and those want opposite reactions. */
+let LIB_SKIPPED = 0;
 async function useFromLibrary(slide, item){
   spend('reused');
   const data = item.data || await libData(item.id);
@@ -4240,8 +4286,14 @@ function libMode(key, dflt){
   if(v === '0') return 'off';
   return ['off','all','half'].includes(v) ? v : (dflt || 'off');
 }
+/* Said once per plan, because "the library gave you nothing" has two very different
+   causes and the bill looks the same either way. */
+function libSkipNote(){
+  return LIB_SKIPPED ? ' · ' + LIB_SKIPPED + ' had nothing relevant in the library and will be generated' : '';
+}
 function planImages(slides, mode){
   const fresh = [], reused = [];
+  LIB_SKIPPED = 0;
   if(mode === undefined) mode = libMode('cb.useLib');
   if(mode === true) mode = 'all';                     // older callers passed a boolean
   if(mode === false) mode = 'off';
@@ -4427,7 +4479,8 @@ async function generateAllImages(){
   const todo = S.slides.filter(s=>s.status === 'queued' && !onJob.includes(s));
   const {fresh, reused} = planImages(todo);
   for(const [s, item] of reused) await useFromLibrary(s, item);
-  if(reused.length) log(reused.length + ' background' + (reused.length>1?'s':'') + ' taken from the library — free','o');
+  log((reused.length ? reused.length + ' background' + (reused.length>1?'s':'') + ' taken from the library — free'
+                     : 'nothing reusable in the library for these') + libSkipNote(), 'o');
   await runQueue(fresh, conc(), genImage);
   autosave();
 }
@@ -4997,7 +5050,8 @@ async function runBatch(){
     all.forEach(s=>{ s.status = 'queued'; });
     const {fresh: needGen, reused} = planImages(all);
     for(const [s, item] of reused) await useFromLibrary(s, item);
-    if(reused.length) log(reused.length + ' backgrounds taken from the library — free','o');
+    log((reused.length ? reused.length + ' backgrounds taken from the library — free'
+                       : 'nothing reusable in the library for these') + libSkipNote(), 'o');
     if(needGen.length){
       if($('batchApiToggle').dataset.on === '1'){
         try{ await submitBatchJob(needGen); }
@@ -6296,7 +6350,8 @@ async function finishRun(){
       if(rest.length) plans.push(planImages(rest, libMode('cb.useLib')));
       const reused = plans.flatMap(p=>p.reused), fresh = plans.flatMap(p=>p.fresh);
       for(const [s, item] of reused) await useFromLibrary(s, item);
-      if(reused.length) log(reused.length+' background'+(reused.length>1?'s':'')+' taken from the library — free','o');
+      log((reused.length ? reused.length+' background'+(reused.length>1?'s':'')+' taken from the library — free'
+                         : 'nothing reusable in the library for these') + libSkipNote(), 'o');
       if(fresh.length && !FINISH_STOP){
         if($('batchApiToggle') && $('batchApiToggle').dataset.on === '1'){
           try{ await submitBatchJob(fresh); }

@@ -98,7 +98,7 @@ const rest = await p.evaluate(async ()=>{
   const monoPrompt = factDeckPrompt(Object.keys(FACT_CATS)[0], {subject:'X', claim:'Y'}, 5, 'mono');
 
   LIB.length = 0;
-  const mk = (id, tone) => ({id, data:'', thumb:'', scene:'a street', tags:['street'], imagery:'archival-documentary-photograph',
+  const mk = (id, tone) => ({id, data:'', thumb:'', scene:'a street', tags:tagsFrom('a street'), tagsV:TAGS_V, imagery:'archival-documentary-photograph',
     aspect:'4:5', collection:'Facts', tone, toneChecked:true, bytes:1, stats:{}, created:1, used:0});
   LIB.push(mk('m','mono'), mk('c','colour'), mk('p','pop'));
   const pick = t => { const r = libPick(new Set(), S.profile, {kind:'slide', tone:t, scene:'a street'}); return r ? r.tone : 'none'; };

@@ -21,7 +21,7 @@ const plan = await p.evaluate(async ()=>{
 
   // a stocked Facts collection, plus decoys in other collections
   LIB.length = 0;
-  const mk = (id, coll, imagery) => ({id, data:'', thumb:'', scene:'an archival scene', tags:['archival','scene'],
+  const mk = (id, coll, imagery) => ({id, data:'', thumb:'', scene:'an archival scene', tags:tagsFrom('an archival scene'), tagsV:TAGS_V,
     imagery, aspect:'4:5', collection:coll, tone:'mono', toneChecked:true, bytes:1000,
     stats:{bands:[0.4,0.4,0.4], sd:[0.1,0.1,0.1]}, created:1, used:0});
   for(let i=0;i<6;i++) LIB.push(mk('f'+i, 'Facts', 'archival-documentary-photograph'));

@@ -1073,7 +1073,7 @@ const FULL_BLEED_CLAUSE = 'The photograph fills the entire frame edge to edge. N
 /* Bumped by hand whenever something ships. It is shown in the header and logged on
    load, so a cached copy of this file can be told from the current one without reading
    the source — the whole app is one file, and a stale one looks completely normal. */
-const BUILD = '2026-11-03 · somewhere else to look';
+const BUILD = '2026-11-03 · the ledger forgets nothing';
 
 /* ============================ state ============================ */
 const S = {
@@ -5310,9 +5310,33 @@ async function loadLedger(){
   try{ if(!LEDGER.length) LEDGER = JSON.parse(localStorage.getItem('cb.ledger')||'[]'); }catch(e){}
   renderLedger();
 }
+/* Two copies, and the second one used to be the hole. IndexedDB holds the whole ledger
+   and is what the page reads on load; localStorage is the fallback for when IndexedDB is
+   gone, and it was being written with only the last 400 entries. Nothing visible happened
+   while IndexedDB survived — but the day a browser cleared site data or evicted the
+   database, the ledger silently became its most recent 400 subjects and everything older
+   was free to repeat. For a page whose whole requirement is that nothing ever repeats,
+   that is the one failure that must not be quiet.
+
+   So the fallback is written in full, and only shrinks if the browser refuses it, halving
+   until it fits. Whatever had to be dropped is said out loud, with the remedy, because a
+   ledger quietly holding less than it should is worse than one that says so. */
+let LEDGER_TRIMMED = 0;
 async function saveLedger(){
   try{ await idbPut('ledger', LEDGER); }catch(e){}
-  try{ localStorage.setItem('cb.ledger', JSON.stringify(LEDGER.slice(-400))); }catch(e){}
+  let keep = LEDGER.length, stored = false;
+  while(keep > 0 && !stored){
+    try{
+      localStorage.setItem('cb.ledger', JSON.stringify(keep >= LEDGER.length ? LEDGER : LEDGER.slice(-keep)));
+      stored = true;
+    }catch(e){ keep = Math.floor(keep / 2); }
+  }
+  const dropped = stored ? LEDGER.length - keep : LEDGER.length;
+  if(dropped > LEDGER_TRIMMED){
+    LEDGER_TRIMMED = dropped;
+    log('the backup copy of the ledger could only hold ' + keep + ' of ' + LEDGER.length +
+        ' covered subjects — export the ledger to keep the rest', 'w');
+  }
   renderLedger();
 }
 const ledgerKey = s => String(s||'').toLowerCase().replace(/[^a-z0-9]+/g,' ').trim();
@@ -5435,6 +5459,16 @@ function renderLedger(){
   }
   const list = $('ledgerList'); if(!list) return;
   list.innerHTML = '';
+  /* The list shows the newest 120. Older entries are still held and still enforced — they
+     are only off the screen — and the line below says so, because a subject vanishing from
+     this list looks exactly like a subject that has been forgotten. */
+  if(n > 120){
+    const note = document.createElement('div');
+    note.className = 'tiny'; note.style.cssText = 'padding:5px 0;color:var(--muted);opacity:.8';
+    note.textContent = 'showing the newest 120 of ' + n + ' — the older ones are still ' +
+                       'blocked, they are just not listed here';
+    list.appendChild(note);
+  }
   LEDGER.slice().reverse().slice(0,120).forEach(e=>{
     const d = document.createElement('div');
     d.className = 'tiny'; d.style.cssText = 'padding:5px 0;border-bottom:1px solid var(--line);color:var(--muted)';
@@ -5510,7 +5544,16 @@ async function pickSubjects(cat, seed, n){
        the calls run in parallel. */
     const wave = Math.max(1, Math.min(6, Math.ceil(need / PICK_CHUNK) + dry));
     const ask = Math.min(PICK_CHUNK, Math.ceil(need / wave) + 2);
-    const recent = LEDGER.slice(-200).map(e=>e.subject).concat(out.map(o=>o.subject));
+    /* What the model is TOLD not to repeat. Enforcement is separate and absolute — every
+       candidate is checked against the entire ledger, so a repeat never ships — but a
+       repeat the model proposes still costs a call, and this list is what stops it
+       proposing one. It used to be the last 200 entries across all categories, which on
+       a board running four of them meant about fifty per category; the rest of that
+       category's history was invisible to the model and got suggested again. Narrowed to
+       this category and widened, it is the whole recent history of the page being
+       written. */
+    const recent = LEDGER.filter(e => !e.cat || e.cat === cat).slice(-400)
+      .map(e=>e.subject).concat(out.map(o=>o.subject));
     const prompts = Array.from({length: wave}, (_, k) => {
       /* A different lens per call, advancing as rounds go, so neither the calls in a
          wave nor the rounds after it ask the same question twice.

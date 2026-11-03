@@ -264,7 +264,12 @@ const r = await p.evaluate(async ()=>{
       const avoid = new Set();
       const m = prompt.match(/ALREADY COVERED[^]*?(?=\nReturn ONLY|$)/);
       if(m) m[0].split('\n').forEach(l=>{ const t = l.replace(/^\s*·\s*/,'').trim(); if(t) avoid.add(t); });
-      const tag = lens.replace(/[^a-z]/gi,'').slice(0,8).toLowerCase() || 'none';
+      /* The tag has to be unique per lens or the stub itself hands out duplicate
+         subjects and the dedupe absorbs them — "the 1700s" and "the 1800s" both reduce
+         to "thes" if you strip digits and truncate. Hash the whole string. */
+      let h = 0;
+      for(const ch of lens) h = (h * 33 + ch.charCodeAt(0)) >>> 0;
+      const tag = h.toString(36);
       const universe = Array.from({length: perLens}, (_,i)=>
         ({subject:'zel'+tag+i.toString(36)+'ix vorn'+tag+(i*7).toString(36)+'ad', claim:'c'}));
       return {text: JSON.stringify(universe.filter(x=>!avoid.has(x.subject)).slice(0, asked))};

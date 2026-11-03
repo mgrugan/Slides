@@ -27,8 +27,11 @@ const r = await p.evaluate(async ()=>{
   /* The subject prompt is built inside pickSubjects, so it is read by stubbing the
      model and keeping what was sent rather than by duplicating the string here. */
   const subjectPrompt = await (async ()=>{
-    // the do-not-repeat list is only sent when there is something to send
-    LEDGER.push({subject:'The Great Emu War', title:'', cat:'History', date:Date.now()});
+    /* The do-not-repeat list is only sent when there is something to send, and it is
+       the list for THIS category — a History entry is no longer sent to a run writing
+       Conspiracy. Both halves of that are held in ledger-memory-tests. */
+    LEDGER.push({subject:'The Great Emu War', title:'', cat:'Conspiracy', date:Date.now()});
+    LEDGER.push({subject:'The Dyatlov Pass incident', title:'', cat:'History', date:Date.now()});
     const keep = window.callModel;
     let sent = '';
     window.callModel = async o => { sent = o.parts[0].text; return {text:'[]'}; };
@@ -55,6 +58,7 @@ const r = await p.evaluate(async ()=>{
                              /If the striking version is a myth, pick something else/.test(subjectPrompt);
   out.stillCarriesTheLedger = /ALREADY COVERED/.test(subjectPrompt) &&
                               /The Great Emu War/.test(subjectPrompt);
+  out.andOnlyThisCategorysPartOfIt = !/Dyatlov/.test(subjectPrompt);
 
   // --- the cover line is engineered
   const dp = factDeckPrompt('Conspiracy', {subject:'Guatemala syphilis experiments',
@@ -107,7 +111,7 @@ const want = {
   itReachesForTheExtreme:true, controversyIsAllowedWhenDocumented:true,
   butNotTheUndocumentedKind:true, datesAreBanned:true, topicsAreBanned:true,
   theWornOutOnesAreBanned:true, theClaimIsAHeadlineNotATopic:true,
-  stillDemandsTheTruth:true, stillCarriesTheLedger:true,
+  stillDemandsTheTruth:true, stillCarriesTheLedger:true, andOnlyThisCategorysPartOfIt:true,
   coverHasItsOwnRules:true, coverLeadsWithTheConcrete:true, coverNamesAnActor:true,
   coverOpensALoop:true, coverMustBeTrueAlone:true, coverBansTheDeadWords:true,
   coverBansOpeningOnADate:true, structureSurvived:true, truthRulesSurvived:true,

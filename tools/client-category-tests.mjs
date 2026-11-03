@@ -1,13 +1,11 @@
-/* Two additions to Mode D, and nothing else moving.
+/* A blank category you write yourself. There was already an "Add" button, but it was
+   buried inside the prompt panel and it seeded placeholder text, so a new category
+   quietly ran with "Describe the kind of fact you want here." as its brief.
 
-   1. A blank category. There was already an "Add" button, but it was buried inside the
-      prompt panel and it seeded placeholder text, so a new category quietly ran with
-      "Describe the kind of fact you want here." as its brief.
-
-   2. A client category: peptide facts built from a counting hook rather than a single
-      story, the hooks shown for approval before anything is written, a closing slide
-      for the client's site, and its backgrounds kept in the General library instead of
-      the Facts one — the client's images are not the channel's stock. */
+   This suite also covered a client peptide category — hook-driven, its own CTA slide,
+   its backgrounds kept out of the Facts shelf. That category was retired along with the
+   other client accounts, so those sections went with it; the add-a-category machinery
+   underneath is still the four shipping categories' own, and is what is checked here. */
 import { chromium } from 'playwright-core';
 
 const stub = () => {
@@ -101,103 +99,15 @@ Object.assign(blank, await p.evaluate(()=>({
   survivesReload: JSON.parse(localStorage.getItem('cb.factCats')).Unsolved
 })));
 
-// ---------- 2. the client category ----------
-const cat = await p.evaluate(()=>Object.keys(FACT_CATS).find(c=>/peptor/i.test(c) || /peptide/i.test(c)));
-const setup = await p.evaluate(c=>({
-  exists: !!c,
-  mode: catCfg(c).mode,
-  cta: catCfg(c).cta,
-  collection: catCfg(c).collection,
-  hasPrompt: catPrompt(c).length > 40,
-  // the other categories must still be plain strings, read the same way as before
+// the four shipping categories are plain prompt strings, read the same way as before
+const shipping = await p.evaluate(()=>({
   othersUnchanged: ['History','Science','Conspiracy','Terrifying']
     .every(k => typeof FACT_CATS[k] === 'string' && catPrompt(k) === FACT_CATS[k]),
-  historyPromptIntact: factDeckPrompt('History', {subject:'X', claim:'Y'}, 6, 'mono').includes(FACT_CATS.History)
-}), cat);
-
-await p.selectOption('#factCat', cat);
-await p.waitForTimeout(200);
-await p.selectOption('#factCount','3');
-const label = await p.textContent('#runFacts');
-
-// hooks first, and nothing written until they are approved
-await p.click('#runFacts');
-await p.waitForTimeout(2500);
-const review = await p.evaluate(()=>({
-  panelShown: !$('factHookPanel').classList.contains('hide'),
-  lines: $('factHookText').value.split('\n').filter(Boolean),
-  decksWritten: window.__n.decks,
-  imagesMade: window.__n.img,
-  batch: S.batch.length,
-  hookPromptMentionsCategory: /peptide/i.test(window.__hookPrompts[0]||''),
-  hookPromptIsNumbered: /open with a count written as a digit/i.test(window.__hookPrompts[0]||'')
+  historyPromptIntact: factDeckPrompt('History', {subject:'X', claim:'Y'}, 6, 'mono')
+    .includes(FACT_CATS.History),
+  // and a category added by hand sits alongside them without disturbing them
+  countAfterAdding: Object.keys(FACT_CATS).length
 }));
-
-// edit the list — one deleted, one rewritten — then create
-await p.evaluate(()=>{
-  const lines = $('factHookText').value.split('\n').filter(Boolean);
-  lines.pop();
-  lines[0] = '4 things the research on BPC-157 actually shows';
-  $('factHookText').value = lines.join('\n');
-});
-await p.click('#factHookCreate');
-await p.waitForTimeout(9000);
-
-const made = await p.evaluate(()=>{
-  const decks = S.batch;
-  return {
-    decks: decks.length,
-    hooks: decks.map(d=>d.hook),
-    editedHookUsed: decks.some(d=>/^4 things the research on BPC-157/.test(d.hook)),
-    // cover + the promised points + the closing slide
-    lengths: decks.map(d=>({promised: hookItemCount(d.hook), slides: d.slides.length})),
-    lastTitles: decks.map(d=>d.slides[d.slides.length-1].title),
-    lastBodies: decks.map(d=>d.slides[d.slides.length-1].body),
-    ctaIsOnlyAtTheEnd: decks.every(d=>d.slides.slice(0,-1).every(s=>!/peptorium/i.test(s.title+' '+s.body))),
-    ctaHasScene: decks.every(d=>!!d.slides[d.slides.length-1].scene),
-    everySlideHasImage: decks.every(d=>d.slides.every(s=>s.img)),
-    coverIsHook: decks.every(d=>d.slides[0].kind === 'hook'),
-    captions: decks.every(d=>d.caption.includes('#peptides')),
-    ledger: LEDGER.filter(e=>/pept/i.test(e.cat||'')).length,
-    styleIsDocumentary: S.profile.caption_treatment === 'documentary',
-    panelHidden: $('factHookPanel').classList.contains('hide')
-  };
-});
-
-// ---------- 3. where the images went ----------
-const lib = await p.evaluate(()=>({
-  perColl: LIB.reduce((a,x)=>{ const c=x.collection||'General'; a[c]=(a[c]||0)+1; return a; },{}),
-  styleCollection: currentCollection(),            // Facts — the documentary preset's own
-  deckCollection: S.batch[0].collection,
-  // a peptide slide must be offered General backgrounds, never the Facts shelf
-  picksFromGeneral: (()=>{
-    const s = S.batch[0].slides[1];
-    LIB.forEach(x=>{ x.toneChecked = true; });
-    const pick = libPick(new Set(), S.profile, s);
-    return pick ? (pick.collection||'General') : 'none';
-  })(),
-  // and an ordinary facts slide still gets the Facts shelf
-  factsStillFacts: (()=>{
-    const s = {kind:'slide', tone:'mono', scene:'a bench', _deck:{id:'x'}};
-    const pick = libPick(new Set(), S.profile, s);
-    return pick ? (pick.collection||'General') : 'none';
-  })()
-}));
-
-// ---------- 4. its own logo, like every other fact category ----------
-const logo = await p.evaluate(async c=>{
-  const mk = t => { const x=document.createElement('canvas'); x.width=x.height=120;
-    const g=x.getContext('2d'); g.fillStyle='#fff'; g.font='bold 60px sans-serif';
-    g.textAlign='center'; g.textBaseline='middle'; g.fillText(t,60,62); return x.toDataURL('image/png'); };
-  CAT_LOGOS[c] = await makeThumb(mk('P'), 512, 'image/png');
-  CAT_LOGOS['History'] = await makeThumb(mk('H'), 512, 'image/png');
-  await idbPut('logos', CAT_LOGOS);
-  await cacheCatLogos();
-  const slide = S.batch[0].slides[0];
-  const mine = logoFor(slide), other = logoFor({_deck:{cat:'History'}});
-  return {hasOwn: !!mine, differsFromAnother: !!mine && !!other && mine !== other,
-          stored: !!(await idbGet('logos'))[c]};
-}, cat);
 
 const fail = [];
 if(!blank.newButtonVisible) fail.push('no visible way to start a new category');
@@ -214,52 +124,13 @@ if(blank.decks) fail.push('an unwritten category produced decks');
 if(!/paper trail/.test(blank.saved||'')) fail.push('the written prompt was not kept: '+blank.saved);
 if(blank.survivesReload !== blank.saved) fail.push('the written prompt was not stored');
 
-if(!setup.exists) fail.push('no client peptide category');
-if(setup.mode !== 'hooks') fail.push('the client category is not hook-driven');
-if(!/peptorium\.com/.test(setup.cta||'')) fail.push('no CTA site on the client category');
-if(setup.collection !== 'General') fail.push('the client category is not pointed at General: '+setup.collection);
-if(!setup.hasPrompt) fail.push('the client category has no brief');
-if(!setup.othersUnchanged) fail.push('the existing categories changed shape');
-if(!setup.historyPromptIntact) fail.push('the ordinary fact prompt no longer carries its category brief');
-if(!/hook/i.test(label||'')) fail.push('the button does not say the hooks come first: '+label);
+if(!shipping.othersUnchanged) fail.push('the shipping categories changed shape');
+if(!shipping.historyPromptIntact) fail.push('the fact prompt no longer carries its category brief');
+if(shipping.countAfterAdding !== 5) fail.push('expected the four shipping categories plus the new one, got '+
+  shipping.countAfterAdding);
 
-if(!review.panelShown) fail.push('the hooks were not shown for review');
-if(review.lines.length !== 3) fail.push('asked for 3 hooks, got '+review.lines.length);
-if(review.decksWritten || review.batch) fail.push('carousels were written before the hooks were approved');
-if(review.imagesMade) fail.push('images were generated before the hooks were approved');
-if(!review.hookPromptMentionsCategory) fail.push('the hook prompt ignores the category brief');
-if(!review.hookPromptIsNumbered) fail.push('the hooks are not the numbered/counting kind');
-
-if(made.decks !== 2) fail.push('created '+made.decks+' carousels from 2 approved hooks');
-if(!made.editedHookUsed) fail.push('an edited hook was not the one used');
-for(const l of made.lengths)
-  if(l.slides !== l.promised + 2) fail.push('a hook promising '+l.promised+' produced '+l.slides+
-    ' slides, expected '+(l.promised+2)+' (cover + points + closing slide)');
-if(!made.lastTitles.every(t=>/peptorium\.com/i.test(t))) fail.push('the last slide does not name the site: '+made.lastTitles.join(' | '));
-if(!made.lastBodies.every(x=>x && x.length > 10)) fail.push('the closing slide has no copy');
-if(!made.ctaIsOnlyAtTheEnd) fail.push('the call to action leaked into the body slides');
-if(!made.ctaHasScene) fail.push('the closing slide has no scene to photograph');
-if(!made.everySlideHasImage) fail.push('some slides came out without an image');
-if(!made.coverIsHook) fail.push('the hook is not the cover');
-if(!made.captions) fail.push('no caption came through');
-if(made.ledger < 2) fail.push('the used hooks were not recorded, so they can repeat');
-if(!made.styleIsDocumentary) fail.push('the client decks are not in the facts style');
-if(!made.panelHidden) fail.push('the review panel stayed open after creating');
-
-if(lib.styleCollection !== 'Facts') fail.push('the facts style no longer uses the Facts collection');
-if(lib.deckCollection !== 'General') fail.push('the client deck is not marked General');
-if((lib.perColl.Facts||0) > 0) fail.push((lib.perColl.Facts)+' client backgrounds went into Facts storage');
-if((lib.perColl.General||0) < 8) fail.push('the client backgrounds did not reach General: '+JSON.stringify(lib.perColl));
-if(lib.picksFromGeneral !== 'General') fail.push('a client slide was offered a '+lib.picksFromGeneral+' background');
-if(lib.factsStillFacts !== 'none' && lib.factsStillFacts !== 'Facts')
-  fail.push('an ordinary facts slide was offered a '+lib.factsStillFacts+' background');
-
-if(!logo.hasOwn) fail.push('the client category cannot carry its own logo');
-if(!logo.differsFromAnother) fail.push('the client logo is not distinct from another category\'s');
-if(!logo.stored) fail.push('the client logo was not stored');
-
-console.log(JSON.stringify({blank, setup, label, review, made, lib, logo, errs}, null, 1));
+console.log(JSON.stringify({blank, shipping, errs}, null, 1));
 console.log(fail.length ? 'FAIL\n' + fail.map(f=>' - '+f).join('\n')
-                        : 'PASS  a blank category to write yourself, and a client mode that reviews its hooks first');
+                        : 'PASS  a blank category to write yourself, beside the four that ship');
 await b.close();
 process.exit(fail.length ? 1 : 0);

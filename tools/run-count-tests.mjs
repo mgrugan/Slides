@@ -247,6 +247,89 @@ const r = await p.evaluate(async ()=>{
   out.unreadableRepliesAreReported = /replies unreadable/.test(
     shortfallLine(50, 20, {returned:20, covered:0, repeated:0, unreadable:4}));
 
+  /* --- THE CEILING. Asking one question repeatedly does not produce more answers: a
+     model has a finite set of subjects it considers good enough for a given line of
+     questioning, and the avoid list only rules out what it already said. Measured
+     against a stub with a pool of twelve, a run for fifty returned twelve and burned
+     twenty calls getting there — which is the behaviour that was reported twice.
+
+     The fix is to ask different questions. Each call in a wave carries its own lens —
+     an era, a region, a field — so the calls cannot converge, and the rounds keep
+     moving along the list. */
+  const pooled = perLens => {
+    return async o => {
+      const prompt = o.parts[0].text;
+      const asked = +(/Pick (\d+) subjects/.exec(prompt) || [0,0])[1];
+      const lens = (/WHERE TO LOOK THIS TIME: ([^.]+)\./.exec(prompt) || [0,''])[1];
+      const avoid = new Set();
+      const m = prompt.match(/ALREADY COVERED[^]*?(?=\nReturn ONLY|$)/);
+      if(m) m[0].split('\n').forEach(l=>{ const t = l.replace(/^\s*·\s*/,'').trim(); if(t) avoid.add(t); });
+      const tag = lens.replace(/[^a-z]/gi,'').slice(0,8).toLowerCase() || 'none';
+      const universe = Array.from({length: perLens}, (_,i)=>
+        ({subject:'zel'+tag+i.toString(36)+'ix vorn'+tag+(i*7).toString(36)+'ad', claim:'c'}));
+      return {text: JSON.stringify(universe.filter(x=>!avoid.has(x.subject)).slice(0, asked))};
+    };
+  };
+  const withFocus = async (fn, want, focus) => {
+    LEDGER.length = 0;
+    const keep = window.callModel;
+    let calls = 0;
+    window.callModel = async o => { calls++; return fn(o); };
+    try{ const got = await pickSubjects('History', focus || '', want);
+         return {n: got.length, calls, unique: new Set(got.map(x=>x.subject)).size}; }
+    catch(e){ return {n:0, calls, unique:0, threw:e.message}; }
+    finally{ window.callModel = keep; }
+  };
+
+  out.everyCallInAWaveAsksSomethingDifferent = await (async ()=>{
+    LEDGER.length = 0;
+    const keep = window.callModel;
+    const lenses = [];
+    window.callModel = async o => {
+      lenses.push((/WHERE TO LOOK THIS TIME: ([^.]+)\./.exec(o.parts[0].text) || [0,''])[1]);
+      return {text:'[]'};
+    };
+    await pickSubjects('History', '', 50);
+    window.callModel = keep;
+    const firstWave = lenses.slice(0, 5);
+    out.lensesSeen = lenses.length;
+    return firstWave.every(x => x) && new Set(firstWave).size === firstWave.length;
+  })();
+  out.theLensNeverReplacesTheCategory = await (async ()=>{
+    LEDGER.length = 0;
+    const keep = window.callModel;
+    let sent = '';
+    window.callModel = async o => { sent = o.parts[0].text; return {text:'[]'}; };
+    await pickSubjects('History', '', 12);
+    window.callModel = keep;
+    return /CATEGORY — History/.test(sent) && /not a replacement for/.test(sent) &&
+           /rather than forcing something weak to fit/.test(sent);
+  })();
+
+  const thin = await withFocus(pooled(4), 50);
+  out.fiftyArrivesWhenEachLensIsThin = thin.n === 50 && thin.unique === 50;
+  const rich = await withFocus(pooled(12), 50);
+  out.andFewerCallsWhenTheyAreNot = rich.n === 50 && rich.calls < thin.calls;
+  out.callsForFifty = thin.calls + ' thin · ' + rich.calls + ' rich';
+  out.aSmallRunIsStillCheap = (await withFocus(pooled(8), 10)).calls <= 2;
+
+  out.aTypedFocusStillGetsItsFifty = await (async ()=>{
+    /* The focus and the lens compose. Dropping the lens when somebody typed a focus put
+       that run back on one line of questioning and straight back into the ceiling. */
+    const got = await withFocus(pooled(12), 50, 'shipwrecks');
+    return got.n === 50;
+  })();
+  out.andTheFocusSurvivesTheLens = await (async ()=>{
+    LEDGER.length = 0;
+    const keep = window.callModel;
+    let sent = '';
+    window.callModel = async o => { sent = o.parts[0].text; return {text:'[]'}; };
+    await pickSubjects('History', 'shipwrecks', 12);
+    window.callModel = keep;
+    return /FOCUS: shipwrecks/.test(sent) && /WHERE TO LOOK THIS TIME/.test(sent) &&
+           /the focus and category above/.test(sent);
+  })();
+
   // --- the rotation picker got the same treatment
   out.theAnglePickerPersistsToo = /round < 7/.test(pickAngleIdeas.toString()) &&
                                   /dry < 3/.test(pickAngleIdeas.toString()) &&
@@ -266,6 +349,9 @@ const want = {
   theScanSweepsAgain:true, theScanReportsItsShortfall:true,
   theScanTopsUpToTheNumber:true, scanReturned:10,
   theAnglePickerPersistsToo:true,
+  everyCallInAWaveAsksSomethingDifferent:true, theLensNeverReplacesTheCategory:true,
+  fiftyArrivesWhenEachLensIsThin:true, andFewerCallsWhenTheyAreNot:true,
+  aSmallRunIsStillCheap:true, aTypedFocusStillGetsItsFifty:true, andTheFocusSurvivesTheLens:true,
   salvagesATruncatedList:true, aBraceInsideAStringIsNotAnObject:true,
   aCompleteListIsStillParsedWhole:true,
   fiftyArrivesWhenRepliesAreCutAt25:true, fiftyArrivesWhenRepliesAreCutAt8:true,
@@ -280,6 +366,7 @@ for(const [k,v] of Object.entries(want)){
   console.log((ok?'  ok  ':'FAIL  ') + k.padEnd(36) + JSON.stringify(got) + (ok ? '' : '  (wanted ' + JSON.stringify(v) + ')'));
 }
 if(errs.length){ console.log('page errors:'); errs.forEach(e=>console.log('  '+e)); bad++; }
+console.log('  ·   calls to reach 50: ' + r.callsForFifty);
 console.log('  ·   biggest single ask on a run of 50: ' + r.biggestSingleAsk +
             ' · calls per round when dry: ' + r.callsPerRound);
 console.log(bad ? bad + ' failing' : 'all good');

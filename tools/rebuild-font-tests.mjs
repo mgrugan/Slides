@@ -15,6 +15,17 @@ import os from 'os';
 import path from 'path';
 
 const ROWS = ['ABCDEFGHIJKLMNOPQRSTUVWXYZ', '1234567890'];
+
+/* The rebuilder is a Python tool with system dependencies (Pillow, numpy, fontTools and
+   potrace). potrace needs a C library that is not installable in every container, so when
+   it is missing the suite says so and stops: a missing toolchain is not a failing tracer,
+   and reporting it as one teaches everyone to ignore the result. */
+try{
+  execFileSync('python3', ['-c', 'import PIL, numpy, potrace, fontTools'], {stdio:'pipe'});
+}catch{
+  console.log('SKIP  the rebuilder\'s Python dependencies are not installed here (needs potrace)');
+  process.exit(0);
+}
 const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'fontrebuild-'));
 const b = await chromium.launch({executablePath:'/opt/pw-browsers/chromium-1243/chrome-linux64/chrome'});
 const p = await b.newPage();
@@ -24,8 +35,12 @@ await p.waitForTimeout(1800);
 
 // ---- a specimen sheet, exactly as somebody would photograph one
 const sheet = await p.evaluate(async ({rows, capPx})=>{
-  await fontReady(PRESETS[PRESETS.findIndex(x=>x.name==='Pickuplines')]);
+  /* Any face the page carries will do; the suite is about the tracer, not the style. This
+     used to warm it through a client preset that set it — those are retired, so the face
+     is loaded directly from the @font-face the page embeds. */
   const size = Math.round(capPx / 0.72);
+  await document.fonts.load('900 ' + size + 'px "Bernoru"');
+  await document.fonts.ready;
   const probe = document.createElement('canvas').getContext('2d');
   probe.font = '900 ' + size + 'px "Bernoru"';
   if('letterSpacing' in probe) probe.letterSpacing = Math.round(size*0.18)+'px';

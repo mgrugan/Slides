@@ -1,7 +1,15 @@
 import { chromium } from 'playwright-core';
 import fs from 'fs';
-const REF = fs.readdirSync('/root/.claude/uploads/52ad29f1-ecfc-555a-b76d-09c17dd971e1')
-  .map(f=>'/root/.claude/uploads/52ad29f1-ecfc-555a-b76d-09c17dd971e1/'+f)
+/* The reference painting this was checked against came in as a chat upload, so it lives
+   outside the repository and is gone once that session's files are cleared. Without it
+   there is nothing to compare to, so the suite says so and stops rather than crashing. */
+const UPLOADS = '/root/.claude/uploads/52ad29f1-ecfc-555a-b76d-09c17dd971e1';
+if(!fs.existsSync(UPLOADS)){
+  console.log('SKIP  the reference painting is not in this container (chat upload, not a repo file)');
+  process.exit(0);
+}
+const REF = fs.readdirSync(UPLOADS)
+  .map(f=>UPLOADS+'/'+f)
   .sort((a,b)=>fs.statSync(b).mtimeMs-fs.statSync(a).mtimeMs)[0];
 const b = await chromium.launch({executablePath:'/opt/pw-browsers/chromium-1243/chrome-linux64/chrome'});
 const p = await b.newPage();

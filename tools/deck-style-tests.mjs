@@ -2,7 +2,7 @@
 
    The style is one global setting and the board holds decks from several accounts at
    once, so whichever style happened to be loaded painted all of them. Twenty history
-   decks came out in a viral news page's skin — its yellow, its handle, and its
+   decks came out in a client page's skin — its colour, its handle, and its
    one-line-a-slide type size laid over their paragraphs — because that page had been
    run last. Switching the style back did not visibly help either: the editor redrew and
    the board did not.
@@ -35,18 +35,19 @@ const r = await p.evaluate(async ()=>{
     ];
     return deck;
   };
-  const conspiracy = mkDeck('Conspiracy', 'c'), fun = mkDeck('fun', 'f');
+  const conspiracy = mkDeck('Conspiracy', 'c');
+  const handBuilt = mkDeck('', 'h');     // a deck in no category answers to the live style
 
   // --- the deck answers for itself, whatever is loaded
   const load = name => { const i = PRESETS.findIndex(x=>x.name === name);
                          applyStyle('preset:'+i, PRESETS[i]); };
-  load('Fun');
+  load('Photographic');
   out.aFactsDeckIsDrawnInTheFactsStyle = profileFor(conspiracy.slides[0]).name === 'Documentary facts';
-  out.aClientDeckIsDrawnInItsOwn = profileFor(fun.slides[0]).name === 'Fun';
-  load('Trendpop');
-  out.stillRightFromAnotherClientStyle = profileFor(conspiracy.slides[0]).name === 'Documentary facts' &&
-                                         profileFor(fun.slides[0]).name === 'Fun';
-  out.aHandBuiltSlideUsesTheLiveStyle = profileFor({id:'x'}).name === 'Trendpop';
+  out.anUncategorisedDeckUsesTheLiveStyle = profileFor(handBuilt.slides[0]).name === 'Photographic';
+  load('Flat cartoon');
+  out.stillRightFromAnotherLoadedStyle = profileFor(conspiracy.slides[0]).name === 'Documentary facts' &&
+                                         profileFor(handBuilt.slides[0]).name === 'Flat cartoon';
+  out.aHandBuiltSlideUsesTheLiveStyle = profileFor({id:'x'}).name === 'Flat cartoon';
   out.liveEditsShowOnTheDeckTheyBelongTo = (()=>{
     load('Documentary facts');
     S.profile.title_size_pct = 0.0777;
@@ -55,33 +56,45 @@ const r = await p.evaluate(async ()=>{
 
   // --- and it draws differently, measurably, not just resolves differently
   out.theTwoStylesActuallyDiffer = (()=>{
-    const a = profileFor(conspiracy.slides[0]), c = profileFor(fun.slides[0]);
-    return a.body_size_pct !== c.body_size_pct && a.glow_color !== c.glow_color;
+    load('Flat cartoon');
+    const a = profileFor(conspiracy.slides[0]), c = profileFor(handBuilt.slides[0]);
+    return a.body_size_pct !== c.body_size_pct || a.glow_color !== c.glow_color;
   })();
-  out.aFactsDeckHasNoBrandYellowOnIt = await (async ()=>{
-    load('Fun');                                   // the wrong style loaded, on purpose
-    await fontReady(PRESETS[PRESETS.findIndex(x=>x.name === 'Documentary facts')]);
+
+  /* The original failure was measured in brand yellow, because the style that had leaked
+     onto twenty history decks was a yellow one. Those client pages are retired, so the
+     measurement is the general form of the same question: with the WRONG style loaded,
+     is the card pixel-identical to one drawn in the facts style, and different from one
+     drawn in the loaded style? A count of yellow would pass today by accident. */
+  const facts = PRESETS[PRESETS.findIndex(x=>x.name === 'Documentary facts')];
+  const paint = async (slide, profile) => {
+    await fontReady(profile);
+    const cv = document.createElement('canvas');
+    renderSlide(slide, cv, profile, 1);
+    return cv.toDataURL('image/png');
+  };
+  await new Promise(res=>{
     const bg = (()=>{ const c = document.createElement('canvas'); c.width = W; c.height = H;
                       const x = c.getContext('2d'); x.fillStyle = '#3a3a3a'; x.fillRect(0,0,W,H);
                       return c.toDataURL('image/jpeg'); })();
-    await new Promise(res=>{ const im = new Image();
-      im.onload = ()=>{ measureCrop(im); IMG_CACHE[conspiracy.slides[0].id] = im;
-                        conspiracy.slides[0].img = im.src; res(); }; im.src = bg; });
-    const cv = document.createElement('canvas');
-    renderSlide(conspiracy.slides[0], cv, profileFor(conspiracy.slides[0]), 1);
-    const d = cv.getContext('2d').getImageData(0, 0, W, H).data;
-    let yellow = 0;
-    for(let i = 0; i < d.length; i += 4)
-      if(d[i] > 150 && d[i+1] > 140 && d[i+2] < 90) yellow++;
-    out.yellowPixelsOnAFactsDeck = yellow;
-    return yellow < 200;                            // @fun's glow and handle paint tens of thousands
+    const im = new Image();
+    im.onload = ()=>{ measureCrop(im); IMG_CACHE[conspiracy.slides[0].id] = im;
+                      conspiracy.slides[0].img = im.src; res(); }; im.src = bg;
+  });
+  out.theCardIsPaintedInTheFactsStyle = await (async ()=>{
+    load('Flat cartoon');                            // the wrong style loaded, on purpose
+    const asDrawn = await paint(conspiracy.slides[0], profileFor(conspiracy.slides[0]));
+    const asFacts = await paint(conspiracy.slides[0], facts);
+    const asLoaded = await paint(conspiracy.slides[0], S.profile);
+    out.andTheLoadedStyleWouldHaveLookedDifferent = asDrawn !== asLoaded;
+    return asDrawn === asFacts;
   })();
 
   // --- the body text is set at the facts size, not at a one-line-a-slide size
   out.theBodyIsNotSetHuge = (()=>{
-    const facts = profileFor(conspiracy.slides[0]), funP = profileFor(fun.slides[0]);
-    out.bodySizes = facts.body_size_pct + ' vs ' + funP.body_size_pct;
-    return facts.body_size_pct <= funP.body_size_pct / 1.5;
+    const others = PRESETS.filter(x=>x.name !== 'Documentary facts').map(x=>x.body_size_pct);
+    out.bodySizes = facts.body_size_pct + ' vs ' + others.join(', ');
+    return others.every(x => facts.body_size_pct < x);
   })();
 
   // --- a style change redraws the BOARD, not only the editor
@@ -106,16 +119,14 @@ const r = await p.evaluate(async ()=>{
     .every(fn => /profileFor\(/.test(window[fn].toString()));
   out.theSingleDeckZipUsesTheDeckStyle = /renderSlide\(s, c, profileFor\(s\)\)/.test(slideCanvas.toString());
   out.exportedPixelsAreRight = await (async ()=>{
-    load('Fun');                                    // the wrong style loaded, on purpose
+    load('Flat cartoon');                           // the wrong style loaded, on purpose
     S.slides = conspiracy.slides;
-    const cv = slideCanvas(0);
-    const d = cv.getContext('2d').getImageData(0, 0, cv.width, cv.height).data;
-    let yellow = 0;
-    for(let i = 0; i < d.length; i += 4)
-      if(d[i] > 150 && d[i+1] > 140 && d[i+2] < 90) yellow++;
-    out.yellowPixelsInTheExport = yellow;
+    const exported = slideCanvas(0).toDataURL('image/png');
+    const asFacts = await paint(conspiracy.slides[0], facts);
+    const asLoaded = await paint(conspiracy.slides[0], S.profile);
+    out.andTheExportWouldHaveLookedDifferent = exported !== asLoaded;
     S.slides = [];
-    return yellow < 200;
+    return exported === asFacts;
   })();
 
   // --- and the build is identifiable without reading the source
@@ -124,7 +135,7 @@ const r = await p.evaluate(async ()=>{
 
   // --- opening a deck loads its style so the controls match the cards
   out.openingADeckLoadsItsStyle = await (async ()=>{
-    load('Fun');
+    load('Flat cartoon');
     S.batch = [conspiracy];
     await openBatchDeck(0);
     const got = S.profile.name;
@@ -136,13 +147,14 @@ const r = await p.evaluate(async ()=>{
 await b.close();
 
 const want = {
-  aFactsDeckIsDrawnInTheFactsStyle:true, aClientDeckIsDrawnInItsOwn:true,
-  stillRightFromAnotherClientStyle:true, aHandBuiltSlideUsesTheLiveStyle:true,
+  aFactsDeckIsDrawnInTheFactsStyle:true, anUncategorisedDeckUsesTheLiveStyle:true,
+  stillRightFromAnotherLoadedStyle:true, aHandBuiltSlideUsesTheLiveStyle:true,
   liveEditsShowOnTheDeckTheyBelongTo:true,
-  theTwoStylesActuallyDiffer:true, aFactsDeckHasNoBrandYellowOnIt:true,
+  theTwoStylesActuallyDiffer:true,
+  theCardIsPaintedInTheFactsStyle:true, andTheLoadedStyleWouldHaveLookedDifferent:true,
   theBodyIsNotSetHuge:true,
   theBuildIsOnScreen:true, everyOutputPathAsksTheDeck:true, theSingleDeckZipUsesTheDeckStyle:true,
-  exportedPixelsAreRight:true,
+  exportedPixelsAreRight:true, andTheExportWouldHaveLookedDifferent:true,
   aStyleChangeRedrawsTheBoard:true, applyStyleAsksForABoardRedraw:true,
   renderBatchWarmsTheFonts:true, openingADeckLoadsItsStyle:true
 };
@@ -152,8 +164,7 @@ for(const [k,v] of Object.entries(want)){
   if(!ok) bad++;
   console.log((ok?'  ok  ':'FAIL  ') + k.padEnd(34) + JSON.stringify(got) + (ok ? '' : '  (wanted ' + JSON.stringify(v) + ')'));
 }
-console.log('  ·   yellow pixels — on the card ' + r.yellowPixelsOnAFactsDeck +
-            ', in the exported file ' + r.yellowPixelsInTheExport + ' · body sizes ' + r.bodySizes);
+console.log('  ·   body size — facts ' + r.bodySizes);
 if(errs.length){ console.log('page errors:'); errs.forEach(e=>console.log('  '+e)); bad++; }
 console.log(bad ? bad + ' failing' : 'all good');
 process.exit(bad ? 1 : 0);

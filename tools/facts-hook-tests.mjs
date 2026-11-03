@@ -90,15 +90,14 @@ const r = await p.evaluate(async ()=>{
   out.theSlidesDoNot = !/THIS IS THE COVER FRAME/.test(imagePrompt(deck.slides[1], false));
   out.theSlidesKeepTheArchivalLook = /authentic period colour photograph/.test(imagePrompt(deck.slides[1], false));
 
-  // --- and none of this leaked onto the client accounts
-  out.clientPagesUntouched = (()=>{
-    const keepP = S.profile;
-    const j = PRESETS.findIndex(x=>x.name === 'Fun');
-    S.profile = JSON.parse(JSON.stringify(PRESETS[j]));
-    const funBrief = funDeckPrompt('fun', {subject:'x', hook:'y', n:6, angle:'blewup'});
-    S.profile = keepP;
-    return !/THE COVER HEADLINE — it decides/.test(funBrief) && !PRESETS[j].hook_image_suffix;
-  })();
+  /* This block used to check that none of the cover rules leaked onto the client pages,
+     which had their own brief. Those pages are retired; what is still worth holding is
+     that the cover brief lives on the facts preset and not on the shared defaults, so
+     another preset does not inherit it. */
+  out.theCoverBriefBelongsToTheFactsPreset = PRESETS
+    .filter(x=>x.name !== 'Documentary facts')
+    .every(x => !x.hook_image_suffix);
+
   return out;
 });
 await b.close();
@@ -116,7 +115,7 @@ const want = {
   styleHasACoverBrief:true, coverBriefBansStock:true, coverBriefWantsThePeak:true,
   coverBriefBansTheTidyRecordShot:true, coverBriefKeepsTheFootClear:true, versionBumped:true,
   theCoverGetsIt:true, theSlidesDoNot:true, theSlidesKeepTheArchivalLook:true,
-  clientPagesUntouched:true
+  theCoverBriefBelongsToTheFactsPreset:true
 };
 let bad = 0;
 for(const [k,v] of Object.entries(want)){

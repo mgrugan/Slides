@@ -75,6 +75,46 @@ const r = await p.evaluate(()=>{
     LIB.splice(0, LIB.length, ...saved);
     return separated && good.weighted < LIB_MIN_RELEVANCE;   // the good one fails the weighted test
   })();
+  /* A pair of words is a strong signal when it matches and worthless as a denominator:
+     a nine-word scene throws off eight pairs that nothing will ever hit. Counting them
+     in the denominator refused a gym frame to a gym slide at 2/12. The share is counted
+     over single words and concepts; pairs still count when they land, through the
+     weighting, and a slide with no scene at all is not measured against anything. */
+  out.aPairDoesNotDiluteTheShare = (()=>{
+    const gymLib = ['dumbbells and a bench in a dark commercial gym',
+                    'a chef chopping vegetables on a wooden kitchen counter'];
+    const saved = LIB.splice(0, LIB.length);
+    gymLib.forEach((sc,i)=>LIB.push({id:'G'+i, scene:sc, title:'', tags:tagsFrom(sc), tagsV:TAGS_V,
+      imagery:S.profile.imagery, aspect:S.profile.aspect_ratio, collection:'Facts',
+      tone:'mono', toneChecked:true, used:0, lastUsed:0, stats:null}));
+    const f = libIDF();
+    const squat = slideFor('a squat rack loaded with plates in a quiet gym', 'Lifting');
+    const o = libOverlap(LIB[0], squat, f);
+    out.gymCase = 'gym frame for a gym slide: share ' + o.share.toFixed(2) +
+                  ' · pairs in the query ' + [...queryTags(squat)].filter(t=>t.includes(' ')).length;
+    const ok = libFits(LIB[0], squat, f) && !libFits(LIB[1], squat, f);
+    LIB.splice(0, LIB.length, ...saved);
+    return ok;
+  })();
+  out.aSceneLessSlideIsNotMeasuredAtAll = libFits(LIB[0], {kind:'slide', scene:'', title:''}, idf);
+  /* And the clause that lets a kindred scene through must not let the original complaint
+     back in: a lighthouse and an anglerfish are both ~ocean, share no words, and that is
+     exactly the reuse that was being handed out. */
+  out.aSharedConceptAloneIsNotEnough = (()=>{
+    const saved = LIB.splice(0, LIB.length);
+    ['a deep sea anglerfish in black water', 'a trawler at anchor in a calm harbour']
+      .forEach((sc,i)=>LIB.push({id:'O'+i, scene:sc, title:'', tags:tagsFrom(sc), tagsV:TAGS_V,
+        imagery:S.profile.imagery, aspect:S.profile.aspect_ratio, collection:'Facts',
+        tone:'mono', toneChecked:true, used:0, lastUsed:0, stats:null}));
+    const f = libIDF();
+    const light = slideFor('a lighthouse keeper on the coastal stairs in a gale', 'The Flannan Isles');
+    const o = libOverlap(LIB[0], light, f);
+    out.oceanCase = 'anglerfish for a lighthouse slide: concept ' + !!o.concept +
+                    ' · share ' + o.share.toFixed(2) + ' → ' + (libFits(LIB[0], light, f) ? 'REUSED' : 'refused');
+    const refused = !libFits(LIB[0], light, f);
+    LIB.splice(0, LIB.length, ...saved);
+    return refused && o.concept;          // same concept, still refused
+  })();
   out.measured = 'emu match share ' + ovOf('wheat field', emu).share.toFixed(2) +
                  ' · unrelated ' + ovOf('submarine hull', emu).share.toFixed(2) +
                  ' · floor ' + LIB_MIN_SHARE;
@@ -153,6 +193,8 @@ await b.close();
 const want = {
   aMatchingFrameCoversTheQuery:true, anUnrelatedFrameCoversNothing:true,
   theWeightedFigureAloneWouldNotSeparateThem:true,
+  aPairDoesNotDiluteTheShare:true, aSceneLessSlideIsNotMeasuredAtAll:true,
+  aSharedConceptAloneIsNotEnough:true,
   anOceanlessStoryGetsNoOcean:true, andNorDoesADesertOne:true, soThoseSlidesAreGenerated:true,
   andItSaysSoRatherThanJustCostingMore:true,
   aMatchingSubjectIsStillReused:true, theRightOneOfSeveralOceansIsStillPicked:true,
@@ -168,5 +210,7 @@ for(const [k,v] of Object.entries(want)){
 }
 console.log('  ·   ' + r.measured + '\n  ·   ' + r.corridorCase);
 if(errs.length){ console.log('page errors:'); errs.forEach(e=>console.log('  '+e)); bad++; }
+console.log('  ·   ' + r.gymCase);
+console.log('  ·   ' + r.oceanCase);
 console.log(bad ? bad + ' failing' : 'all good');
 process.exit(bad ? 1 : 0);

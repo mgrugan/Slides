@@ -1073,7 +1073,7 @@ const FULL_BLEED_CLAUSE = 'The photograph fills the entire frame edge to edge. N
 /* Bumped by hand whenever something ships. It is shown in the header and logged on
    load, so a cached copy of this file can be told from the current one without reading
    the source — the whole app is one file, and a stale one looks completely normal. */
-const BUILD = '2026-11-02 · relevant reuse only';
+const BUILD = '2026-11-03 · somewhere else to look';
 
 /* ============================ state ============================ */
 const S = {
@@ -1526,18 +1526,42 @@ async function libEnrich(){
    subject. A frame qualifies on either. */
 const LIB_MIN_RELEVANCE = 0.15;
 const LIB_MIN_SHARE = 0.25;
+const LIB_MIN_KINDRED = 0.20;   // with a shared concept tag behind it
 function libOverlap(item, slide, idf){
   const want = queryTags(slide);
   if(!want.size || !item.tags || !item.tags.length) return {weighted:0, share:0, shared:0};
   const have = new Set(item.tags);
-  let hit = 0, total = 0, shared = 0;
-  want.forEach(t=>{ total += idf(t); if(have.has(t)){ hit += idf(t); shared++; } });
-  return {weighted: total ? hit / total : 0, share: shared / want.size, shared};
+  let hit = 0, total = 0, shared = 0, plainWant = 0;
+  /* The share is counted over single words and concepts only. Adjacent pairs are a strong
+     signal when they do match, and they stay in the weighting, but as a DENOMINATOR they
+     are unfair: a scene of nine words contributes eight pairs that almost nothing will
+     ever match, so a frame genuinely about the subject was scoring 2/12 and being refused.
+     Pairs are counted when they hit and ignored when they do not. */
+  let concept = false;
+  want.forEach(t=>{
+    const pair = t.includes(' ');
+    total += idf(t);
+    if(!pair) plainWant++;
+    if(have.has(t)){ hit += idf(t); if(!pair) shared++; if(t[0] === '~') concept = true; }
+  });
+  return {weighted: total ? hit / total : 0, share: plainWant ? shared / plainWant : 0, shared, concept};
 }
 const libRelevance = (item, slide, idf) => libOverlap(item, slide, idf).weighted;
 function libFits(item, slide, idf){
+  /* A slide with no scene text has no subject to be wrong about, so the floor has nothing
+     to measure and must not apply: a hand-built slide would otherwise be refused every
+     picture in the library and charged for a new one. Shape, tone and the caption band
+     still decide which. Everything the writer produces carries a scene, so this does not
+     loosen the case the floor exists for. */
+  if(!queryTags(slide).size) return true;
   const o = libOverlap(item, slide, idf);
-  return o.share >= LIB_MIN_SHARE || o.weighted >= LIB_MIN_RELEVANCE;
+  /* The last clause is for the frame that is plainly the same kind of scene — a bench and
+     dumbbells for a slide about a squat rack — where the shared vocabulary is thin because
+     the two scenes describe different corners of the same room. A shared concept alone is
+     not enough (a lighthouse and an anglerfish are both ~ocean, which is the reuse the
+     floor exists to stop); it has to come with words in common as well. */
+  return o.share >= LIB_MIN_SHARE || o.weighted >= LIB_MIN_RELEVANCE ||
+         (o.concept && o.share >= LIB_MIN_KINDRED);
 }
 function libScore(item, slide, p, idf){
   idf = idf || libIDF();
@@ -5427,6 +5451,33 @@ function renderLedger(){
 /* The most subjects to ask for in a single reply. Past about a dozen, a reply that
    also has to carry a claim for each one starts getting cut off. */
 const PICK_CHUNK = 12;
+/* Somewhere to look.
+
+   Asking one question repeatedly does not produce more answers. A model asked "pick
+   History subjects that clear this bar" has a finite set it considers good enough —
+   measured against a stub with a pool of twelve, a run for fifty returned twelve and
+   spent twenty calls doing it, which is the behaviour reported. Growing the avoid list
+   does not help: it only rules out what was already said, and the next-best candidates
+   are the same ones again.
+
+   What produces more answers is a different question. Each call in a wave gets its own
+   lens — an era, a part of the world, a field — so the calls cannot converge on the
+   same dozen, and successive rounds keep moving along the list. The lens says where to
+   search inside the category; it never replaces it, and a lens with nothing in it for
+   this category is allowed to come back from anywhere rather than inventing something
+   to fit. */
+const PICK_LENSES = [
+  'before 1700', 'the 1700s', 'the 1800s', 'the years 1900 to 1945',
+  'the years 1945 to 1980', 'since 1980',
+  'Africa', 'Asia', 'South America', 'Eastern Europe or Russia',
+  'the Pacific or Oceania', 'the Arctic or the Antarctic', 'the Middle East',
+  'medicine or the human body', 'engineering, building or infrastructure',
+  'the sea, shipping or what is under it', 'flight, aviation or space',
+  'animals or the natural world', 'money, business or fraud',
+  'law, courts or policing', 'communication, printing or broadcasting',
+  'weather, geology or the ground itself', 'food, farming or water',
+  'machines that failed', 'something ordinary people did together'
+];
 async function pickSubjects(cat, seed, n){
   const out = [], seen = new Set();
   /* Where a run loses carousels, counted rather than guessed at. A short run used to
@@ -5435,6 +5486,9 @@ async function pickSubjects(cat, seed, n){
      completely different fixes. */
   const lost = {returned:0, covered:0, repeated:0, unreadable:0};
   let dry = 0;
+  // where in the lens list this run starts, so two runs of the same category do not
+  // walk the same path in the same order
+  let lensAt = Math.floor(Math.random() * PICK_LENSES.length);
   /* Eight rounds and three dry ones before giving up. It used to be five and two, which
      was enough while the brief accepted almost any subject; against a brief that sets a
      real bar the early rounds come back thin and a run for twenty would stop at twelve. */
@@ -5457,10 +5511,25 @@ async function pickSubjects(cat, seed, n){
     const wave = Math.max(1, Math.min(6, Math.ceil(need / PICK_CHUNK) + dry));
     const ask = Math.min(PICK_CHUNK, Math.ceil(need / wave) + 2);
     const recent = LEDGER.slice(-200).map(e=>e.subject).concat(out.map(o=>o.subject));
-    const sys =
+    const prompts = Array.from({length: wave}, (_, k) => {
+      /* A different lens per call, advancing as rounds go, so neither the calls in a
+         wave nor the rounds after it ask the same question twice.
+
+         It applies WITH a typed focus rather than instead of it. Dropping the lens
+         when somebody typed one put that run back on a single line of questioning and
+         straight back into the same ceiling — asking for fifty shipwrecks returned
+         twelve. The focus says what the run is about; the lens says which corner of it
+         to search this time, and the two compose. */
+      const lens = PICK_LENSES[(lensAt + k) % PICK_LENSES.length];
+      return (
 'Pick '+ask+' subjects for short documentary-style fact carousels.\n\n' +
 'CATEGORY — '+cat+':\n' + catPrompt(cat) + '\n' +
 (seed ? '\nFOCUS: '+seed+'\n' : '') +
+(lens ? '\nWHERE TO LOOK THIS TIME: '+lens+'. This is a place to search inside '+
+        (seed ? 'the focus and category above' : 'the category above') + ', not a replacement for '+
+        (seed ? 'either' : 'it') + ' — everything still has to clear the bar below. If there is genuinely '+
+        'nothing here worth posting, return subjects from anywhere inside the category rather than forcing '+
+        'something weak to fit.\n' : '') +
 '\nTHE BAR — this is the whole job, and most subjects fail it:\n' +
 '- The test is "no way". If a reader would not say that out loud, it is not a post. Interesting is not enough; a page of interesting is a page nobody shares.\n' +
 '- It has to survive being said in ONE sentence to somebody who has never heard of it. If the sentence needs setup, the subject is wrong.\n' +
@@ -5478,11 +5547,13 @@ async function pickSubjects(cat, seed, n){
 '- The "claim" is the COVER HEADLINE, not a description of the topic. Written the way it would be set in caps across the cover: leading with the most concrete impossible-sounding thing in it, and true read on its own by somebody who never swipes.\n' +
 '- Vary era, country and type. No two from the same event or the same person, and not five from the same decade.\n' +
 (recent.length ? '- ALREADY COVERED, do not choose these or close variants:\n' + recent.map(s=>'  · '+s).join('\n') + '\n' : '') +
-'\nReturn ONLY a JSON array of exactly '+ask+' objects: [{"subject":"canonical name","claim":"the astonishing true claim in under 14 words"}]';
+'\nReturn ONLY a JSON array of exactly '+ask+' objects: [{"subject":"canonical name","claim":"the astonishing true claim in under 14 words"}]');
+    });
+    lensAt += wave;
     /* The wave, asked in parallel. They cannot see each other's picks, so they will
        overlap — the dedupe below is what makes that harmless, and the next wave carries
        everything found so far in its do-not-repeat list. */
-    const replies = await Promise.all(Array.from({length: wave}, async ()=>{
+    const replies = await Promise.all(prompts.map(async sys => {
       try{
         const r = await callModel({model: cfg().textModel, parts:[{type:'text', text:sys}]});
         S.lastRaw = r.text;

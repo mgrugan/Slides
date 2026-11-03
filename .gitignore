@@ -5,3 +5,7 @@ node_modules/
 tools/*.png
 tools/*.jpg
 node_modules
+
+# and in the repo root when a suite is run from there
+/*.png
+/*.jpg

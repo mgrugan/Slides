@@ -50,9 +50,15 @@ const r = await p.evaluate(async ()=>{
     bands: LIB.slice(0,2).map(x=>({scene:x.scene.slice(0,18), sd:x.stats.bands.map(b=>b.sd)})),
     lowPickFlatBottom: lowPick.stats.bands[2].sd < lowPick.stats.bands[0].sd,
     highPickFlatTop: highPick.stats.bands[0].sd < highPick.stats.bands[2].sd,
+    /* Two gym frames in the library and three slides asking for one. The deck must never
+       be handed the same picture twice, and once the relevant ones are spent the answer
+       is nothing — a new picture is bought — rather than a repeat or an off-subject
+       frame from elsewhere in the library. */
     noRepeatInDeck: (()=>{ const seen=new Set(); const picks=[];
-      for(let i=0;i<3;i++){ const it=libPick(seen, S.profile, gymSlide); seen.add(it.id); picks.push(it.id); }
-      return new Set(picks).size === 3; })()
+      for(let i=0;i<3;i++){ const it=libPick(seen, S.profile, gymSlide);
+                            if(it) seen.add(it.id); picks.push(it ? it.id : null); }
+      const got = picks.filter(Boolean);
+      return new Set(got).size === got.length && got.length === 2 && picks[2] === null; })()
   };
 });
 // search + tag chips
@@ -62,5 +68,19 @@ await p.fill('#libSearch','gym'); await p.waitForTimeout(300);
 const filtered = await p.$$eval('#libGrid .libItem', e=>e.length);
 await p.fill('#libSearch',''); await p.waitForTimeout(200);
 await p.screenshot({path:'ui-lib-tags.png'});
+const fail = [];
+if(!/gym|barbell|dumbbell|rack/.test(r.gymPick)) fail.push('a gym slide was handed: '+r.gymPick);
+if(!/fairway|green|golf|bunker/.test(r.golfPick)) fail.push('a golf slide was handed: '+r.golfPick);
+if(!r.statsOk) fail.push('some library items came out without band statistics');
+if(!r.lowPickFlatBottom) fail.push('low caption text was not given a flat-bottomed frame');
+if(!r.highPickFlatTop) fail.push('high caption text was not given a flat-topped frame');
+if(!r.noRepeatInDeck) fail.push('a deck repeated a background, or took an off-subject one once the relevant ones ran out');
+if(filtered !== 2) fail.push('searching "gym" showed '+filtered+' of the 2 gym frames');
+if(!chips.length) fail.push('no tag chips were offered');
+if(errs.length) fail.push('page errors: '+errs.join(' | '));
+
 console.log(JSON.stringify({...r, chips, filteredToGym: filtered, errs}, null, 1));
+console.log(fail.length ? 'FAIL\n' + fail.map(f=>' - '+f).join('\n')
+                        : 'PASS  tagged by subject, steered by the caption band, never twice in a deck');
 await b.close();
+process.exit(fail.length ? 1 : 0);
